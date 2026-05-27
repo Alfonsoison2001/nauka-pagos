@@ -278,12 +278,69 @@ type CaratulaProps = {
 
 ## 9. Migration Plan
 
-User has 3 Google Sheets files con histórico (NAUKA L3, L44, Beachfront).
+> **CRITICAL FOR SCHEMA DESIGN:** Read this section BEFORE writing any SQL migration. The schema MUST be migration-friendly. Alfonso has 3 Google Sheets (one per project: NAUKA Lote 3, Lote 44, Beachfront), each with the same 6-tab structure as `reference/NAUKA_Flujo_Pagos.xlsx`. These Excels will be the seed data for production. Use the column mappings below as the source of truth when naming and typing DB columns.
 
-Cuando Alfonso diga "listo para migrar":
-1. Exporta cada Google Sheet como `.xlsx`, guárdalos en `scripts/migration/`.
-2. Script `scripts/migrate-from-excel.ts` lee cada archivo y seedea contratistas + partidas + estimaciones.
-3. Corre contra staging primero. Valida conteos. Después prod.
+### Excel → DB column mappings
+
+#### Tab `Configuración` → `projects` row + `firmantes` + `project_firmantes`
+
+| Excel cell | DB target |
+|---|---|
+| `C7` (Nombre del Proyecto) | `projects.nombre` |
+| `C8` (Ubicación) | `projects.ubicacion` |
+| `C9` (Cliente) | `projects.cliente` |
+| Rows `B13:D15` (3 firmantes) | `firmantes` rows (global, deduped by email) + `project_firmantes` join with `orden = 1..3` |
+
+#### Tab `Glosario` → `pagadores`
+
+| Excel cell | DB target |
+|---|---|
+| `C6:C9` (Salomon Ison, Fasja, Nauka, Otros) | `pagadores.nombre`, `project_id = null` (global pagadores) |
+
+#### Tab `Presupuesto` → `contratistas` + `partidas`
+
+| Excel col | DB target |
+|---|---|
+| `B` (Contratista) | `contratistas.nombre` (dedupe by `(project_id, nombre)`) |
+| `C` (Partida) | `partidas.nombre` |
+| `D` (Presupuesto sin IVA) | `partidas.presupuesto_sin_iva` |
+| `E` (IVA %) | `partidas.iva_pct` |
+| `F` (IVA monto) | `partidas.iva_monto` — let DB generate |
+| `G` (Total con IVA) | `partidas.presupuesto_con_iva` — let DB generate |
+| `H` (Notas) | `partidas.notas` |
+
+#### Tab `Flujo de Pagos` → `estimaciones`
+
+| Excel col | DB target |
+|---|---|
+| `C` (Fecha de pago) | `estimaciones.fecha_pago` if status="Pagado", else `fecha_solicitud` |
+| `D` (Pagó) | `estimaciones.pagador_id` (FK lookup by name in `pagadores`) |
+| `E` (Contratista) | used to look up `partidas.id` via contratista+partida |
+| `F` (Partida) | used to look up `partidas.id` |
+| `G` (Concepto) | `estimaciones.concepto` |
+| `H` (# Estimación) | `estimaciones.numero` |
+| `I` (Monto) | `estimaciones.monto_con_iva` (Excel stores con-IVA; derive `monto_sin_iva` from partida `iva_pct`) |
+| `M` (Estatus) | `estimaciones.status`: "Pagado" → `'pagada'`, "No Pagado" → `'pendiente'` |
+| `N` (Notas) | `estimaciones.notas` |
+
+Excel columns `J` (Presupuesto), `K` (Pagado Acum.), `L` (Resto por Pagar) are computed in the Excel and **NOT migrated** — the app computes them from raw `monto_con_iva` aggregations.
+
+Tabs `Resumen Total` and `Resumen Mensual` are pure views in Excel — nothing to migrate; the app computes them.
+
+### Migration script — execution plan (Día 7+, after MVP is verified end-to-end with test data)
+
+1. Alfonso exports each Google Sheet as `.xlsx` and places them in `scripts/migration/`:
+   - `scripts/migration/nauka-lote-3.xlsx`
+   - `scripts/migration/nauka-lote-44.xlsx`
+   - `scripts/migration/nauka-beachfront.xlsx`
+2. Script `scripts/migrate-from-excel.ts` (TypeScript, run via `pnpm tsx`):
+   - Reads files with `exceljs` library.
+   - Walks tabs in dependency order: `Configuración` → `Glosario` → `Presupuesto` → `Flujo de Pagos`.
+   - Uses `SUPABASE_SERVICE_ROLE_KEY` to bypass RLS.
+   - Idempotent: if a `projects.nombre` already exists, prompts to upsert or skip.
+   - Prints summary: "X projects, Y contratistas, Z partidas, W estimaciones imported."
+3. Run order: against `staging` Supabase project first → validate row counts + spot checks → then `prod`.
+4. After successful prod migration, archive original Sheets in `/excel-archive/` (gitignored).
 
 ---
 
