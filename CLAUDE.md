@@ -133,6 +133,20 @@ The loop for every new feature:
 
 ---
 
+## Regression prevention (CRITICAL — applies to every change)
+
+This is the single most important rule. When the user asks for a change, follow these:
+
+1. **Surgical edits only.** Touch the minimum number of files and lines needed. Do NOT refactor unrelated code "while you're there".
+2. **Read before writing.** Before editing a component, read its full current state. Understand what it does today before changing it.
+3. **Preserve existing behavior.** If a feature worked before (edit button visible, table sort, dropdown filter), it MUST keep working after the change.
+4. **Verify affected surfaces.** After making changes, mentally walk through the user paths that touch the modified files. Test the obvious ones in dev before declaring done.
+5. **Never delete code you don't fully understand.** If you see code that seems redundant or out of place, leave it. If you want to remove it, ask the user first.
+6. **Per-change validation:** before sending changes to the user for verification, list out what features should still work end-to-end. Mentally check each one.
+7. **No "cleanup" passes.** Do not "improve" formatting, naming, structure, or organization of code that isn't directly involved in the requested change.
+
+If a regression is reported, the fix is: read the diff of recent changes, find what got removed/broken, restore it with minimal touch.
+
 ## What NOT to do
 
 - ❌ Do not write code BEFORE running `grill-me` and `openspec` on a feature.
