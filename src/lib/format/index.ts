@@ -5,3 +5,4 @@
 export { formatMXN } from "@/lib/utils"
 export { formatDate } from "./fecha"
 export { numeroALetras } from "./numero-a-letras"
+export { formatPct } from "./porcentaje"
