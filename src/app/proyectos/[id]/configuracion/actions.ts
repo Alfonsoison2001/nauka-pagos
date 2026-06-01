@@ -154,3 +154,154 @@ export async function removeProjectPagador(
     .eq("project_id", projectId)
   revalidatePath(`/proyectos/${projectId}/configuracion`)
 }
+
+// ---------------------------------------------------------------------------
+// Firmantes: CRUD por proyecto (biblioteca global compartida vía junction)
+// ---------------------------------------------------------------------------
+
+export type FirmanteActionResult = { error: string } | { ok: true }
+
+const firmanteSchema = z.object({
+  nombre: z.string().trim().min(1, "Nombre requerido").max(120),
+  cargo: z.string().trim().min(1, "Cargo requerido").max(120),
+  empresa: z.string().trim().min(1, "Empresa requerida").max(120),
+  email: z.string().trim().email("Correo inválido"),
+})
+
+function parseFirmante(formData: FormData) {
+  return firmanteSchema.safeParse({
+    nombre: formData.get("nombre"),
+    cargo: formData.get("cargo"),
+    empresa: formData.get("empresa"),
+    email: formData.get("email"),
+  })
+}
+
+export async function addProjectFirmante(
+  projectId: string,
+  formData: FormData,
+): Promise<FirmanteActionResult> {
+  const parsed = parseFirmante(formData)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+  const d = parsed.data
+  const supabase = await createClient()
+
+  // Máx 3 firmantes por proyecto (CHECK orden IN (1,2,3)); busca orden libre.
+  const { data: existing } = await supabase
+    .from("project_firmantes")
+    .select("orden")
+    .eq("project_id", projectId)
+  const ordenes = new Set((existing ?? []).map((r) => r.orden as number))
+  let nextOrden = 1
+  while (ordenes.has(nextOrden)) nextOrden++
+  if (nextOrden > 3) return { error: "Máximo 3 firmantes por proyecto" }
+
+  // Reusa firmante por email (índice único), o crea uno nuevo.
+  const { data: found } = await supabase
+    .from("firmantes")
+    .select("id")
+    .ilike("email", d.email)
+    .is("deleted_at", null)
+    .maybeSingle()
+  let firmanteId = found?.id as string | undefined
+  if (!firmanteId) {
+    const { data: inserted, error: insErr } = await supabase
+      .from("firmantes")
+      .insert({
+        nombre: d.nombre,
+        cargo: d.cargo,
+        empresa: d.empresa,
+        email: d.email,
+      })
+      .select("id")
+      .single()
+    if (insErr) return { error: insErr.message }
+    firmanteId = inserted.id as string
+  }
+
+  const { data: link } = await supabase
+    .from("project_firmantes")
+    .select("project_id")
+    .eq("project_id", projectId)
+    .eq("firmante_id", firmanteId)
+    .maybeSingle()
+  if (link) return { error: "Ese firmante ya está en este proyecto" }
+
+  const { error: linkErr } = await supabase.from("project_firmantes").insert({
+    project_id: projectId,
+    firmante_id: firmanteId,
+    orden: nextOrden,
+    default_signs: true,
+  })
+  if (linkErr) return { error: linkErr.message }
+
+  revalidatePath(`/proyectos/${projectId}/configuracion`)
+  return { ok: true }
+}
+
+export async function updateFirmante(
+  firmanteId: string,
+  projectId: string,
+  formData: FormData,
+): Promise<FirmanteActionResult> {
+  const parsed = parseFirmante(formData)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+  const d = parsed.data
+  const supabase = await createClient()
+
+  // Edita la fila global → aplica a todos los proyectos que la comparten.
+  const { error } = await supabase
+    .from("firmantes")
+    .update({
+      nombre: d.nombre,
+      cargo: d.cargo,
+      empresa: d.empresa,
+      email: d.email,
+    })
+    .eq("id", firmanteId)
+    .is("deleted_at", null)
+  if (error) {
+    if (error.code === "23505") {
+      return { error: "Ya existe un firmante con ese correo" }
+    }
+    return { error: error.message }
+  }
+
+  revalidatePath(`/proyectos/${projectId}/configuracion`)
+  return { ok: true }
+}
+
+export async function removeProjectFirmante(
+  firmanteId: string,
+  projectId: string,
+): Promise<FirmanteActionResult> {
+  const supabase = await createClient()
+
+  // Desvincula de ESTE proyecto (junction sin deleted_at → se quita el link).
+  const { error: delErr } = await supabase
+    .from("project_firmantes")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("firmante_id", firmanteId)
+  if (delErr) return { error: delErr.message }
+
+  // Si ya no firma en ningún proyecto, soft-delete del firmante global.
+  const { count } = await supabase
+    .from("project_firmantes")
+    .select("project_id", { count: "exact", head: true })
+    .eq("firmante_id", firmanteId)
+  if ((count ?? 0) === 0) {
+    await supabase
+      .from("firmantes")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", firmanteId)
+      .is("deleted_at", null)
+  }
+
+  revalidatePath(`/proyectos/${projectId}/configuracion`)
+  return { ok: true }
+}

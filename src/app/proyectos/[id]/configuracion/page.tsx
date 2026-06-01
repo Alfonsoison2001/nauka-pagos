@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/server"
 import { addProjectPagador, removeProjectPagador } from "./actions"
 import { ConfigurationForm } from "./configuration-form"
 import { DeleteProjectButton } from "./delete-project-button"
+import { type FirmanteItem, FirmantesSection } from "./firmantes-section"
 
 export const metadata = {
   title: "Configuración",
@@ -62,10 +63,75 @@ export default async function ConfiguracionPage({
     .is("deleted_at", null)
     .order("nombre")
 
-  const { count: firmantesCount } = await supabase
-    .from("firmantes")
-    .select("id", { count: "exact", head: true })
-    .is("deleted_at", null)
+  // Firmantes de este proyecto + info de "compartido con N proyectos"
+  type FJoin = {
+    id: string
+    nombre: string
+    cargo: string
+    empresa: string
+    email: string
+    deleted_at: string | null
+  }
+  const { data: pfRaw } = await supabase
+    .from("project_firmantes")
+    .select(
+      "orden, firmante_id, firmantes(id, nombre, cargo, empresa, email, deleted_at)",
+    )
+    .eq("project_id", id)
+    .order("orden")
+  const pfRows = (pfRaw ?? []) as Array<{
+    orden: number
+    firmante_id: string
+    firmantes: FJoin | FJoin[] | null
+  }>
+  const projectFirmantes = pfRows
+    .map((row) => {
+      const f = Array.isArray(row.firmantes) ? row.firmantes[0] : row.firmantes
+      return f && !f.deleted_at ? { orden: row.orden, f } : null
+    })
+    .filter((x): x is { orden: number; f: FJoin } => x !== null)
+  const firmanteIds = projectFirmantes.map((x) => x.f.id)
+
+  // Sharing: cuántos (y cuáles) proyectos activos firma cada uno
+  type PJoin = { id: string; nombre: string; deleted_at: string | null }
+  const otherProjectsByFirmante = new Map<string, string[]>()
+  const countByFirmante = new Map<string, number>()
+  if (firmanteIds.length > 0) {
+    const { data: linksRaw } = await supabase
+      .from("project_firmantes")
+      .select("firmante_id, projects(id, nombre, deleted_at)")
+      .in("firmante_id", firmanteIds)
+    const linkRows = (linksRaw ?? []) as Array<{
+      firmante_id: string
+      projects: PJoin | PJoin[] | null
+    }>
+    for (const row of linkRows) {
+      const p = Array.isArray(row.projects) ? row.projects[0] : row.projects
+      if (!p || p.deleted_at) continue
+      countByFirmante.set(
+        row.firmante_id,
+        (countByFirmante.get(row.firmante_id) ?? 0) + 1,
+      )
+      if (p.id !== id) {
+        const arr = otherProjectsByFirmante.get(row.firmante_id) ?? []
+        arr.push(p.nombre)
+        otherProjectsByFirmante.set(row.firmante_id, arr)
+      }
+    }
+  }
+
+  const firmantesItems: FirmanteItem[] = projectFirmantes.map(
+    ({ orden, f }) => ({
+      id: f.id,
+      nombre: f.nombre,
+      cargo: f.cargo,
+      empresa: f.empresa,
+      email: f.email,
+      orden,
+      sharedCount: countByFirmante.get(f.id) ?? 1,
+      otherProjects: otherProjectsByFirmante.get(f.id) ?? [],
+    }),
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -159,21 +225,12 @@ export default async function ConfiguracionPage({
         <CardHeader>
           <CardTitle>Firmantes asignados</CardTitle>
           <CardDescription>
-            Personas que pueden firmar carátulas de este proyecto.
+            Personas que firman las carátulas de este proyecto (bloque de
+            autorizaciones, máximo 3).
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {firmantesCount && firmantesCount > 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Multi-select de firmantes llega cuando esté lista la biblioteca
-              global (/firmantes, día posterior).
-            </p>
-          ) : (
-            <p className="text-sm italic text-muted-foreground">
-              Aún no hay firmantes en la biblioteca global. La página /firmantes
-              para crearlos llega en un día posterior.
-            </p>
-          )}
+          <FirmantesSection projectId={project.id} firmantes={firmantesItems} />
         </CardContent>
       </Card>
 
