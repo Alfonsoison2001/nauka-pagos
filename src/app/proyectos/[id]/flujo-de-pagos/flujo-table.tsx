@@ -24,12 +24,23 @@ function formatDate(iso: string | null): string {
   }
 }
 
-/** Last day of the month for a given YYYY-MM-DD date string. */
-function getEOM(fechaPago: string | null): string {
-  if (!fechaPago) return "—"
-  const [y, m] = fechaPago.split("-").map(Number)
-  const lastDay = new Date(y, m, 0).getDate()
-  return `${String(lastDay).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`
+/** Status chip: pendiente (gris), enviada (azul sky), pagada (verde). */
+function StatusBadge({ status }: { status: EstimacionRow["status"] }) {
+  if (status === "pagada") {
+    return (
+      <Badge className="border-transparent bg-green-600 text-white">
+        Pagada
+      </Badge>
+    )
+  }
+  if (status === "enviada") {
+    return (
+      <Badge className="border-transparent bg-sky-500 text-white">
+        Enviada
+      </Badge>
+    )
+  }
+  return <Badge variant="outline">Pendiente</Badge>
 }
 
 // ── Table ─────────────────────────────────────────────────────────────────────
@@ -57,8 +68,7 @@ export function FlujoTable({
         <thead>
           <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
             <th className="px-3 py-2.5 text-right">#</th>
-            <th className="px-3 py-2.5 text-right">EOM</th>
-            <th className="px-3 py-2.5 text-right">Fecha de pago</th>
+            <th className="px-3 py-2.5 text-right">Fecha estimación</th>
             <th className="px-3 py-2.5 text-left">Pagó</th>
             <th className="px-3 py-2.5 text-left">Contratista</th>
             <th className="px-3 py-2.5 text-left">Partida</th>
@@ -116,10 +126,9 @@ function FlujoRow({
   return (
     <tr className="group border-b last:border-0 hover:bg-muted/30">
       <td className="px-3 py-2 text-right text-muted-foreground">{index}</td>
-      <td className="px-3 py-2 text-right text-muted-foreground">
-        {getEOM(row.fecha_pago)}
+      <td className="px-3 py-2 text-right">
+        {formatDate(row.fecha_estimacion)}
       </td>
-      <td className="px-3 py-2 text-right">{formatDate(row.fecha_pago)}</td>
       <td className="px-3 py-2">{row.pagador_nombre ?? "—"}</td>
       <td className="px-3 py-2 font-medium">{row.contratista_nombre}</td>
       <td className="px-3 py-2">{row.partida_nombre}</td>
@@ -133,9 +142,7 @@ function FlujoRow({
       <td className="px-3 py-2 text-right">{formatMXN(row.pagado_acum)}</td>
       <td className="px-3 py-2 text-right">{formatMXN(row.resto_por_pagar)}</td>
       <td className="px-3 py-2 text-center">
-        <Badge variant={row.status === "pagada" ? "default" : "outline"}>
-          {row.status === "pagada" ? "Pagada" : "Pendiente"}
-        </Badge>
+        <StatusBadge status={row.status} />
       </td>
       <td className="px-3 py-2">
         <ComprobanteCell estimacion={row} projectId={projectId} />

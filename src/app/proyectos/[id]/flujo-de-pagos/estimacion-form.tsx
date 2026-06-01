@@ -18,36 +18,23 @@ import type { ContratistaOption, PagadorOption, PartidaOption } from "./actions"
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
-export const formSchema = z
-  .object({
-    // client-only: drives partida dropdown, not sent to server
-    contratista_id: z.string(),
-    partida_id: z.string().uuid("Partida inválida"),
-    pagador_id: z.string().uuid("Pagador requerido"),
-    numero: z.string().trim().min(1, "# Estimación requerido"),
-    concepto: z.string().trim().optional(),
-    // Empty string allowed for pendiente; required only when pagada
-    fecha_pago: z.string(),
-    monto_sin_iva: z
-      .string()
-      .min(1, "Monto requerido")
-      .refine(
-        (v) => !Number.isNaN(Number(v)) && Number(v) >= 0,
-        "Debe ser ≥ 0",
-      ),
-    agregar_iva: z.boolean(),
-    status: z.enum(["pendiente", "pagada"]),
-    notas: z.string().trim().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.status === "pagada" && !data.fecha_pago) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Fecha de pago requerida para estimaciones pagadas",
-        path: ["fecha_pago"],
-      })
-    }
-  })
+export const formSchema = z.object({
+  // client-only: drives partida dropdown, not sent to server
+  contratista_id: z.string(),
+  partida_id: z.string().uuid("Partida inválida"),
+  pagador_id: z.string().uuid("Pagador requerido"),
+  numero: z.string().trim().min(1, "# Estimación requerido"),
+  concepto: z.string().trim().optional(),
+  fecha_estimacion: z.string().min(1, "Fecha requerida"),
+  monto_sin_iva: z
+    .string()
+    .min(1, "Monto requerido")
+    .refine((v) => !Number.isNaN(Number(v)) && Number(v) >= 0, "Debe ser ≥ 0"),
+  agregar_iva: z.boolean(),
+  // Status manual: las 3 opciones se eligen directamente.
+  status: z.enum(["pendiente", "enviada", "pagada"]),
+  notas: z.string().trim().optional(),
+})
 
 export type FormValues = z.infer<typeof formSchema>
 
@@ -290,6 +277,7 @@ export function EstimacionFormFields({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pendiente">Pendiente</SelectItem>
+                  <SelectItem value="enviada">Enviada</SelectItem>
                   <SelectItem value="pagada">Pagada</SelectItem>
                 </SelectContent>
               </Select>
@@ -310,18 +298,18 @@ export function EstimacionFormFields({
         )}
       />
 
-      {/* Fecha de Pago + Monto */}
+      {/* Fecha estimación + Monto */}
       <div className="grid grid-cols-2 gap-4">
         <Controller
-          name="fecha_pago"
+          name="fecha_estimacion"
           control={control}
           render={({ field }) => (
             <div className="flex flex-col gap-2">
-              <Label htmlFor="ef-fecha">Fecha de pago</Label>
+              <Label htmlFor="ef-fecha">Fecha estimación</Label>
               <Input id="ef-fecha" type="date" {...field} />
-              {errors.fecha_pago && (
+              {errors.fecha_estimacion && (
                 <p className="text-xs text-destructive">
-                  {errors.fecha_pago.message}
+                  {errors.fecha_estimacion.message}
                 </p>
               )}
             </div>

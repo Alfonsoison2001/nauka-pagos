@@ -24,9 +24,8 @@ export type EstimacionRow = {
   iva_pct: number
   iva_monto: number
   monto_con_iva: number
-  fecha_solicitud: string
-  fecha_pago: string | null
-  status: "pendiente" | "pagada"
+  fecha_estimacion: string
+  status: "pendiente" | "enviada" | "pagada"
   notas: string | null
   caratula_generada_url: string | null
   caratula_firmada_url: string | null
@@ -47,29 +46,19 @@ export type PagadorOption = { id: string; nombre: string }
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
-const estimacionSchema = z
-  .object({
-    partida_id: z.string().uuid("Partida inválida"),
-    pagador_id: z.string().uuid("Pagador inválido"),
-    numero: z.string().trim().min(1, "# Estimación requerido"),
-    concepto: z.string().trim().optional(),
-    // Empty string allowed for "pendiente"; required only when pagada
-    fecha_pago: z.string(),
-    monto_sin_iva: z.coerce.number().min(0, "Debe ser ≥ 0"),
-    // iva_pct sent by client: 0.16 (checkbox on) or 0 (checkbox off)
-    iva_pct: z.coerce.number().min(0).max(1),
-    status: z.enum(["pendiente", "pagada"]),
-    notas: z.string().trim().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.status === "pagada" && !data.fecha_pago) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Fecha de pago requerida para estimaciones pagadas",
-        path: ["fecha_pago"],
-      })
-    }
-  })
+const estimacionSchema = z.object({
+  partida_id: z.string().uuid("Partida inválida"),
+  pagador_id: z.string().uuid("Pagador inválido"),
+  numero: z.string().trim().min(1, "# Estimación requerido"),
+  concepto: z.string().trim().optional(),
+  fecha_estimacion: z.string().min(1, "Fecha requerida"),
+  monto_sin_iva: z.coerce.number().min(0, "Debe ser ≥ 0"),
+  // iva_pct sent by client: 0.16 (checkbox on) or 0 (checkbox off)
+  iva_pct: z.coerce.number().min(0).max(1),
+  // Status manual: pendiente | enviada | pagada
+  status: z.enum(["pendiente", "enviada", "pagada"]),
+  notas: z.string().trim().optional(),
+})
 
 function parseFormData(fd: FormData) {
   return estimacionSchema.safeParse({
@@ -77,7 +66,7 @@ function parseFormData(fd: FormData) {
     pagador_id: fd.get("pagador_id"),
     numero: fd.get("numero"),
     concepto: (fd.get("concepto") as string) || undefined,
-    fecha_pago: fd.get("fecha_pago"),
+    fecha_estimacion: fd.get("fecha_estimacion"),
     monto_sin_iva: fd.get("monto_sin_iva"),
     iva_pct: fd.get("iva_pct"),
     status: fd.get("status"),
@@ -112,7 +101,7 @@ export async function createEstimacion(
     pagador_id: d.pagador_id,
     numero: d.numero,
     concepto: d.concepto ?? null,
-    fecha_pago: d.fecha_pago || null,
+    fecha_estimacion: d.fecha_estimacion,
     monto_sin_iva: d.monto_sin_iva,
     iva_pct: d.iva_pct,
     status: d.status,
@@ -145,7 +134,7 @@ export async function updateEstimacion(
       pagador_id: d.pagador_id,
       numero: d.numero,
       concepto: d.concepto ?? null,
-      fecha_pago: d.fecha_pago || null,
+      fecha_estimacion: d.fecha_estimacion,
       monto_sin_iva: d.monto_sin_iva,
       iva_pct: d.iva_pct,
       status: d.status,

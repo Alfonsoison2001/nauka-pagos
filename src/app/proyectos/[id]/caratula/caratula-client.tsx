@@ -150,13 +150,7 @@ export function CaratulaClient({
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs text-muted-foreground">Estatus</span>
                 <span>
-                  <Badge
-                    variant={
-                      selected.status === "pagada" ? "default" : "outline"
-                    }
-                  >
-                    {selected.status === "pagada" ? "Pagada" : "Pendiente"}
-                  </Badge>
+                  <StatusBadge status={selected.status} />
                 </span>
               </div>
               <div className="flex flex-col gap-0.5">
@@ -246,6 +240,25 @@ export function CaratulaClient({
 /** Etiqueta legible para el dropdown: "{numero} — {contratista} — {partida}". */
 function estLabel(e: CaratulaEstimacion): string {
   return `${e.numero} — ${e.contratistaNombre} — ${e.partidaNombre}`
+}
+
+/** Status chip: pendiente (gris), enviada (azul sky), pagada (verde). */
+function StatusBadge({ status }: { status: CaratulaEstimacion["status"] }) {
+  if (status === "pagada") {
+    return (
+      <Badge className="border-transparent bg-green-600 text-white">
+        Pagada
+      </Badge>
+    )
+  }
+  if (status === "enviada") {
+    return (
+      <Badge className="border-transparent bg-sky-500 text-white">
+        Enviada
+      </Badge>
+    )
+  }
+  return <Badge variant="outline">Pendiente</Badge>
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

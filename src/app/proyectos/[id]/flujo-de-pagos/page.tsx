@@ -86,12 +86,12 @@ export default async function FlujoDePagosPage({
     const { data: eRows } = await sb
       .from("estimaciones")
       .select(
-        "id, partida_id, pagador_id, numero, concepto, monto_sin_iva, iva_pct, iva_monto, monto_con_iva, fecha_solicitud, fecha_pago, status, notas, caratula_generada_url, caratula_firmada_url, comprobante_pago_url",
+        "id, partida_id, pagador_id, numero, concepto, monto_sin_iva, iva_pct, iva_monto, monto_con_iva, fecha_estimacion, status, notas, caratula_generada_url, caratula_firmada_url, comprobante_pago_url",
       )
       .in("partida_id", pIds)
       .is("deleted_at", null)
-      // FIX 1: oldest row first, same as Excel (newest appended at bottom)
-      .order("fecha_pago", { ascending: true, nullsFirst: true })
+      // Oldest first (same as Excel); running acum se calcula en este orden.
+      .order("fecha_estimacion", { ascending: true })
       .order("created_at", { ascending: true })
 
     // Maps for joining
@@ -141,9 +141,8 @@ export default async function FlujoDePagosPage({
         iva_pct: Number(e.iva_pct),
         iva_monto: Number(e.iva_monto),
         monto_con_iva: Number(e.monto_con_iva),
-        fecha_solicitud: e.fecha_solicitud as string,
-        fecha_pago: (e.fecha_pago as string | null) ?? null,
-        status: e.status as "pendiente" | "pagada",
+        fecha_estimacion: e.fecha_estimacion as string,
+        status: e.status as "pendiente" | "enviada" | "pagada",
         notas: (e.notas as string | null) ?? null,
         caratula_generada_url:
           (e.caratula_generada_url as string | null) ?? null,

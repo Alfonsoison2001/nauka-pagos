@@ -56,6 +56,7 @@ export function FlujoFilters({
         <SelectContent>
           <SelectItem value="__all__">Todos los estatus</SelectItem>
           <SelectItem value="pendiente">Pendiente</SelectItem>
+          <SelectItem value="enviada">Enviada</SelectItem>
           <SelectItem value="pagada">Pagada</SelectItem>
         </SelectContent>
       </Select>

@@ -48,7 +48,7 @@ function getDefaults(props: Props): FormValues {
       pagador_id: "",
       numero: "",
       concepto: "",
-      fecha_pago: "",
+      fecha_estimacion: new Date().toISOString().slice(0, 10),
       monto_sin_iva: "",
       agregar_iva: false,
       status: "pendiente",
@@ -62,7 +62,7 @@ function getDefaults(props: Props): FormValues {
     pagador_id: e.pagador_id ?? "",
     numero: e.numero,
     concepto: e.concepto ?? "",
-    fecha_pago: e.fecha_pago ?? "",
+    fecha_estimacion: e.fecha_estimacion,
     monto_sin_iva: String(e.monto_sin_iva),
     agregar_iva: e.iva_pct > 0,
     status: e.status,
@@ -102,7 +102,7 @@ export function EstimacionDialog(props: Props) {
       fd.append("pagador_id", values.pagador_id)
       fd.append("numero", values.numero)
       if (values.concepto) fd.append("concepto", values.concepto)
-      fd.append("fecha_pago", values.fecha_pago)
+      fd.append("fecha_estimacion", values.fecha_estimacion)
       fd.append("monto_sin_iva", values.monto_sin_iva)
       fd.append("iva_pct", String(ivaPct))
       fd.append("status", values.status)

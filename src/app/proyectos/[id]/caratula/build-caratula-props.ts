@@ -17,7 +17,7 @@ type FirmanteJoin = {
 type MontoRow = {
   monto_sin_iva: unknown
   monto_con_iva: unknown
-  fecha_solicitud: string
+  fecha_estimacion: string
   created_at: string
 }
 
@@ -52,7 +52,7 @@ export async function buildCaratulaData(
   const { data: est } = await sb
     .from("estimaciones")
     .select(
-      "id, partida_id, numero, monto_sin_iva, monto_con_iva, fecha_solicitud, created_at",
+      "id, partida_id, numero, monto_sin_iva, monto_con_iva, fecha_estimacion, created_at",
     )
     .eq("id", estimacionId)
     .is("deleted_at", null)
@@ -88,7 +88,7 @@ export async function buildCaratulaData(
   // Todas las estimaciones de la partida (para el acumulado contratado).
   const { data: allEstRaw } = await sb
     .from("estimaciones")
-    .select("monto_sin_iva, monto_con_iva, fecha_solicitud, created_at")
+    .select("monto_sin_iva, monto_con_iva, fecha_estimacion, created_at")
     .eq("partida_id", est.partida_id)
     .is("deleted_at", null)
 
@@ -111,14 +111,14 @@ export async function buildCaratulaData(
   // Acumulado contratado: suma de TODAS las estimaciones de la partida con
   // fecha ≤ esta, INCLUYÉNDOLA, sin importar el estatus de pago. El desempate
   // por created_at asegura incluir esta cuando hay misma fecha.
-  const thisFecha = est.fecha_solicitud as string
+  const thisFecha = est.fecha_estimacion as string
   const thisCreated = est.created_at as string
   const allEst = (allEstRaw ?? []) as MontoRow[]
   let acumulado = 0
   for (const r of allEst) {
     if (
-      r.fecha_solicitud < thisFecha ||
-      (r.fecha_solicitud === thisFecha && r.created_at <= thisCreated)
+      r.fecha_estimacion < thisFecha ||
+      (r.fecha_estimacion === thisFecha && r.created_at <= thisCreated)
     ) {
       acumulado += pick(r)
     }
@@ -162,7 +162,7 @@ export async function buildCaratulaData(
     partidaNombre: partida.nombre as string,
     ubicacion: lote,
     numero: est.numero as string,
-    fecha: formatDate(est.fecha_solicitud as string),
+    fecha: formatDate(est.fecha_estimacion as string),
     contratoTotal: ppto,
     saldoPorEjercerHeader,
     importe,

@@ -11,7 +11,7 @@ export type CaratulaEstimacion = {
   contratistaEmail: string | null
   partidaNombre: string
   monto: number
-  status: "pendiente" | "pagada"
+  status: "pendiente" | "enviada" | "pagada"
   yaGenerada: boolean
   enviadaAt: string | null
   destinatariosPrev: string[] | null
@@ -75,7 +75,7 @@ export default async function CaratulaPage({
       const { data: eRows } = await sb
         .from("estimaciones")
         .select(
-          "id, partida_id, numero, monto_sin_iva, monto_con_iva, status, caratula_generada_url, caratula_enviada_at, destinatarios_email, fecha_solicitud, created_at",
+          "id, partida_id, numero, monto_sin_iva, monto_con_iva, status, caratula_generada_url, caratula_enviada_at, destinatarios_email, fecha_estimacion, created_at",
         )
         .in("partida_id", pIds)
         .is("deleted_at", null)
@@ -92,7 +92,7 @@ export default async function CaratulaPage({
             (contratista?.contacto_email as string | null) ?? null,
           partidaNombre: partida?.nombre ?? "",
           monto: Number(conIva ? e.monto_con_iva : e.monto_sin_iva),
-          status: e.status as "pendiente" | "pagada",
+          status: e.status as "pendiente" | "enviada" | "pagada",
           yaGenerada: Boolean(e.caratula_generada_url),
           enviadaAt: (e.caratula_enviada_at as string | null) ?? null,
           destinatariosPrev: (e.destinatarios_email as string[] | null) ?? null,

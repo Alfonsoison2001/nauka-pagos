@@ -73,7 +73,7 @@ export function FlujoClient({
       if (filters.partida_id && row.partida_id !== filters.partida_id)
         return false
       if (filters.mes) {
-        const rowMes = row.fecha_pago?.slice(0, 7) ?? ""
+        const rowMes = row.fecha_estimacion?.slice(0, 7) ?? ""
         if (rowMes !== filters.mes) return false
       }
       if (filters.busqueda) {
