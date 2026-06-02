@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 import {
   Card,
   CardContent,
@@ -21,7 +22,9 @@ export default function LoginPage() {
           <CardDescription>Inicia sesión para continuar.</CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm />
+          <Suspense fallback={null}>
+            <LoginForm />
+          </Suspense>
         </CardContent>
       </Card>
     </main>

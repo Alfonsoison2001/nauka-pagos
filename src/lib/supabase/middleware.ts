@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr"
 import { type NextRequest, NextResponse } from "next/server"
 import { env } from "@/lib/env"
 
-const PUBLIC_PATHS = ["/login"]
+// /auth/* incluye el callback del magic link / invitación, accesible sin sesión.
+const PUBLIC_PATHS = ["/login", "/auth"]
 
 /**
  * Refreshes the Supabase auth session (rotates cookies) AND enforces

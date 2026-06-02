@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   LogOut,
   Settings,
+  Users,
   Wallet,
 } from "lucide-react"
 import Link from "next/link"
@@ -30,9 +31,10 @@ const TABS: { slug: string; label: string; icon: IconType }[] = [
 type Props = {
   projectId: string
   greetingName: string
+  isAdmin?: boolean
 }
 
-export function Sidebar({ projectId, greetingName }: Props) {
+export function Sidebar({ projectId, greetingName, isAdmin = false }: Props) {
   const pathname = usePathname()
   const base = `/proyectos/${projectId}`
 
@@ -73,6 +75,16 @@ export function Sidebar({ projectId, greetingName }: Props) {
               active={pathname === "/"}
             />
           </li>
+          {isAdmin ? (
+            <li>
+              <SidebarLink
+                href="/usuarios"
+                label="Usuarios"
+                Icon={Users}
+                active={pathname === "/usuarios"}
+              />
+            </li>
+          ) : null}
         </ul>
       </nav>
 

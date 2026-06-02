@@ -38,6 +38,17 @@ export default async function ProjectLayout({
     "Usuario"
   const greetingName = firstNameOf(fullName)
 
+  let isAdmin = false
+  if (user) {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("auth_user_id", user.id)
+      .is("deleted_at", null)
+      .maybeSingle()
+    isAdmin = prof?.role === "admin"
+  }
+
   const { data: projects } = await supabase
     .from("projects")
     .select("id, nombre")
@@ -47,7 +58,11 @@ export default async function ProjectLayout({
 
   return (
     <div className="flex min-h-svh">
-      <Sidebar projectId={project.id} greetingName={greetingName} />
+      <Sidebar
+        projectId={project.id}
+        greetingName={greetingName}
+        isAdmin={isAdmin}
+      />
       <div className="flex min-w-0 flex-1 flex-col bg-nauka-bg">
         <div className="px-12 pt-10">
           <ProjectTopbar

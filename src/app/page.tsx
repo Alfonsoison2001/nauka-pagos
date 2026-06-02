@@ -1,3 +1,4 @@
+import { Users } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { UserMenu } from "@/components/user-menu"
@@ -31,6 +32,14 @@ export default async function HomePage() {
     email.split("@")[0] ??
     "Usuario"
   const initial = fullName.charAt(0).toUpperCase() || "?"
+
+  const { data: myProfile } = await sb
+    .from("profiles")
+    .select("role")
+    .eq("auth_user_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle()
+  const isAdmin = myProfile?.role === "admin"
 
   const { data: projRows } = await sb
     .from("projects")
@@ -131,7 +140,18 @@ export default async function HomePage() {
               Selecciona un proyecto
             </p>
           </div>
-          <UserMenu email={email} displayName={fullName} initial={initial} />
+          <div className="flex items-center gap-3">
+            {isAdmin ? (
+              <Link
+                href="/usuarios"
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-nauka-card-border bg-white px-4 text-sm font-medium text-nauka-dark transition-colors hover:bg-nauka-subtle"
+              >
+                <Users className="size-4" />
+                Usuarios
+              </Link>
+            ) : null}
+            <UserMenu email={email} displayName={fullName} initial={initial} />
+          </div>
         </header>
 
         {tiles.length === 0 ? (
