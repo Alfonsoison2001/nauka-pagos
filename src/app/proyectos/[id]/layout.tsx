@@ -1,8 +1,13 @@
 import { notFound } from "next/navigation"
 import { PersistLastProject } from "@/components/persist-last-project"
-import { ProjectSubNav } from "@/components/project-sub-nav"
-import { TopNav } from "@/components/top-nav"
+import { ProjectTopbar } from "@/components/project-topbar"
+import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/lib/supabase/server"
+
+function firstNameOf(value: string): string {
+  const first = value.trim().split(/\s+/)[0] ?? "Usuario"
+  return first.charAt(0).toUpperCase() + first.slice(1)
+}
 
 export default async function ProjectLayout({
   children,
@@ -24,11 +29,34 @@ export default async function ProjectLayout({
     notFound()
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const fullName =
+    (user?.user_metadata?.full_name as string | undefined) ??
+    user?.email?.split("@")[0] ??
+    "Usuario"
+  const greetingName = firstNameOf(fullName)
+
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id, nombre")
+    .is("deleted_at", null)
+    .eq("status", "activo")
+    .order("nombre")
+
   return (
-    <div className="min-h-svh">
-      <TopNav currentProjectId={project.id} />
-      <ProjectSubNav projectId={project.id} />
-      <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+    <div className="flex min-h-svh">
+      <Sidebar projectId={project.id} greetingName={greetingName} />
+      <div className="flex min-w-0 flex-1 flex-col bg-nauka-bg">
+        <div className="px-12 pt-10">
+          <ProjectTopbar
+            projects={projects ?? []}
+            currentProjectId={project.id}
+          />
+        </div>
+        <main className="px-12 pb-12 pt-8">{children}</main>
+      </div>
       <PersistLastProject projectId={project.id} />
     </div>
   )
