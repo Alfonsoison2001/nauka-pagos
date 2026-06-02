@@ -73,9 +73,8 @@ export default async function PresupuestoPage({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Presupuesto</h2>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-end">
         <NewPartidaButton projectId={id} contratistas={contratistas} />
       </div>
 
@@ -98,8 +97,10 @@ function EmptyState({
   contratistas: ContratistaOption[]
 }) {
   return (
-    <div className="rounded-md border border-dashed p-12 text-center">
-      <p className="text-sm font-medium">Aún no hay partidas.</p>
+    <div className="rounded-2xl border border-nauka-card-border bg-white p-12 text-center shadow-nauka-card">
+      <p className="text-sm font-medium text-nauka-dark">
+        Aún no hay partidas.
+      </p>
       <p className="mt-1 text-sm text-muted-foreground">
         Sube tu primer presupuesto firmado.
       </p>
@@ -120,10 +121,10 @@ function PresupuestoTable({
   projectId: string
 }) {
   return (
-    <div className="overflow-x-auto rounded-md border">
+    <div className="overflow-x-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
       <table className="w-full text-sm tabular-nums">
         <thead>
-          <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
+          <tr className="border-b border-nauka-subtle text-xs uppercase tracking-wider text-slate-500">
             <th className="px-3 py-2.5 text-right">#</th>
             <th className="px-3 py-2.5 text-left">Contratista</th>
             <th className="px-3 py-2.5 text-left">Partida</th>
@@ -138,7 +139,10 @@ function PresupuestoTable({
         </thead>
         <tbody>
           {partidas.map((p, i) => (
-            <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30">
+            <tr
+              key={p.id}
+              className="border-b border-nauka-subtle last:border-0 hover:bg-nauka-bg"
+            >
               <td className="px-3 py-2 text-right text-muted-foreground">
                 {i + 1}
               </td>
