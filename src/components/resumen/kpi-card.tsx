@@ -40,7 +40,7 @@ export function KpiCard({
       <span
         className={cn(
           "text-xs font-medium uppercase tracking-wider",
-          dark ? "text-white/60" : "text-slate-500",
+          dark ? "text-nauka-accent/70" : "text-slate-500",
         )}
       >
         {label}

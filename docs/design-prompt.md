@@ -44,17 +44,32 @@ El dashboard debe sentirse **casi idéntico** a la referencia (`docs/references/
 - Bottom: `#102C36`
 
 ### Cards y superficies
-- Card bg: **`#ECF7F6`** (tinte muy sutil del `#7FCFCB` accent, NO blanco puro — los cards son notoriamente azul-turquesa claros)
-- Card border: `1px solid #C9E8E6` (border en la familia del accent para coherencia visual)
-- Card shadow: `0px 4px 20px rgba(22, 61, 74, 0.05)` (toque del azul de marca, no negro)
-- Card radius: `20px`
+
+**Tipos de card (importante):**
+
+1. **Cards estándar (default)** — fondo BLANCO con borde turquesa sutil
+   - Card bg: `#FFFFFF`
+   - Card border: `1px solid #C9E8E6` (toque turquesa para coherencia con el accent)
+   - Card shadow: `0px 4px 20px rgba(22, 61, 74, 0.05)` (toque del azul de marca, no negro)
+   - Card radius: `20px`
+   - Usar para: hero, composición, tablas, listas, chips, charts, todo lo que no sea KPI principal
+
+2. **KPI Cards principales (variant="dark")** — fondo AZUL OSCURO con número turquesa
+   - Card bg: `#163D4A` (NAUKA dark)
+   - Card border: none o sutil del mismo color
+   - Card shadow: `0px 4px 20px rgba(22, 61, 74, 0.15)` (más fuerte para que destaque)
+   - Label: text-xs uppercase tracking-wider color `#7FCFCB` (turquesa, alpha medio)
+   - Métrica: text-4xl font-medium color `#7FCFCB` tabular-nums
+   - Subtítulo: text-sm color blanco con alpha
+   - Usar SOLO para los 4 KPIs principales del Resumen (Presupuesto Total, Ejercido, Disponible, Por pagar) — son los únicos cards con fondo oscuro
 
 **Jerarquía visual:**
-- Main bg `#F8FAFB` (casi blanco, lo más claro)
-- Cards `#ECF7F6` (tinte turquesa, salen ligeramente del fondo)
-- Sidebar gradiente `#163D4A` → `#102C36` (la zona oscura ancla la composición)
+- Sidebar gradiente `#163D4A` → `#102C36` (zona oscura ancla la composición a la izquierda)
+- Main bg `#F8FAFB` (casi blanco)
+- Cards estándar blancas con border turquesa
+- 4 KPI cards azul oscuro destacan como "focales" sobre el fondo claro
 
-Las cards deben sentirse como **hojas de papel turquesa muy claras flotando** sobre un fondo casi blanco.
+El contraste es: **2 zonas oscuras (sidebar + KPIs) ancla la atención, todo lo demás flota en blanco**.
 
 ### Texto
 - Primary: `#163D4A` (números grandes y headings) o `#0F172A` (body en main)
