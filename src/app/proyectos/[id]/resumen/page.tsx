@@ -213,7 +213,9 @@ export default async function ResumenPage({
       />
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold">Estimaciones por pagar</h2>
+        <h2 className="text-base font-semibold text-nauka-dark">
+          Estimaciones por pagar
+        </h2>
         <EstimacionMiniList
           projectId={id}
           rows={porPagarList}
@@ -222,7 +224,9 @@ export default async function ResumenPage({
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold">Últimos pagos</h2>
+        <h2 className="text-base font-semibold text-nauka-dark">
+          Últimos pagos
+        </h2>
         <EstimacionMiniList
           projectId={id}
           rows={ultimosPagos}

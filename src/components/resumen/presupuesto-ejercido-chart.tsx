@@ -100,8 +100,8 @@ type Props = {
 /** Barra apilada por partida: Ejercido / Por pagar / No comprometido. */
 export function PresupuestoEjercidoChart({ data }: Props) {
   return (
-    <div className="rounded-xl border bg-card p-4">
-      <p className="mb-3 text-sm font-medium">
+    <div className="rounded-2xl border border-nauka-card-border bg-nauka-card p-6 shadow-nauka-card">
+      <p className="mb-4 text-sm font-semibold text-nauka-dark">
         Composición del presupuesto por partida
       </p>
       <ResponsiveContainer

@@ -79,11 +79,11 @@ export function PartidaResumenTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border">
+    <div className="overflow-x-auto rounded-2xl border border-nauka-card-border bg-nauka-card shadow-nauka-card">
       <table className="min-w-full text-sm tabular-nums">
         <thead>
-          <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
-            <th className="px-3 py-2.5 text-left">Contratista</th>
+          <tr className="border-b border-nauka-card-border text-xs uppercase tracking-wider text-slate-500">
+            <th className="px-3 py-3 text-left font-medium">Contratista</th>
             <th className="px-3 py-2.5 text-left">Partida</th>
             <th className="px-3 py-2.5 text-right">Presupuesto</th>
             <th className="px-3 py-2.5 text-right">Ejercido</th>

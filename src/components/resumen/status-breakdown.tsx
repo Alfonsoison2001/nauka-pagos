@@ -28,7 +28,7 @@ export function StatusBreakdown({ projectId, statusBreakdown }: Props) {
           <Link
             key={status}
             href={`/proyectos/${projectId}/flujo-de-pagos?status=${status}`}
-            className="flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5 text-sm transition-colors hover:bg-muted/50"
+            className="flex items-center gap-2 rounded-full border border-nauka-card-border bg-nauka-card px-3 py-1.5 text-sm transition-colors hover:bg-white"
           >
             <span className={cn("size-2 rounded-full", dot)} />
             <span className="font-medium">{label}</span>

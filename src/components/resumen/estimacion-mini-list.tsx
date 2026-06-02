@@ -61,7 +61,7 @@ export function EstimacionMiniList({ projectId, rows, emptyMessage }: Props) {
   }
 
   return (
-    <ul className="divide-y rounded-xl border">
+    <ul className="divide-y divide-nauka-card-border rounded-2xl border border-nauka-card-border bg-nauka-card shadow-nauka-card">
       {rows.map((r) => (
         <li
           key={r.id}

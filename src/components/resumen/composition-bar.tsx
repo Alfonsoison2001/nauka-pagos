@@ -32,14 +32,16 @@ export function CompositionBar({
   ] as const
 
   return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="mb-2 flex items-baseline justify-between">
-        <p className="text-sm font-medium">Composición del proyecto</p>
-        <p className="text-sm text-muted-foreground tabular-nums">
+    <div className="rounded-2xl border border-nauka-card-border bg-nauka-card p-6 shadow-nauka-card">
+      <div className="mb-3 flex items-baseline justify-between">
+        <p className="text-sm font-semibold text-nauka-dark">
+          Composición del proyecto
+        </p>
+        <p className="text-sm text-slate-500 tabular-nums">
           {formatPct(avance)} ejercido
         </p>
       </div>
-      <div className="flex h-4 w-full overflow-hidden rounded-full bg-muted">
+      <div className="flex h-4 w-full overflow-hidden rounded-full bg-white">
         {segments.map((s) =>
           s.value > 0 ? (
             <div

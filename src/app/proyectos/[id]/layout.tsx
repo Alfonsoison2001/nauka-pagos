@@ -48,7 +48,7 @@ export default async function ProjectLayout({
   return (
     <div className="flex min-h-svh">
       <Sidebar projectId={project.id} greetingName={greetingName} />
-      <div className="flex min-w-0 flex-1 flex-col bg-nauka-bg">
+      <div className="flex min-w-0 flex-1 flex-col bg-gradient-to-b from-[#F1F9F8] to-nauka-bg">
         <div className="px-12 pt-10">
           <ProjectTopbar
             projects={projects ?? []}
