@@ -50,9 +50,9 @@ export function PartidaResumenTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-nauka-card-border bg-nauka-card shadow-nauka-card">
+    <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-nauka-card shadow-nauka-card">
       <table className="min-w-full text-sm tabular-nums">
-        <thead>
+        <thead className="sticky top-0 z-10">
           <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
             <th className="px-3 py-3 text-left font-medium">Contratista</th>
             <th className="px-3 py-2.5 text-left">Partida</th>

@@ -116,18 +116,22 @@ export function PresupuestoEjercidoChart({ data }: Props) {
           <CartesianGrid
             strokeDasharray="3 3"
             horizontal={false}
-            stroke="#e5e7eb"
+            stroke="#eef2f5"
           />
           <XAxis
             type="number"
             tickFormatter={compactMXN}
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: "#94a3b8" }}
+            axisLine={false}
+            tickLine={false}
           />
           <YAxis
             type="category"
             dataKey="name"
             width={120}
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: "#94a3b8" }}
+            axisLine={false}
+            tickLine={false}
           />
           <Tooltip
             content={<ChartTooltip />}

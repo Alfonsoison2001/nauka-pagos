@@ -44,9 +44,9 @@ export function FlujoTable({
   pagadoAcumByPartida,
 }: Props) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
+    <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
       <table className="min-w-full text-sm tabular-nums">
-        <thead>
+        <thead className="sticky top-0 z-20">
           <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
             <th className="px-3 py-2.5 text-right">#</th>
             <th className="px-3 py-2.5 text-right">Fecha estimación</th>
@@ -61,7 +61,7 @@ export function FlujoTable({
             <th className="px-3 py-2.5 text-center">Estatus</th>
             <th className="px-3 py-2.5 text-left">Comprobante</th>
             <th className="px-3 py-2.5 text-left">Notas</th>
-            <th className="sticky right-0 z-10 bg-nauka-dark px-3 py-2.5" />
+            <th className="sticky right-0 z-30 bg-nauka-dark px-3 py-2.5" />
           </tr>
         </thead>
         <tbody>

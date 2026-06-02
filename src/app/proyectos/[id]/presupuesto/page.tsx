@@ -121,9 +121,9 @@ function PresupuestoTable({
   projectId: string
 }) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
+    <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
       <table className="w-full text-sm tabular-nums">
-        <thead>
+        <thead className="sticky top-0 z-10">
           <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
             <th className="px-3 py-2.5 text-right">#</th>
             <th className="px-3 py-2.5 text-left">Contratista</th>
