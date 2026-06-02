@@ -4,7 +4,7 @@ import {
   ArrowRightLeft,
   CalendarDays,
   FileText,
-  Layers,
+  Home,
   LayoutDashboard,
   LogOut,
   Settings,
@@ -40,7 +40,12 @@ export function Sidebar({ projectId, greetingName }: Props) {
     <aside className="sticky top-0 flex h-svh w-[260px] shrink-0 flex-col bg-gradient-to-b from-nauka-dark to-nauka-dark-2 text-white">
       {/* Logo / wordmark — reemplazar por <Image src="/logo-nauka.svg" /> al subir el asset */}
       <div className="px-6 pt-8">
-        <span className="text-2xl font-medium tracking-wide">NAUKA</span>
+        <Link
+          href="/"
+          className="text-2xl font-medium tracking-wide transition-opacity hover:opacity-80"
+        >
+          NAUKA
+        </Link>
         <p className="mt-3 text-sm text-white/70">¡Hola, {greetingName}!</p>
       </div>
 
@@ -65,8 +70,8 @@ export function Sidebar({ projectId, greetingName }: Props) {
           <li className="mt-1">
             <SidebarLink
               href="/"
-              label="Consolidado"
-              Icon={Layers}
+              label="Home"
+              Icon={Home}
               active={pathname === "/"}
             />
           </li>
