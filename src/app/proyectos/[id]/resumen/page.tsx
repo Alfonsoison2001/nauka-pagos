@@ -171,6 +171,7 @@ export default async function ResumenPage({
         <KpiCard
           label="Presupuesto total"
           value={formatMXN(r.totalPresupuesto)}
+          variant="dark"
         />
         <KpiCard
           label="Ejercido"
@@ -181,12 +182,12 @@ export default async function ResumenPage({
         <KpiCard
           label="Disponible"
           value={formatMXN(r.totalDisponible)}
-          tone={r.totalDisponible < 0 ? "warning" : "default"}
+          variant="dark"
         />
         <KpiCard
           label="Por pagar"
           value={formatMXN(r.porPagar.monto)}
-          tone="muted"
+          variant="dark"
           hint={`${r.porPagar.count} estimaciones (pendiente + enviada)`}
         />
       </div>

@@ -16,8 +16,8 @@
   --color-nauka-dark-2: #102c36; /* fondo del gradiente del sidebar */
   --color-nauka-accent: #7fcfcb; /* item activo, hover, charts */
   --color-nauka-bg: #f8fafb; /* fondo del área principal */
-  --color-nauka-card: #ecf7f6; /* fondo de cards (tinte turquesa claro) */
-  --color-nauka-card-border: #c9e8e6; /* borde de cards (familia accent) */
+  --color-nauka-card: #ffffff; /* fondo de cards: blanco (solo borde azul) */
+  --color-nauka-card-border: #c9e8e6; /* borde de cards (azul familia accent) */
   --color-nauka-subtle: #eef2f5; /* dividers sutiles */
   --color-nauka-success: #16a34a; /* Pagada / positivo */
   --color-nauka-warning: #f59e0b; /* Enviada / en espera */
