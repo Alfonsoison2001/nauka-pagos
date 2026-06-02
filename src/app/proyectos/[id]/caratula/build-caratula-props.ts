@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises"
+import { join } from "node:path"
 import type {
   CaratulaFirmante,
   CaratulaProps,
@@ -141,17 +143,14 @@ export async function buildCaratulaData(
     }
   }
 
-  // Logo como data URI (bucket privado) si existe.
+  // Logo NAUKA estático (PNG transparente, sin caja blanca) embebido como
+  // data URI. Se lee de public/ en el render server-side.
   let logoSrc: string | null = null
-  if (project.logo_url) {
-    const { data: blob } = await sb.storage
-      .from("proyectos")
-      .download(project.logo_url)
-    if (blob) {
-      const buf = Buffer.from(await blob.arrayBuffer())
-      const mime = blob.type || "image/png"
-      logoSrc = `data:${mime};base64,${buf.toString("base64")}`
-    }
+  try {
+    const buf = await readFile(join(process.cwd(), "public", "logo-nauka.png"))
+    logoSrc = `data:image/png;base64,${buf.toString("base64")}`
+  } catch {
+    logoSrc = null
   }
 
   const lote = (project.lote as string | null) ?? ""

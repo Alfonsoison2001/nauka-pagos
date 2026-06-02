@@ -38,15 +38,13 @@ export function Sidebar({ projectId, greetingName }: Props) {
 
   return (
     <aside className="sticky top-0 flex h-svh w-[260px] shrink-0 flex-col bg-gradient-to-b from-nauka-dark to-nauka-dark-2 text-white">
-      {/* Logo / wordmark — reemplazar por <Image src="/logo-nauka.svg" /> al subir el asset */}
-      <div className="px-6 pt-8">
-        <Link
-          href="/"
-          className="text-2xl font-medium tracking-wide transition-opacity hover:opacity-80"
-        >
-          NAUKA
+      {/* Logo NAUKA (PNG blanco transparente) → Home */}
+      <div className="px-6 pt-10">
+        <Link href="/" className="block transition-opacity hover:opacity-80">
+          {/* biome-ignore lint/performance/noImgElement: logo estático del sidebar */}
+          <img src="/logo-nauka-white.png" alt="NAUKA" className="w-[70%]" />
         </Link>
-        <p className="mt-3 text-sm text-white/70">¡Hola, {greetingName}!</p>
+        <p className="mt-4 text-sm text-white/70">¡Hola, {greetingName}!</p>
       </div>
 
       <div className="mx-6 my-5 border-t border-white/10" />
