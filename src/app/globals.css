@@ -16,12 +16,14 @@
   --color-nauka-dark-2: #102c36; /* fondo del gradiente del sidebar */
   --color-nauka-accent: #7fcfcb; /* item activo, hover, charts */
   --color-nauka-bg: #f8fafb; /* fondo del área principal */
-  --color-nauka-subtle: #eef2f5; /* borde de cards, dividers */
+  --color-nauka-card: #ecf7f6; /* fondo de cards (tinte turquesa claro) */
+  --color-nauka-card-border: #c9e8e6; /* borde de cards (familia accent) */
+  --color-nauka-subtle: #eef2f5; /* dividers sutiles */
   --color-nauka-success: #16a34a; /* Pagada / positivo */
   --color-nauka-warning: #f59e0b; /* Enviada / en espera */
   --color-nauka-danger: #dc2626; /* sobre-ejercido */
   --color-nauka-neutral: #94a3b8; /* Pendiente / disponible */
-  --shadow-nauka-card: 0 4px 20px rgb(0 0 0 / 0.03);
+  --shadow-nauka-card: 0 4px 20px rgb(22 61 74 / 0.05); /* azul de marca */
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

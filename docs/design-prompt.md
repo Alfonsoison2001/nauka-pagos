@@ -44,10 +44,17 @@ El dashboard debe sentirse **casi idéntico** a la referencia (`docs/references/
 - Bottom: `#102C36`
 
 ### Cards y superficies
-- Card bg: `#FFFFFF`
-- Card border: `1px solid #EEF2F5`
-- Card shadow: `0px 4px 20px rgba(0,0,0,0.03)` (las cards deben sentirse como hojas de papel flotando)
+- Card bg: **`#ECF7F6`** (tinte muy sutil del `#7FCFCB` accent, NO blanco puro — los cards son notoriamente azul-turquesa claros)
+- Card border: `1px solid #C9E8E6` (border en la familia del accent para coherencia visual)
+- Card shadow: `0px 4px 20px rgba(22, 61, 74, 0.05)` (toque del azul de marca, no negro)
 - Card radius: `20px`
+
+**Jerarquía visual:**
+- Main bg `#F8FAFB` (casi blanco, lo más claro)
+- Cards `#ECF7F6` (tinte turquesa, salen ligeramente del fondo)
+- Sidebar gradiente `#163D4A` → `#102C36` (la zona oscura ancla la composición)
+
+Las cards deben sentirse como **hojas de papel turquesa muy claras flotando** sobre un fondo casi blanco.
 
 ### Texto
 - Primary: `#163D4A` (números grandes y headings) o `#0F172A` (body en main)
@@ -176,6 +183,15 @@ Specs:
 - Ejes: minimal (sin tick lines, text-xs color `#94A3B8`)
 - Tooltip: card blanca, radius `12px`, shadow sutil, border `#EEF2F5`, padding `p-3`
 - **Referencia mental:** Stripe / Mercury / Linear (NO Power BI / Tableau / Excel)
+
+#### Paleta de chart segments (monocromático azul + gris — NO verde, NO amarillo)
+
+Cuando un chart tenga segmentos para Ejercido / Por pagar / Disponible:
+- **Ejercido:** `#7FCFCB` (NAUKA accent — claro, "completado")
+- **Por pagar:** `#163D4A` (NAUKA dark — fuerte, "comprometido")
+- **Disponible / No comprometido:** `#E5E7EB` (gris claro)
+
+**Importante:** los STATUS BADGES de la app (Pendiente / Enviada / Pagada en tablas y listas) sí mantienen sus colores funcionales (verde Pagada, amber Enviada, gris Pendiente) — la regla monocromática azul aplica SOLO a chart segments.
 
 ### Sparklines (mini chart en KPI cards)
 - Sin ejes, sin labels, sin grid
