@@ -124,7 +124,7 @@ function PresupuestoTable({
     <div className="overflow-x-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
       <table className="w-full text-sm tabular-nums">
         <thead>
-          <tr className="border-b border-nauka-subtle text-xs uppercase tracking-wider text-slate-500">
+          <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
             <th className="px-3 py-2.5 text-right">#</th>
             <th className="px-3 py-2.5 text-left">Contratista</th>
             <th className="px-3 py-2.5 text-left">Partida</th>
