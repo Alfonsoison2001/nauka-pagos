@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils"
 
 type Tone = "default" | "positive" | "warning" | "muted"
+type Variant = "light" | "dark"
 
 const toneValue: Record<Tone, string> = {
   default: "text-nauka-dark",
@@ -14,21 +15,51 @@ type Props = {
   value: string
   hint?: string
   tone?: Tone
+  /** "dark" = card hero azul oscuro con valor en turquesa (alto contraste). */
+  variant?: Variant
 }
 
-/** Tarjeta KPI: etiqueta + valor grande (tabular) + hint opcional. */
-export function KpiCard({ label, value, hint, tone = "default" }: Props) {
+/** Tarjeta KPI: etiqueta uppercase + valor grande (tabular) + hint opcional. */
+export function KpiCard({
+  label,
+  value,
+  hint,
+  tone = "default",
+  variant = "light",
+}: Props) {
+  const dark = variant === "dark"
   return (
-    <div className="flex flex-col gap-1.5 rounded-2xl border border-nauka-card-border bg-nauka-card p-6 shadow-nauka-card">
-      <span className="text-xs font-medium uppercase tracking-wider text-slate-500">
+    <div
+      className={cn(
+        "flex flex-col gap-1.5 rounded-2xl border p-6 shadow-nauka-card",
+        dark
+          ? "border-transparent bg-nauka-dark"
+          : "border-nauka-card-border bg-nauka-card",
+      )}
+    >
+      <span
+        className={cn(
+          "text-xs font-medium uppercase tracking-wider",
+          dark ? "text-white/60" : "text-slate-500",
+        )}
+      >
         {label}
       </span>
       <span
-        className={cn("text-3xl font-medium tabular-nums", toneValue[tone])}
+        className={cn(
+          "text-3xl font-medium tabular-nums",
+          dark ? "text-nauka-accent" : toneValue[tone],
+        )}
       >
         {value}
       </span>
-      {hint && <span className="text-xs text-slate-400">{hint}</span>}
+      {hint && (
+        <span
+          className={cn("text-xs", dark ? "text-white/50" : "text-slate-400")}
+        >
+          {hint}
+        </span>
+      )}
     </div>
   )
 }

@@ -175,7 +175,7 @@ export default async function ResumenPage({
         <KpiCard
           label="Ejercido"
           value={formatMXN(r.totalEjercido)}
-          tone="positive"
+          variant="dark"
           hint={`${r.statusBreakdown.pagada.count} pagadas`}
         />
         <KpiCard
