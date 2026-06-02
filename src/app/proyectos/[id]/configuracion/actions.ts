@@ -137,8 +137,29 @@ export async function updateProjectConfig(
 export async function addProjectPagador(projectId: string, formData: FormData) {
   const nombre = ((formData.get("nombre") as string) || "").trim()
   if (!nombre) return
+  const emailRaw = ((formData.get("email") as string) || "").trim()
   const supabase = await createClient()
-  await supabase.from("pagadores").insert({ nombre, project_id: projectId })
+  await supabase
+    .from("pagadores")
+    .insert({ nombre, project_id: projectId, email: emailRaw || null })
+  revalidatePath(`/proyectos/${projectId}/configuracion`)
+}
+
+/**
+ * Actualiza el correo de un pagador (destinatario de la carátula). Editar un
+ * pagador GLOBAL afecta a todos los proyectos que lo comparten. Vacío → null.
+ */
+export async function updatePagadorEmail(
+  pagadorId: string,
+  projectId: string,
+  formData: FormData,
+) {
+  const raw = ((formData.get("email") as string) || "").trim()
+  const email = raw === "" ? null : raw
+  // Si viene algo, validar que sea un correo; si no, no hacer nada.
+  if (email && !z.string().email().safeParse(email).success) return
+  const supabase = await createClient()
+  await supabase.from("pagadores").update({ email }).eq("id", pagadorId)
   revalidatePath(`/proyectos/${projectId}/configuracion`)
 }
 

@@ -1,4 +1,12 @@
 import { notFound } from "next/navigation"
+import {
+  type ApprovalRequestRow,
+  buildDocumentApproval,
+  type DocumentApproval,
+  fetchCaratulaRequests,
+  fetchVotesByRequest,
+} from "@/lib/approvals/fetch"
+import { getMyProfile } from "@/lib/auth/roles"
 import { createClient } from "@/lib/supabase/server"
 import { CaratulaClient } from "./caratula-client"
 
@@ -7,14 +15,15 @@ export const metadata = { title: "Carátula" }
 export type CaratulaEstimacion = {
   id: string
   numero: string
+  contratistaId: string
   contratistaNombre: string
-  contratistaEmail: string | null
   partidaNombre: string
   monto: number
   status: "pendiente" | "enviada" | "pagada"
   yaGenerada: boolean
   enviadaAt: string | null
   destinatariosPrev: string[] | null
+  pagadorEmail: string | null
 }
 
 export type CaratulaFirmanteRow = {
@@ -75,27 +84,52 @@ export default async function CaratulaPage({
       const { data: eRows } = await sb
         .from("estimaciones")
         .select(
-          "id, partida_id, numero, monto_sin_iva, monto_con_iva, status, caratula_generada_url, caratula_enviada_at, destinatarios_email, fecha_estimacion, created_at",
+          "id, partida_id, pagador_id, numero, monto_sin_iva, monto_con_iva, status, caratula_generada_url, caratula_enviada_at, destinatarios_email, fecha_estimacion, created_at",
         )
         .in("partida_id", pIds)
         .is("deleted_at", null)
         .order("created_at", { ascending: true })
 
+      // Email del pagador de cada estimación (destinatario de la carátula).
+      const pagadorIds = [
+        ...new Set(
+          (eRows ?? [])
+            .map((e) => e.pagador_id as string | null)
+            .filter((x): x is string => Boolean(x)),
+        ),
+      ]
+      const pagadorEmailMap = new Map<string, string | null>()
+      if (pagadorIds.length > 0) {
+        const { data: pagEmailRows } = await sb
+          .from("pagadores")
+          .select("id, email")
+          .in("id", pagadorIds)
+        for (const p of pagEmailRows ?? []) {
+          pagadorEmailMap.set(
+            p.id as string,
+            (p.email as string | null) ?? null,
+          )
+        }
+      }
+
       estimaciones = (eRows ?? []).map((e) => {
         const partida = partidasMap.get(e.partida_id as string)
         const contratista = contratistasMap.get(partida?.contratista_id ?? "")
+        const pagadorId = e.pagador_id as string | null
         return {
           id: e.id as string,
           numero: e.numero as string,
+          contratistaId: partida?.contratista_id ?? "",
           contratistaNombre: contratista?.nombre ?? "",
-          contratistaEmail:
-            (contratista?.contacto_email as string | null) ?? null,
           partidaNombre: partida?.nombre ?? "",
           monto: Number(conIva ? e.monto_con_iva : e.monto_sin_iva),
           status: e.status as "pendiente" | "enviada" | "pagada",
           yaGenerada: Boolean(e.caratula_generada_url),
           enviadaAt: (e.caratula_enviada_at as string | null) ?? null,
           destinatariosPrev: (e.destinatarios_email as string[] | null) ?? null,
+          pagadorEmail: pagadorId
+            ? (pagadorEmailMap.get(pagadorId) ?? null)
+            : null,
         }
       })
     }
@@ -119,6 +153,29 @@ export default async function CaratulaPage({
     }
   }
 
+  // Estado de aprobación por estimación (rondas + votos).
+  const profile = await getMyProfile()
+  const estIds = estimaciones.map((e) => e.id)
+  const reqs = await fetchCaratulaRequests(sb, estIds)
+  const votesByReq = await fetchVotesByRequest(
+    sb,
+    reqs.map((r) => r.id),
+  )
+  const reqsByDoc = new Map<string, ApprovalRequestRow[]>()
+  for (const r of reqs) {
+    const arr = reqsByDoc.get(r.documentId) ?? []
+    arr.push(r)
+    reqsByDoc.set(r.documentId, arr)
+  }
+  const approvalByEst: Record<string, DocumentApproval> = {}
+  for (const e of estimaciones) {
+    approvalByEst[e.id] = buildDocumentApproval(
+      reqsByDoc.get(e.id) ?? [],
+      votesByReq,
+      profile?.firmanteId ?? null,
+    )
+  }
+
   return (
     <CaratulaClient
       projectId={id}
@@ -126,6 +183,8 @@ export default async function CaratulaPage({
       estimaciones={estimaciones}
       firmantes={firmantes}
       defaultEmails={(project.default_emails as string[] | null) ?? []}
+      isAdmin={profile?.role === "admin"}
+      approvalByEst={approvalByEst}
     />
   )
 }

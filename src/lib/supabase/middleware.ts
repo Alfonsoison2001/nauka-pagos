@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { type NextRequest, NextResponse } from "next/server"
 import { env } from "@/lib/env"
+import { LAST_PROJECT_COOKIE } from "@/lib/last-project"
 
 // /auth/* incluye el callback del magic link / invitación, accesible sin sesión.
 const PUBLIC_PATHS = ["/login", "/auth"]
@@ -57,6 +58,18 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = "/"
     return NextResponse.redirect(url)
+  }
+
+  // Recordar el último proyecto visitado (cookie SSR-legible). El sidebar fuera
+  // de un proyecto (/aprobaciones) la usa para apuntar los tabs ahí, no al
+  // primer proyecto alfabético. Server-side → no depende de timing del cliente.
+  const projMatch = pathname.match(/^\/proyectos\/([^/]+)/)
+  if (projMatch?.[1]) {
+    response.cookies.set(LAST_PROJECT_COOKIE, projMatch[1], {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+    })
   }
 
   return response

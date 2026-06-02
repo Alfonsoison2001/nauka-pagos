@@ -1,15 +1,34 @@
 import { formatMXN, formatPct } from "@/lib/format"
+import { SEGMENT_COLORS, SEGMENT_LABELS } from "./colors"
 
 type Props = {
   pctAvance: number
   ejercido: number
+  porPagar: number
   presupuesto: number
 }
 
-/** Hero del Resumen: % avance grande + barra + "Ejercido X de Y contratado". */
-export function AvanceHero({ pctAvance, ejercido, presupuesto }: Props) {
-  // La barra se topa visualmente en 100% aunque haya sobre-ejercido.
-  const width = Math.min(100, Math.max(0, pctAvance * 100))
+/** Hero del Resumen: % avance grande + barra de 3 colores (Ejercido / Por
+ * pagar / No comprometido) + "Ejercido X de Y contratado". */
+export function AvanceHero({
+  pctAvance,
+  ejercido,
+  porPagar,
+  presupuesto,
+}: Props) {
+  const noComprometido = Math.max(0, presupuesto - ejercido - porPagar)
+  const pct = (n: number) =>
+    presupuesto > 0 ? Math.min(100, Math.max(0, (n / presupuesto) * 100)) : 0
+  const segments = [
+    { key: "ejercido", value: ejercido, color: SEGMENT_COLORS.ejercido },
+    { key: "porPagar", value: porPagar, color: SEGMENT_COLORS.porPagar },
+    {
+      key: "noComprometido",
+      value: noComprometido,
+      color: SEGMENT_COLORS.noComprometido,
+    },
+  ] as const
+
   return (
     <div className="rounded-2xl border border-nauka-card-border bg-nauka-card p-8 shadow-nauka-card">
       <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -21,18 +40,34 @@ export function AvanceHero({ pctAvance, ejercido, presupuesto }: Props) {
         </span>
         <span className="text-sm text-slate-500">ejercido</span>
       </div>
-      <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-[#C9E8E6]">
-        <div
-          className="h-full rounded-full bg-nauka-accent transition-all"
-          style={{ width: `${width}%` }}
-        />
+      <div className="mt-4 flex h-2.5 w-full overflow-hidden rounded-full bg-[#E5E7EB]">
+        {segments.map((s) =>
+          s.value > 0 ? (
+            <div
+              key={s.key}
+              className="h-full"
+              style={{ width: `${pct(s.value)}%`, backgroundColor: s.color }}
+            />
+          ) : null,
+        )}
       </div>
-      <p className="mt-3 text-sm text-slate-500 tabular-nums">
-        <span className="font-medium text-nauka-dark">
-          {formatMXN(ejercido)}
-        </span>{" "}
-        de {formatMXN(presupuesto)} contratado
-      </p>
+      {/* Leyenda: los 3 segmentos con su color y monto. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+        {segments.map((s) => (
+          <span key={s.key} className="flex items-center gap-1.5">
+            <span
+              className="size-2.5 rounded-full"
+              style={{ backgroundColor: s.color }}
+            />
+            <span className="text-muted-foreground">
+              {SEGMENT_LABELS[s.key]}:
+            </span>
+            <span className="font-medium tabular-nums text-nauka-dark">
+              {formatMXN(s.value)}
+            </span>
+          </span>
+        ))}
+      </div>
     </div>
   )
 }

@@ -10,7 +10,11 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/server"
-import { addProjectPagador, removeProjectPagador } from "./actions"
+import {
+  addProjectPagador,
+  removeProjectPagador,
+  updatePagadorEmail,
+} from "./actions"
 import { ConfigurationForm } from "./configuration-form"
 import { DeleteProjectButton } from "./delete-project-button"
 import { type FirmanteItem, FirmantesSection } from "./firmantes-section"
@@ -51,14 +55,14 @@ export default async function ConfiguracionPage({
 
   const { data: globalPagadores } = await supabase
     .from("pagadores")
-    .select("id, nombre")
+    .select("id, nombre, email")
     .is("project_id", null)
     .is("deleted_at", null)
     .order("nombre")
 
   const { data: projectPagadores } = await supabase
     .from("pagadores")
-    .select("id, nombre")
+    .select("id, nombre, email")
     .eq("project_id", id)
     .is("deleted_at", null)
     .order("nombre")
@@ -152,8 +156,9 @@ export default async function ConfiguracionPage({
         <CardHeader>
           <CardTitle>Pagadores</CardTitle>
           <CardDescription>
-            Los 4 pagadores globales aparecen en cada proyecto. Puedes agregar
-            pagadores específicos solo para este proyecto.
+            Quién mueve el dinero (Salomon Ison, Fasja, NAUKA…). Su correo es el
+            destinatario de la carátula / solicitud de pago. Editar el correo de
+            un pagador global aplica a todos los proyectos.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -163,10 +168,18 @@ export default async function ConfiguracionPage({
               {globalPagadores?.map((p) => (
                 <li
                   key={p.id}
-                  className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                  className="flex flex-col gap-2 rounded-md border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <span>{p.nombre}</span>
-                  <Badge variant="secondary">Global</Badge>
+                  <div className="flex items-center gap-2">
+                    <span>{p.nombre}</span>
+                    <Badge variant="secondary">Global</Badge>
+                  </div>
+                  <PagadorEmailForm
+                    pagadorId={p.id}
+                    projectId={project.id}
+                    nombre={p.nombre}
+                    email={p.email ?? null}
+                  />
                 </li>
               ))}
             </ul>
@@ -181,21 +194,33 @@ export default async function ConfiguracionPage({
                 {projectPagadores.map((p) => (
                   <li
                     key={p.id}
-                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                    className="flex flex-col gap-2 rounded-md border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
                   >
                     <span>{p.nombre}</span>
-                    <form
-                      action={removeProjectPagador.bind(null, p.id, project.id)}
-                    >
-                      <Button
-                        type="submit"
-                        variant="ghost"
-                        size="sm"
-                        aria-label={`Quitar ${p.nombre}`}
+                    <div className="flex items-center gap-2">
+                      <PagadorEmailForm
+                        pagadorId={p.id}
+                        projectId={project.id}
+                        nombre={p.nombre}
+                        email={p.email ?? null}
+                      />
+                      <form
+                        action={removeProjectPagador.bind(
+                          null,
+                          p.id,
+                          project.id,
+                        )}
                       >
-                        Quitar
-                      </Button>
-                    </form>
+                        <Button
+                          type="submit"
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Quitar ${p.nombre}`}
+                        >
+                          Quitar
+                        </Button>
+                      </form>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -206,14 +231,20 @@ export default async function ConfiguracionPage({
             )}
             <form
               action={addProjectPagador.bind(null, project.id)}
-              className="mt-3 flex gap-2"
+              className="mt-3 flex flex-col gap-2 sm:flex-row"
             >
               <Input
                 name="nombre"
-                placeholder="Nombre del pagador específico"
+                placeholder="Nombre del pagador"
                 aria-label="Nombre del nuevo pagador"
                 required
                 maxLength={120}
+              />
+              <Input
+                name="email"
+                type="email"
+                placeholder="Correo (opcional)"
+                aria-label="Correo del nuevo pagador"
               />
               <Button type="submit">Agregar</Button>
             </form>
@@ -249,5 +280,37 @@ export default async function ConfiguracionPage({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/** Editor inline del correo de un pagador (destinatario de la carátula). */
+function PagadorEmailForm({
+  pagadorId,
+  projectId,
+  nombre,
+  email,
+}: {
+  pagadorId: string
+  projectId: string
+  nombre: string
+  email: string | null
+}) {
+  return (
+    <form
+      action={updatePagadorEmail.bind(null, pagadorId, projectId)}
+      className="flex items-center gap-2"
+    >
+      <Input
+        name="email"
+        type="email"
+        defaultValue={email ?? ""}
+        placeholder="correo@pagador.com"
+        aria-label={`Correo de ${nombre}`}
+        className="h-8 w-full sm:w-56"
+      />
+      <Button type="submit" variant="ghost" size="sm">
+        Guardar
+      </Button>
+    </form>
   )
 }

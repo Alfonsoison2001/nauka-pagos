@@ -1,0 +1,256 @@
+import type { createClient } from "@/lib/supabase/server"
+import type {
+  RequestStatus,
+  TimelineRound,
+  VoteDisplay,
+  VoteStatus,
+} from "./compute"
+
+type ServerClient = Awaited<ReturnType<typeof createClient>>
+
+export type ApprovalRequestRow = {
+  id: string
+  documentId: string
+  projectId: string
+  round: number
+  status: RequestStatus
+  requestedAt: string
+  resolvedAt: string | null
+}
+export type ApprovalVoteRow = {
+  id: string
+  requestId: string
+  firmanteId: string
+  firmanteNombre: string
+  status: VoteStatus
+  onBehalf: boolean
+  decidedAt: string | null
+  motivo: string | null
+}
+
+type RawRequest = {
+  id: string
+  document_id: string
+  project_id: string
+  round: number
+  status: string
+  requested_at: string
+  resolved_at: string | null
+}
+type RawVote = {
+  id: string
+  request_id: string
+  firmante_id: string
+  status: string
+  on_behalf: boolean
+  decided_at: string | null
+  motivo: string | null
+}
+
+function mapRequest(r: RawRequest): ApprovalRequestRow {
+  return {
+    id: r.id,
+    documentId: r.document_id,
+    projectId: r.project_id,
+    round: r.round,
+    status: r.status as RequestStatus,
+    requestedAt: r.requested_at,
+    resolvedAt: r.resolved_at,
+  }
+}
+
+/** Solicitudes de carátula; opcionalmente acotadas a ciertos document_id. */
+export async function fetchCaratulaRequests(
+  sb: ServerClient,
+  documentIds?: string[],
+): Promise<ApprovalRequestRow[]> {
+  if (documentIds && documentIds.length === 0) return []
+  let q = sb
+    .from("approval_requests")
+    .select(
+      "id, document_id, project_id, round, status, requested_at, resolved_at",
+    )
+    .eq("document_type", "caratula")
+  if (documentIds) q = q.in("document_id", documentIds)
+  const { data } = await q.order("requested_at", { ascending: false })
+  return ((data ?? []) as RawRequest[]).map(mapRequest)
+}
+
+async function resolveFirmanteNames(
+  sb: ServerClient,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const m = new Map<string, string>()
+  if (ids.length === 0) return m
+  const { data } = await sb.from("firmantes").select("id, nombre").in("id", ids)
+  for (const f of (data ?? []) as { id: string; nombre: string }[]) {
+    m.set(f.id, f.nombre)
+  }
+  return m
+}
+
+/** Votos agrupados por request_id, con el nombre del firmante resuelto. */
+export async function fetchVotesByRequest(
+  sb: ServerClient,
+  requestIds: string[],
+): Promise<Map<string, ApprovalVoteRow[]>> {
+  const map = new Map<string, ApprovalVoteRow[]>()
+  if (requestIds.length === 0) return map
+
+  const { data: vRaw } = await sb
+    .from("approvals")
+    .select(
+      "id, request_id, firmante_id, status, on_behalf, decided_at, motivo",
+    )
+    .in("request_id", requestIds)
+  const votes = (vRaw ?? []) as RawVote[]
+  const names = await resolveFirmanteNames(sb, [
+    ...new Set(votes.map((v) => v.firmante_id)),
+  ])
+
+  for (const v of votes) {
+    const arr = map.get(v.request_id) ?? []
+    arr.push({
+      id: v.id,
+      requestId: v.request_id,
+      firmanteId: v.firmante_id,
+      firmanteNombre: names.get(v.firmante_id) ?? "—",
+      status: v.status as VoteStatus,
+      onBehalf: v.on_behalf,
+      decidedAt: v.decided_at,
+      motivo: v.motivo,
+    })
+    map.set(v.request_id, arr)
+  }
+  return map
+}
+
+export type DocumentApproval = {
+  hasRequests: boolean
+  latestStatus: RequestStatus | null
+  latestRound: number
+  isOpen: boolean
+  chips: VoteDisplay[]
+  rounds: TimelineRound[]
+  /** Voto pendiente del usuario actual en la ronda abierta (para firmar). */
+  myPendingApprovalId: string | null
+  /** Votos pendientes (id + firmante) de la ronda abierta — para override admin. */
+  pendingVotes: { approvalId: string; firmanteNombre: string }[]
+  rejectionMotivo: string | null
+}
+
+/**
+ * Ensambla el estado de aprobación de UN documento a partir de sus rondas y
+ * votos. Reusado por la bandeja y la pestaña Carátula.
+ */
+export function buildDocumentApproval(
+  requestsForDoc: ApprovalRequestRow[],
+  votesByRequest: Map<string, ApprovalVoteRow[]>,
+  myFirmanteId: string | null,
+): DocumentApproval {
+  if (requestsForDoc.length === 0) {
+    return {
+      hasRequests: false,
+      latestStatus: null,
+      latestRound: 0,
+      isOpen: false,
+      chips: [],
+      rounds: [],
+      myPendingApprovalId: null,
+      pendingVotes: [],
+      rejectionMotivo: null,
+    }
+  }
+
+  const sorted = [...requestsForDoc].sort((a, b) => b.round - a.round)
+  const latest = sorted[0]
+  const latestVotes = votesByRequest.get(latest.id) ?? []
+  const isOpen = latest.status === "en_aprobacion"
+
+  const rounds: TimelineRound[] = sorted.map((r) => ({
+    round: r.round,
+    status: r.status,
+    requestedAt: r.requestedAt,
+    votes: (votesByRequest.get(r.id) ?? []).map((v) => ({
+      firmanteNombre: v.firmanteNombre,
+      status: v.status,
+      onBehalf: v.onBehalf,
+      decidedAt: v.decidedAt,
+      motivo: v.motivo,
+    })),
+  }))
+
+  const pendingVotes = isOpen
+    ? latestVotes
+        .filter((v) => v.status === "pendiente")
+        .map((v) => ({ approvalId: v.id, firmanteNombre: v.firmanteNombre }))
+    : []
+  const myVote =
+    isOpen && myFirmanteId
+      ? latestVotes.find(
+          (v) => v.firmanteId === myFirmanteId && v.status === "pendiente",
+        )
+      : undefined
+
+  return {
+    hasRequests: true,
+    latestStatus: latest.status,
+    latestRound: latest.round,
+    isOpen,
+    chips: latestVotes.map((v) => ({
+      firmanteNombre: v.firmanteNombre,
+      status: v.status,
+      onBehalf: v.onBehalf,
+    })),
+    rounds,
+    myPendingApprovalId: myVote?.id ?? null,
+    pendingVotes,
+    rejectionMotivo:
+      latest.status === "rechazada"
+        ? (latestVotes.find((v) => v.status === "rechazada")?.motivo ?? null)
+        : null,
+  }
+}
+
+/**
+ * Conteo de aprobaciones pendientes para el badge del sidebar (context-aware).
+ * - admin: solicitudes abiertas (status='en_aprobacion').
+ * - aprobador: sus votos pendientes en solicitudes abiertas.
+ * Si se pasa `projectId`, cuenta solo ese proyecto; si no, global.
+ * No realtime: se recalcula al navegar.
+ */
+export async function getPendingApprovalsCount(
+  sb: ServerClient,
+  role: "admin" | "aprobador",
+  firmanteId: string | null,
+  projectId?: string,
+): Promise<number> {
+  if (role === "admin") {
+    let q = sb
+      .from("approval_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("document_type", "caratula")
+      .eq("status", "en_aprobacion")
+    if (projectId) q = q.eq("project_id", projectId)
+    const { count } = await q
+    return count ?? 0
+  }
+
+  if (!firmanteId) return 0
+  let openQ = sb
+    .from("approval_requests")
+    .select("id")
+    .eq("status", "en_aprobacion")
+  if (projectId) openQ = openQ.eq("project_id", projectId)
+  const { data: openReqs } = await openQ
+  const ids = (openReqs ?? []).map((r) => r.id as string)
+  if (ids.length === 0) return 0
+
+  const { count } = await sb
+    .from("approvals")
+    .select("id", { count: "exact", head: true })
+    .in("request_id", ids)
+    .eq("firmante_id", firmanteId)
+    .eq("status", "pendiente")
+  return count ?? 0
+}

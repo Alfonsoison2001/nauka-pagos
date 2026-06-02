@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { renderCaratulaPdf } from "@/components/caratula/render-caratula"
+import { requireAdmin } from "@/lib/auth/roles"
 import {
   caratulaSubject,
   renderCaratulaEmailHtml,
@@ -148,4 +149,82 @@ export async function enviarCaratula(
 
   revalidatePath(`/proyectos/${projectId}/caratula`)
   return { ok: true, enviadaAt, destinatarios }
+}
+
+// ── Enviar a aprobación (interno) ────────────────────────────────────────────
+// Distinto de "Enviar al contratista": crea una ronda de aprobación con un voto
+// pendiente por cada firmante activo del proyecto. Solo admin.
+
+export type EnviarAprobacionResult = { error: string } | { ok: true }
+
+export async function enviarAAprobacion(
+  estimacionId: string,
+  projectId: string,
+): Promise<EnviarAprobacionResult> {
+  const me = await requireAdmin()
+  const sb = await createClient()
+
+  // Firmantes activos del proyecto (orden 1-3).
+  const { data: pfRaw } = await sb
+    .from("project_firmantes")
+    .select("firmante_id, orden, firmantes(id, deleted_at)")
+    .eq("project_id", projectId)
+    .order("orden")
+  type Fj = { id: string; deleted_at: string | null }
+  type PF = { firmante_id: string; firmantes: Fj | Fj[] | null }
+  const firmanteIds = ((pfRaw ?? []) as PF[])
+    .filter((r) => {
+      const f = Array.isArray(r.firmantes) ? r.firmantes[0] : r.firmantes
+      return f && !f.deleted_at
+    })
+    .map((r) => r.firmante_id)
+
+  if (firmanteIds.length === 0) {
+    return {
+      error:
+        "Este proyecto no tiene firmantes configurados. Agrégalos en Configuración.",
+    }
+  }
+
+  // Estado de rondas previas: bloquear si ya hay una abierta; si no, +1 ronda.
+  const { data: prev } = await sb
+    .from("approval_requests")
+    .select("round, status")
+    .eq("document_type", "caratula")
+    .eq("document_id", estimacionId)
+    .order("round", { ascending: false })
+  const rows = (prev ?? []) as { round: number; status: string }[]
+  if (rows.some((r) => r.status === "en_aprobacion")) {
+    return { error: "Esta carátula ya está en aprobación." }
+  }
+  const nextRound = (rows[0]?.round ?? 0) + 1
+
+  const { data: request, error: reqErr } = await sb
+    .from("approval_requests")
+    .insert({
+      document_type: "caratula",
+      document_id: estimacionId,
+      project_id: projectId,
+      round: nextRound,
+      status: "en_aprobacion",
+      requested_by: me.authUserId,
+    })
+    .select("id")
+    .single()
+  if (reqErr || !request) {
+    return { error: reqErr?.message ?? "No se pudo crear la solicitud" }
+  }
+
+  const { error: votesErr } = await sb.from("approvals").insert(
+    firmanteIds.map((firmante_id) => ({
+      request_id: request.id,
+      firmante_id,
+      status: "pendiente",
+    })),
+  )
+  if (votesErr) return { error: votesErr.message }
+
+  revalidatePath(`/proyectos/${projectId}/caratula`)
+  revalidatePath("/aprobaciones")
+  return { ok: true }
 }

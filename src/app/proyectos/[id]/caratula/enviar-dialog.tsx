@@ -75,7 +75,9 @@ export function EnviarDialog({
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
-            {yaEnviada ? "Reenviar carátula" : "Enviar carátula"}
+            {yaEnviada
+              ? "Reenviar carátula al pagador"
+              : "Enviar carátula al pagador"}
           </DialogTitle>
         </DialogHeader>
 

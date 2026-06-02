@@ -1,6 +1,9 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
+import { ApprovalStatusChips } from "@/components/approvals/approval-status-chips"
+import { ApprovalTimeline } from "@/components/approvals/approval-timeline"
+import { ApproveRejectDialog } from "@/components/approvals/approve-reject-dialog"
 import { EstatusBadge } from "@/components/estatus-badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,9 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import type { DocumentApproval } from "@/lib/approvals/fetch"
 import { formatDate } from "@/lib/format/fecha"
 import { formatMXN } from "@/lib/utils"
-import { generarCaratula } from "./actions"
+import { enviarAAprobacion, generarCaratula } from "./actions"
 import { EnviarDialog } from "./enviar-dialog"
 import type { CaratulaEstimacion, CaratulaFirmanteRow } from "./page"
 
@@ -22,6 +26,8 @@ type Props = {
   estimaciones: CaratulaEstimacion[]
   firmantes: CaratulaFirmanteRow[]
   defaultEmails: string[]
+  isAdmin: boolean
+  approvalByEst: Record<string, DocumentApproval>
 }
 
 export function CaratulaClient({
@@ -30,15 +36,57 @@ export function CaratulaClient({
   estimaciones,
   firmantes,
   defaultEmails,
+  isAdmin,
+  approvalByEst,
 }: Props) {
   const [estList, setEstList] = useState(estimaciones)
+  const [contratistaId, setContratistaId] = useState<string>("")
   const [selectedId, setSelectedId] = useState<string>("")
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
   const [enviarOpen, setEnviarOpen] = useState(false)
   const [generating, startGen] = useTransition()
+  const [sendingAprob, startAprob] = useTransition()
+  const [aprobError, setAprobError] = useState<string | null>(null)
+
+  // Step 1: contratistas que tienen estimaciones (únicos, ordenados).
+  const contratistaOptions = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const e of estList) {
+      if (e.contratistaId && !seen.has(e.contratistaId)) {
+        seen.set(e.contratistaId, e.contratistaNombre)
+      }
+    }
+    return [...seen.entries()]
+      .map(([id, nombre]) => ({ id, nombre }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [estList])
+
+  // Step 2: estimaciones del contratista elegido.
+  const estForContratista = useMemo(
+    () => estList.filter((e) => e.contratistaId === contratistaId),
+    [estList, contratistaId],
+  )
 
   const selected = estList.find((e) => e.id === selectedId)
+  const approval = selected ? approvalByEst[selected.id] : undefined
+  const aprobada = approval?.latestStatus === "aprobada"
+
+  function handleEnviarAprob() {
+    if (!selected) return
+    setAprobError(null)
+    startAprob(async () => {
+      const r = await enviarAAprobacion(selected.id, projectId)
+      if ("error" in r) setAprobError(r.error)
+    })
+  }
+
+  function selectContratista(id: string) {
+    setContratistaId(id)
+    setSelectedId("")
+    setPreviewUrl(null)
+    setGenError(null)
+  }
 
   function selectEstimacion(id: string) {
     setSelectedId(id)
@@ -91,11 +139,13 @@ export function CaratulaClient({
     )
   }
 
+  // Destinatarios por defecto: emails del proyecto + email del PAGADOR (no del
+  // contratista). Si el pagador no tiene email, solo van los del proyecto.
   const prefillEmails = selected
     ? Array.from(
         new Set(
-          [...defaultEmails, selected.contratistaEmail].filter(
-            (x): x is string => Boolean(x),
+          [...defaultEmails, selected.pagadorEmail].filter((x): x is string =>
+            Boolean(x),
           ),
         ),
       )
@@ -112,27 +162,59 @@ export function CaratulaClient({
         </div>
       )}
 
-      {/* Selector */}
-      <div className="flex flex-col gap-2">
-        <label htmlFor="caratula-select" className="text-sm font-medium">
-          Estimación
-        </label>
-        <Select
-          value={selectedId}
-          onValueChange={(v) => selectEstimacion(v ?? "")}
-          items={estList.map((e) => ({ value: e.id, label: estLabel(e) }))}
-        >
-          <SelectTrigger id="caratula-select" className="w-full sm:max-w-md">
-            <SelectValue placeholder="Selecciona una estimación" />
-          </SelectTrigger>
-          <SelectContent>
-            {estList.map((e) => (
-              <SelectItem key={e.id} value={e.id}>
-                {estLabel(e)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Selector en 2 pasos: contratista → estimación */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+        <div className="flex flex-col gap-2 sm:w-72">
+          <label htmlFor="contratista-select" className="text-sm font-medium">
+            Contratista
+          </label>
+          <Select
+            value={contratistaId}
+            onValueChange={(v) => selectContratista(v ?? "")}
+            items={contratistaOptions.map((c) => ({
+              value: c.id,
+              label: c.nombre,
+            }))}
+          >
+            <SelectTrigger id="contratista-select" className="w-full">
+              <SelectValue placeholder="Selecciona un contratista" />
+            </SelectTrigger>
+            <SelectContent>
+              {contratistaOptions.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {contratistaId ? (
+          <div className="flex flex-col gap-2 sm:w-[26rem]">
+            <label htmlFor="estimacion-select" className="text-sm font-medium">
+              Estimación
+            </label>
+            <Select
+              value={selectedId}
+              onValueChange={(v) => selectEstimacion(v ?? "")}
+              items={estForContratista.map((e) => ({
+                value: e.id,
+                label: estLabel(e),
+              }))}
+            >
+              <SelectTrigger id="estimacion-select" className="w-full">
+                <SelectValue placeholder="Selecciona una estimación" />
+              </SelectTrigger>
+              <SelectContent>
+                {estForContratista.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {estLabel(e)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
       </div>
 
       {selected && (
@@ -188,25 +270,126 @@ export function CaratulaClient({
               )}
             </div>
 
-            {/* Acciones */}
-            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-nauka-subtle pt-3">
-              <Button onClick={handleGenerar} disabled={generating}>
-                {generating ? "Generando..." : "Generar carátula"}
-              </Button>
-              <Button
-                variant="outline"
-                disabled={!canEnviar}
-                onClick={() => setEnviarOpen(true)}
-              >
-                Enviar por correo
-              </Button>
-            </div>
+            {/* Acciones de admin (generar / enviar al pagador) */}
+            {isAdmin && (
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-nauka-subtle pt-3">
+                <Button onClick={handleGenerar} disabled={generating}>
+                  {generating ? "Generando..." : "Generar carátula"}
+                </Button>
+                {aprobada ? (
+                  <Button
+                    variant="outline"
+                    disabled={!canEnviar}
+                    onClick={() => setEnviarOpen(true)}
+                  >
+                    Enviar al pagador
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      disabled
+                      title="Disponible cuando la carátula esté aprobada"
+                    >
+                      Enviar al pagador
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={!canEnviar}
+                      onClick={() => setEnviarOpen(true)}
+                      title="Enviar al pagador sin esperar la aprobación"
+                    >
+                      Enviar sin aprobación
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
 
             {genError && (
               <p className="mt-3 text-sm text-destructive" role="alert">
                 {genError}
               </p>
             )}
+
+            {/* Aprobación in-platform */}
+            <div className="mt-4 border-t border-nauka-subtle pt-3">
+              <p className="mb-2 text-xs text-muted-foreground">Aprobación</p>
+              {approval?.hasRequests ? (
+                <ApprovalStatusChips
+                  status={approval.latestStatus ?? "en_aprobacion"}
+                  votes={approval.chips}
+                />
+              ) : (
+                <p className="text-sm italic text-muted-foreground">
+                  Esta carátula no se ha enviado a aprobación.
+                </p>
+              )}
+
+              {approval?.rejectionMotivo && (
+                <p className="mt-2 text-sm text-red-700">
+                  Motivo del rechazo: {approval.rejectionMotivo}
+                </p>
+              )}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {isAdmin && !approval?.isOpen && (
+                  <Button
+                    variant="outline"
+                    onClick={handleEnviarAprob}
+                    disabled={sendingAprob || firmantes.length === 0}
+                  >
+                    {sendingAprob
+                      ? "Enviando..."
+                      : approval?.hasRequests
+                        ? "Reenviar a aprobación"
+                        : "Enviar a aprobación"}
+                  </Button>
+                )}
+
+                {approval?.myPendingApprovalId && (
+                  <ApproveRejectDialog
+                    approvalId={approval.myPendingApprovalId}
+                    caratulaTitulo={`Est. ${selected.numero} · ${selected.contratistaNombre}`}
+                    previewUrl={previewUrl}
+                    triggerLabel="Revisar y firmar"
+                  />
+                )}
+
+                {isAdmin &&
+                  approval?.pendingVotes
+                    .filter(
+                      (pv) => pv.approvalId !== approval.myPendingApprovalId,
+                    )
+                    .map((pv) => (
+                      <ApproveRejectDialog
+                        key={pv.approvalId}
+                        approvalId={pv.approvalId}
+                        caratulaTitulo={`Est. ${selected.numero} · ${selected.contratistaNombre}`}
+                        previewUrl={previewUrl}
+                        onBehalfFirmante={pv.firmanteNombre}
+                        triggerLabel={`Decidir por ${pv.firmanteNombre}`}
+                      />
+                    ))}
+              </div>
+
+              {aprobError && (
+                <p className="mt-2 text-sm text-destructive" role="alert">
+                  {aprobError}
+                </p>
+              )}
+
+              {approval?.hasRequests && (
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-xs text-slate-500 hover:text-nauka-dark">
+                    Historial
+                  </summary>
+                  <div className="mt-2">
+                    <ApprovalTimeline rounds={approval.rounds} />
+                  </div>
+                </details>
+              )}
+            </div>
           </div>
 
           {/* Preview */}
@@ -239,9 +422,9 @@ export function CaratulaClient({
   )
 }
 
-/** Etiqueta legible para el dropdown: "{numero} — {contratista} — {partida}". */
+/** Etiqueta del Step 2 (contratista ya elegido): "Est. N — Partida — $monto". */
 function estLabel(e: CaratulaEstimacion): string {
-  return `${e.numero} — ${e.contratistaNombre} — ${e.partidaNombre}`
+  return `Est. ${e.numero} — ${e.partidaNombre} — ${formatMXN(e.monto)}`
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

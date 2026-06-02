@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation"
 import { AvanceHero } from "@/components/resumen/avance-hero"
-import { CompositionBar } from "@/components/resumen/composition-bar"
 import {
   EstimacionMiniList,
   type MiniRow,
@@ -11,7 +10,6 @@ import {
   type ChartDatum,
   PresupuestoEjercidoChart,
 } from "@/components/resumen/presupuesto-ejercido-chart"
-import { StatusBreakdown } from "@/components/resumen/status-breakdown"
 import { formatMXN } from "@/lib/format"
 import {
   computeResumen,
@@ -123,11 +121,6 @@ export default async function ResumenPage({
     })),
   })
 
-  const totalNoComprometido = Math.max(
-    0,
-    r.totalPresupuesto - r.totalEjercido - r.porPagar.monto,
-  )
-
   const sobreEjercidoNames = r.porPartida
     .filter((p) => p.sobreEjercido)
     .map((p) => `${p.contratistaNombre} — ${p.partidaNombre}`)
@@ -164,6 +157,7 @@ export default async function ResumenPage({
       <AvanceHero
         pctAvance={r.pctAvance}
         ejercido={r.totalEjercido}
+        porPagar={r.porPagar.monto}
         presupuesto={r.totalPresupuesto}
       />
 
@@ -191,15 +185,6 @@ export default async function ResumenPage({
           hint={`${r.porPagar.count} estimaciones (pendiente + enviada)`}
         />
       </div>
-
-      <StatusBreakdown projectId={id} statusBreakdown={r.statusBreakdown} />
-
-      <CompositionBar
-        ejercido={r.totalEjercido}
-        porPagar={r.porPagar.monto}
-        noComprometido={totalNoComprometido}
-        total={r.totalPresupuesto}
-      />
 
       <PresupuestoEjercidoChart data={chartData} />
 

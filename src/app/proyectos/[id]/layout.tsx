@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { PersistLastProject } from "@/components/persist-last-project"
 import { ProjectTopbar } from "@/components/project-topbar"
 import { Sidebar } from "@/components/sidebar"
+import { getPendingApprovalsCount } from "@/lib/approvals/fetch"
 import { createClient } from "@/lib/supabase/server"
 
 function firstNameOf(value: string): string {
@@ -39,14 +40,24 @@ export default async function ProjectLayout({
   const greetingName = firstNameOf(fullName)
 
   let isAdmin = false
+  let pendingCount = 0
   if (user) {
     const { data: prof } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, firmante_id")
       .eq("auth_user_id", user.id)
       .is("deleted_at", null)
       .maybeSingle()
-    isAdmin = prof?.role === "admin"
+    if (prof) {
+      isAdmin = prof.role === "admin"
+      // Badge context-aware: solo las pendientes de ESTE proyecto.
+      pendingCount = await getPendingApprovalsCount(
+        supabase,
+        prof.role as "admin" | "aprobador",
+        (prof.firmante_id as string | null) ?? null,
+        id,
+      )
+    }
   }
 
   const { data: projects } = await supabase
@@ -62,6 +73,7 @@ export default async function ProjectLayout({
         projectId={project.id}
         greetingName={greetingName}
         isAdmin={isAdmin}
+        pendingCount={pendingCount}
       />
       <div className="flex min-w-0 flex-1 flex-col bg-nauka-bg">
         <div className="px-12 pt-10">

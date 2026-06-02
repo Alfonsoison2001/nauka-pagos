@@ -1,6 +1,10 @@
 "use client"
 
 import { format, parseISO } from "date-fns"
+import {
+  ApprovalChip,
+  type ApprovalSummary,
+} from "@/components/approvals/approval-chip"
 import { EstatusBadge } from "@/components/estatus-badge"
 import { formatMXN } from "@/lib/utils"
 import type {
@@ -33,6 +37,7 @@ type Props = {
   partidas: PartidaOption[]
   pagadores: PagadorOption[]
   pagadoAcumByPartida: Record<string, number>
+  aprobacionByEst: Record<string, ApprovalSummary>
 }
 
 export function FlujoTable({
@@ -42,6 +47,7 @@ export function FlujoTable({
   partidas,
   pagadores,
   pagadoAcumByPartida,
+  aprobacionByEst,
 }: Props) {
   return (
     <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
@@ -59,6 +65,9 @@ export function FlujoTable({
             <th className="px-3 py-2.5 text-right">Pagado Acum.</th>
             <th className="px-3 py-2.5 text-right">Resto por Pagar</th>
             <th className="px-3 py-2.5 text-center">Estatus</th>
+            <th className="min-w-[150px] px-3 py-2.5 text-center">
+              Aprobación
+            </th>
             <th className="px-3 py-2.5 text-left">Comprobante</th>
             <th className="px-3 py-2.5 text-left">Notas</th>
             <th className="sticky right-0 z-30 bg-nauka-dark px-3 py-2.5" />
@@ -75,6 +84,7 @@ export function FlujoTable({
               partidas={partidas}
               pagadores={pagadores}
               pagadoAcumByPartida={pagadoAcumByPartida}
+              aprobacion={aprobacionByEst[row.id]}
             />
           ))}
         </tbody>
@@ -93,6 +103,7 @@ type RowProps = {
   partidas: PartidaOption[]
   pagadores: PagadorOption[]
   pagadoAcumByPartida: Record<string, number>
+  aprobacion: ApprovalSummary | undefined
 }
 
 function FlujoRow({
@@ -103,7 +114,14 @@ function FlujoRow({
   partidas,
   pagadores,
   pagadoAcumByPartida,
+  aprobacion,
 }: RowProps) {
+  const aprobSummary: ApprovalSummary = aprobacion ?? {
+    status: null,
+    aprobadas: 0,
+    total: 0,
+    tooltip: "",
+  }
   return (
     <tr className="group border-b border-nauka-subtle last:border-0 hover:bg-nauka-bg">
       <td className="px-3 py-2 text-right text-muted-foreground">{index}</td>
@@ -124,6 +142,9 @@ function FlujoRow({
       <td className="px-3 py-2 text-right">{formatMXN(row.resto_por_pagar)}</td>
       <td className="px-3 py-2 text-center">
         <EstatusBadge status={row.status} />
+      </td>
+      <td className="min-w-[150px] px-3 py-2 text-center">
+        <ApprovalChip summary={aprobSummary} href="/aprobaciones" />
       </td>
       <td className="px-3 py-2">
         <ComprobanteCell estimacion={row} projectId={projectId} />

@@ -3,6 +3,7 @@
 import {
   ArrowRightLeft,
   CalendarDays,
+  ClipboardCheck,
   FileText,
   Home,
   LayoutDashboard,
@@ -32,11 +33,26 @@ type Props = {
   projectId: string
   greetingName: string
   isAdmin?: boolean
+  pendingCount?: number
+  /** Override del href de Aprobaciones (lo usa /aprobaciones para conservar el
+   * filtro actual). Por defecto apunta al proyecto del sidebar. */
+  aprobacionesHref?: string
 }
 
-export function Sidebar({ projectId, greetingName, isAdmin = false }: Props) {
+export function Sidebar({
+  projectId,
+  greetingName,
+  isAdmin = false,
+  pendingCount = 0,
+  aprobacionesHref,
+}: Props) {
   const pathname = usePathname()
   const base = `/proyectos/${projectId}`
+  // El link de Aprobaciones lleva el proyecto actual como contexto → la bandeja
+  // pre-filtra a ese proyecto. (Desde Home el link va sin query = "Todos".)
+  const aprobHref =
+    aprobacionesHref ??
+    (projectId ? `/aprobaciones?proyecto=${projectId}` : "/aprobaciones")
 
   return (
     <aside className="sticky top-0 flex h-svh w-[260px] shrink-0 flex-col bg-gradient-to-b from-nauka-dark to-nauka-dark-2 text-white">
@@ -51,8 +67,16 @@ export function Sidebar({ projectId, greetingName, isAdmin = false }: Props) {
 
       <div className="mx-6 my-5 border-t border-white/10" />
 
-      <nav aria-label="Navegación del proyecto" className="flex-1 px-3">
+      <nav aria-label="Navegación" className="flex-1 px-3">
         <ul className="flex flex-col gap-1">
+          <li>
+            <SidebarLink
+              href="/"
+              label="Home"
+              Icon={Home}
+              active={pathname === "/"}
+            />
+          </li>
           {TABS.map((item) => {
             const href = `${base}/${item.slug}`
             const active = pathname === href || pathname.startsWith(`${href}/`)
@@ -69,10 +93,11 @@ export function Sidebar({ projectId, greetingName, isAdmin = false }: Props) {
           })}
           <li className="mt-1">
             <SidebarLink
-              href="/"
-              label="Home"
-              Icon={Home}
-              active={pathname === "/"}
+              href={aprobHref}
+              label="Aprobaciones"
+              Icon={ClipboardCheck}
+              active={pathname === "/aprobaciones"}
+              badge={pendingCount}
             />
           </li>
           {isAdmin ? (
@@ -107,11 +132,13 @@ function SidebarLink({
   label,
   Icon,
   active,
+  badge = 0,
 }: {
   href: string
   label: string
   Icon: IconType
   active: boolean
+  badge?: number
 }) {
   return (
     <Link
@@ -126,6 +153,16 @@ function SidebarLink({
     >
       <Icon className="size-[18px]" />
       {label}
+      {badge > 0 ? (
+        <span
+          className={cn(
+            "ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium",
+            active ? "bg-nauka-dark text-white" : "bg-red-500 text-white",
+          )}
+        >
+          {badge}
+        </span>
+      ) : null}
     </Link>
   )
 }

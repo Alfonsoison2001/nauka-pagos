@@ -1,12 +1,15 @@
 /**
- * Client-side helper to remember the last project the user was viewing.
- * Used to preselect the project selector when the user opens the app fresh.
+ * Recuerda el último proyecto que el usuario estaba viendo.
  *
- * Storage: localStorage on the browser only (SSR-safe via window check).
- * Key: nauka.lastProjectId
+ * - localStorage (cliente): para el preselect/hint del selector de proyecto.
+ * - Cookie `nauka_last_project` (SSR-legible): la escribe el middleware en cada
+ *   navegación a /proyectos/[id], y la leen layouts server fuera de un proyecto
+ *   (p. ej. /aprobaciones) para apuntar los links del sidebar al último
+ *   proyecto. Ver src/lib/supabase/middleware.ts y last-project-server.ts.
  */
 
 const KEY = "nauka.lastProjectId"
+export const LAST_PROJECT_COOKIE = "nauka_last_project"
 
 export function getLastProjectId(): string | null {
   if (typeof window === "undefined") return null

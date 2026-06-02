@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation"
 import { useMemo } from "react"
+import type { ApprovalSummary } from "@/components/approvals/approval-chip"
 import type {
   ContratistaOption,
   EstimacionRow,
@@ -19,6 +20,7 @@ type Props = {
   partidas: PartidaOption[]
   pagadores: PagadorOption[]
   pagadoAcumByPartida: Record<string, number>
+  aprobacionByEst: Record<string, ApprovalSummary>
   projectId: string
 }
 
@@ -28,6 +30,7 @@ export function FlujoClient({
   partidas,
   pagadores,
   pagadoAcumByPartida,
+  aprobacionByEst,
   projectId,
 }: Props) {
   const sp = useSearchParams()
@@ -125,6 +128,7 @@ export function FlujoClient({
           partidas={partidas}
           pagadores={pagadores}
           pagadoAcumByPartida={pagadoAcumByPartida}
+          aprobacionByEst={aprobacionByEst}
         />
       )}
     </div>

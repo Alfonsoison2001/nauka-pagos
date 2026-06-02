@@ -1,5 +1,12 @@
 import { notFound } from "next/navigation"
 import { Suspense } from "react"
+import type { ApprovalSummary } from "@/components/approvals/approval-chip"
+import {
+  type ApprovalRequestRow,
+  buildDocumentApproval,
+  fetchCaratulaRequests,
+  fetchVotesByRequest,
+} from "@/lib/approvals/fetch"
 import { createClient } from "@/lib/supabase/server"
 import type {
   ContratistaOption,
@@ -153,6 +160,45 @@ export default async function FlujoDePagosPage({
       }
     })
 
+    // ── Estado de aprobación por estimación (columna "Aprobación") ──────────
+    const estIds = rows.map((r) => r.id)
+    const aprobReqs = await fetchCaratulaRequests(sb, estIds)
+    const aprobVotes = await fetchVotesByRequest(
+      sb,
+      aprobReqs.map((r) => r.id),
+    )
+    const aprobByDoc = new Map<string, ApprovalRequestRow[]>()
+    for (const r of aprobReqs) {
+      const arr = aprobByDoc.get(r.documentId) ?? []
+      arr.push(r)
+      aprobByDoc.set(r.documentId, arr)
+    }
+    const aprobacionByEst: Record<string, ApprovalSummary> = {}
+    for (const estId of estIds) {
+      const a = buildDocumentApproval(
+        aprobByDoc.get(estId) ?? [],
+        aprobVotes,
+        null,
+      )
+      aprobacionByEst[estId] = {
+        status: a.latestStatus,
+        aprobadas: a.chips.filter((c) => c.status === "aprobada").length,
+        total: a.chips.length,
+        tooltip: a.chips
+          .map(
+            (c) =>
+              `${c.firmanteNombre} ${
+                c.status === "aprobada"
+                  ? "✓"
+                  : c.status === "rechazada"
+                    ? "✗"
+                    : "pendiente"
+              }`,
+          )
+          .join(", "),
+      }
+    }
+
     return (
       <Suspense>
         <FlujoClient
@@ -161,6 +207,7 @@ export default async function FlujoDePagosPage({
           partidas={partidas}
           pagadores={pagadores}
           pagadoAcumByPartida={pagadoAcumByPartida}
+          aprobacionByEst={aprobacionByEst}
           projectId={id}
         />
       </Suspense>
@@ -176,6 +223,7 @@ export default async function FlujoDePagosPage({
         partidas={[]}
         pagadores={pagadores}
         pagadoAcumByPartida={{}}
+        aprobacionByEst={{}}
         projectId={id}
       />
     </Suspense>

@@ -1,7 +1,8 @@
-import { Users } from "lucide-react"
+import { ClipboardCheck, Users } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { UserMenu } from "@/components/user-menu"
+import { getPendingApprovalsCount } from "@/lib/approvals/fetch"
 import { formatMXN, formatPct } from "@/lib/format"
 import {
   computeResumen,
@@ -35,11 +36,19 @@ export default async function HomePage() {
 
   const { data: myProfile } = await sb
     .from("profiles")
-    .select("role")
+    .select("role, firmante_id")
     .eq("auth_user_id", user.id)
     .is("deleted_at", null)
     .maybeSingle()
   const isAdmin = myProfile?.role === "admin"
+  // Badge del pill: conteo GLOBAL (Home es vista cross-project).
+  const pendingCount = myProfile
+    ? await getPendingApprovalsCount(
+        sb,
+        myProfile.role as "admin" | "aprobador",
+        (myProfile.firmante_id as string | null) ?? null,
+      )
+    : 0
 
   const { data: projRows } = await sb
     .from("projects")
@@ -141,6 +150,18 @@ export default async function HomePage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Link
+              href="/aprobaciones"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-nauka-card-border bg-white px-4 text-sm font-medium text-nauka-dark transition-colors hover:bg-nauka-subtle"
+            >
+              <ClipboardCheck className="size-4" />
+              Aprobaciones
+              {pendingCount > 0 ? (
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-medium text-white">
+                  {pendingCount}
+                </span>
+              ) : null}
+            </Link>
             {isAdmin ? (
               <Link
                 href="/usuarios"
