@@ -14,10 +14,10 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <main className="flex min-h-svh items-center justify-center p-6">
+    <main className="flex min-h-svh items-center justify-center bg-nauka-bg p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>NAUKA Pagos</CardTitle>
+          <CardTitle className="text-xl text-nauka-dark">NAUKA Pagos</CardTitle>
           <CardDescription>Inicia sesión para continuar.</CardDescription>
         </CardHeader>
         <CardContent>
