@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { Badge } from "@/components/ui/badge"
+import { EstatusBadge } from "@/components/estatus-badge"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -138,7 +138,7 @@ export function CaratulaClient({
       {selected && (
         <>
           {/* Panel de detalle */}
-          <div className="rounded-md border p-4">
+          <div className="rounded-2xl border border-nauka-card-border bg-white p-6 shadow-nauka-card">
             <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
               <Detail label="Contratista" value={selected.contratistaNombre} />
               <Detail label="Partida" value={selected.partidaNombre} />
@@ -150,7 +150,7 @@ export function CaratulaClient({
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs text-muted-foreground">Estatus</span>
                 <span>
-                  <StatusBadge status={selected.status} />
+                  <EstatusBadge status={selected.status} />
                 </span>
               </div>
               <div className="flex flex-col gap-0.5">
@@ -166,7 +166,7 @@ export function CaratulaClient({
             </div>
 
             {/* Firmantes que aparecerán */}
-            <div className="mt-4 border-t pt-3">
+            <div className="mt-4 border-t border-nauka-subtle pt-3">
               <p className="mb-1 text-xs text-muted-foreground">
                 Firmantes en la carátula
               </p>
@@ -189,7 +189,7 @@ export function CaratulaClient({
             </div>
 
             {/* Acciones */}
-            <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-nauka-subtle pt-3">
               <Button onClick={handleGenerar} disabled={generating}>
                 {generating ? "Generando..." : "Generar carátula"}
               </Button>
@@ -212,11 +212,13 @@ export function CaratulaClient({
           {/* Preview */}
           {previewUrl && (
             <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">Vista previa</p>
+              <p className="text-sm font-medium text-nauka-dark">
+                Vista previa
+              </p>
               <iframe
                 src={previewUrl}
                 title="Vista previa de la carátula"
-                className="h-[640px] w-full rounded-md border"
+                className="h-[640px] w-full rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card"
               />
             </div>
           )}
@@ -240,25 +242,6 @@ export function CaratulaClient({
 /** Etiqueta legible para el dropdown: "{numero} — {contratista} — {partida}". */
 function estLabel(e: CaratulaEstimacion): string {
   return `${e.numero} — ${e.contratistaNombre} — ${e.partidaNombre}`
-}
-
-/** Status chip: pendiente (gris), enviada (azul sky), pagada (verde). */
-function StatusBadge({ status }: { status: CaratulaEstimacion["status"] }) {
-  if (status === "pagada") {
-    return (
-      <Badge className="border-transparent bg-green-600 text-white">
-        Pagada
-      </Badge>
-    )
-  }
-  if (status === "enviada") {
-    return (
-      <Badge className="border-transparent bg-sky-500 text-white">
-        Enviada
-      </Badge>
-    )
-  }
-  return <Badge variant="outline">Pendiente</Badge>
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
