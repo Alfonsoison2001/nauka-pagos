@@ -50,7 +50,7 @@ export function FlujoFilters({
           onFilterChange("status", !v || v === "__all__" ? "" : v)
         }
       >
-        <SelectTrigger className="h-8 w-36 text-xs">
+        <SelectTrigger className="h-8 w-36 rounded-full text-xs">
           <SelectValue placeholder="Estatus" />
         </SelectTrigger>
         <SelectContent>
@@ -68,7 +68,7 @@ export function FlujoFilters({
           onFilterChange("contratista_id", !v || v === "__all__" ? "" : v)
         }
       >
-        <SelectTrigger className="h-8 w-44 text-xs">
+        <SelectTrigger className="h-8 w-44 rounded-full text-xs">
           <SelectValue placeholder="Contratista" />
         </SelectTrigger>
         <SelectContent>
@@ -88,7 +88,7 @@ export function FlujoFilters({
           onFilterChange("partida_id", !v || v === "__all__" ? "" : v)
         }
       >
-        <SelectTrigger className="h-8 w-44 text-xs">
+        <SelectTrigger className="h-8 w-44 rounded-full text-xs">
           <SelectValue placeholder="Partida" />
         </SelectTrigger>
         <SelectContent>
@@ -106,13 +106,13 @@ export function FlujoFilters({
         type="month"
         value={filters.mes}
         onChange={(e) => onFilterChange("mes", e.target.value)}
-        className="h-8 rounded-md border border-input bg-background px-3 text-xs shadow-xs focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="h-8 rounded-full border border-nauka-card-border bg-white px-3 text-xs focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         placeholder="Mes/Año"
       />
 
       {/* Búsqueda libre */}
       <Input
-        className="h-8 w-48 text-xs"
+        className="h-8 w-48 rounded-full text-xs"
         placeholder="Buscar…"
         value={filters.busqueda}
         onChange={(e) => onFilterChange("busqueda", e.target.value)}

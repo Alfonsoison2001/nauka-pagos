@@ -95,9 +95,8 @@ export function FlujoClient({
   }, [rows, filters])
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Flujo de Pagos</h2>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-end">
         <NewEstimacionButton
           projectId={projectId}
           contratistas={contratistas}
@@ -136,8 +135,8 @@ export function FlujoClient({
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
-    <div className="rounded-md border border-dashed p-12 text-center">
-      <p className="text-sm font-medium">
+    <div className="rounded-2xl border border-nauka-card-border bg-white p-12 text-center shadow-nauka-card">
+      <p className="text-sm font-medium text-nauka-dark">
         {hasFilters
           ? "No hay estimaciones que coincidan con los filtros."
           : "Aún no hay estimaciones registradas."}

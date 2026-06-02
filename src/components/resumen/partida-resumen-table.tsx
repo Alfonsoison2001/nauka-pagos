@@ -3,40 +3,11 @@
 import { ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { Fragment, useMemo, useState } from "react"
+import { EstatusBadge } from "@/components/estatus-badge"
 import { formatDate, formatMXN, formatPct } from "@/lib/format"
-import type { EstatusEstimacion, PartidaResumen } from "@/lib/resumen/compute"
+import type { PartidaResumen } from "@/lib/resumen/compute"
 import { cn } from "@/lib/utils"
 import type { MiniRow } from "./estimacion-mini-list"
-
-const STATUS_STYLE: Record<EstatusEstimacion, { label: string; cls: string }> =
-  {
-    pendiente: {
-      label: "Pendiente",
-      cls: "border-border text-muted-foreground",
-    },
-    enviada: {
-      label: "Enviada",
-      cls: "border-transparent bg-sky-500 text-white",
-    },
-    pagada: {
-      label: "Pagada",
-      cls: "border-transparent bg-green-600 text-white",
-    },
-  }
-
-function StatusChip({ status }: { status: EstatusEstimacion }) {
-  const s = STATUS_STYLE[status]
-  return (
-    <span
-      className={cn(
-        "inline-flex h-5 shrink-0 items-center rounded-full border px-2 text-[11px] font-medium",
-        s.cls,
-      )}
-    >
-      {s.label}
-    </span>
-  )
-}
 
 type Props = {
   projectId: string
@@ -219,7 +190,7 @@ function SubEstimaciones({
           className="flex items-center justify-between gap-3 border-b px-3 py-1.5 text-sm last:border-0 hover:bg-muted/40"
         >
           <span className="flex items-center gap-2">
-            <StatusChip status={r.status} />
+            <EstatusBadge status={r.status} />
             <span className="font-medium">{r.numero}</span>
             <span className="text-xs text-muted-foreground">
               {formatDate(r.fechaEstimacion)}

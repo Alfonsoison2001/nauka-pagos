@@ -1,7 +1,7 @@
 "use client"
 
 import { format, parseISO } from "date-fns"
-import { Badge } from "@/components/ui/badge"
+import { EstatusBadge } from "@/components/estatus-badge"
 import { formatMXN } from "@/lib/utils"
 import type {
   ContratistaOption,
@@ -24,25 +24,6 @@ function formatDate(iso: string | null): string {
   }
 }
 
-/** Status chip: pendiente (gris), enviada (azul sky), pagada (verde). */
-function StatusBadge({ status }: { status: EstimacionRow["status"] }) {
-  if (status === "pagada") {
-    return (
-      <Badge className="border-transparent bg-green-600 text-white">
-        Pagada
-      </Badge>
-    )
-  }
-  if (status === "enviada") {
-    return (
-      <Badge className="border-transparent bg-sky-500 text-white">
-        Enviada
-      </Badge>
-    )
-  }
-  return <Badge variant="outline">Pendiente</Badge>
-}
-
 // ── Table ─────────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -63,10 +44,10 @@ export function FlujoTable({
   pagadoAcumByPartida,
 }: Props) {
   return (
-    <div className="overflow-x-auto rounded-md border">
+    <div className="overflow-x-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
       <table className="min-w-full text-sm tabular-nums">
         <thead>
-          <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
+          <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
             <th className="px-3 py-2.5 text-right">#</th>
             <th className="px-3 py-2.5 text-right">Fecha estimación</th>
             <th className="px-3 py-2.5 text-left">Pagó</th>
@@ -80,7 +61,7 @@ export function FlujoTable({
             <th className="px-3 py-2.5 text-center">Estatus</th>
             <th className="px-3 py-2.5 text-left">Comprobante</th>
             <th className="px-3 py-2.5 text-left">Notas</th>
-            <th className="sticky right-0 z-10 bg-muted/50 px-3 py-2.5" />
+            <th className="sticky right-0 z-10 bg-nauka-dark px-3 py-2.5" />
           </tr>
         </thead>
         <tbody>
@@ -124,7 +105,7 @@ function FlujoRow({
   pagadoAcumByPartida,
 }: RowProps) {
   return (
-    <tr className="group border-b last:border-0 hover:bg-muted/30">
+    <tr className="group border-b border-nauka-subtle last:border-0 hover:bg-nauka-bg">
       <td className="px-3 py-2 text-right text-muted-foreground">{index}</td>
       <td className="px-3 py-2 text-right">
         {formatDate(row.fecha_estimacion)}
@@ -142,7 +123,7 @@ function FlujoRow({
       <td className="px-3 py-2 text-right">{formatMXN(row.pagado_acum)}</td>
       <td className="px-3 py-2 text-right">{formatMXN(row.resto_por_pagar)}</td>
       <td className="px-3 py-2 text-center">
-        <StatusBadge status={row.status} />
+        <EstatusBadge status={row.status} />
       </td>
       <td className="px-3 py-2">
         <ComprobanteCell estimacion={row} projectId={projectId} />
@@ -150,7 +131,7 @@ function FlujoRow({
       <td className="max-w-[160px] truncate px-3 py-2 text-muted-foreground">
         {row.notas ?? "—"}
       </td>
-      <td className="sticky right-0 z-10 bg-background px-3 py-2 group-hover:bg-muted/30">
+      <td className="sticky right-0 z-10 bg-white px-3 py-2 group-hover:bg-nauka-bg">
         <div className="flex items-center gap-0.5">
           <EditEstimacionButton
             estimacion={row}
