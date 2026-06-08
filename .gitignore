@@ -41,3 +41,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# real data — never commit (financial backups + source Excels for migration)
+/backups/
+/excel-archive/
+/scripts/migration/*.xlsx
+/scripts/migration/*.xls
+/scripts/migration/*.csv
