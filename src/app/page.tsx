@@ -1,6 +1,8 @@
 import { ClipboardCheck, Users } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
+import { Suspense } from "react"
+import { FlashToast } from "@/components/flash-toast"
 import { UserMenu } from "@/components/user-menu"
 import { getPendingApprovalsCount } from "@/lib/approvals/fetch"
 import { formatMXN, formatPct } from "@/lib/format"
@@ -139,6 +141,9 @@ export default async function HomePage() {
 
   return (
     <main className="min-h-svh bg-nauka-bg px-6 py-10 sm:px-12">
+      <Suspense fallback={null}>
+        <FlashToast />
+      </Suspense>
       <div className="mx-auto max-w-6xl">
         <header className="mb-10 flex items-start justify-between gap-4">
           <div>
