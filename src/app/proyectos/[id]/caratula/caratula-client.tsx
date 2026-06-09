@@ -1,10 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useMemo, useState, useTransition } from "react"
-import { ApprovalStatusChips } from "@/components/approvals/approval-status-chips"
-import { ApprovalTimeline } from "@/components/approvals/approval-timeline"
-import { ApproveRejectDialog } from "@/components/approvals/approve-reject-dialog"
+import { useMemo, useState } from "react"
 import { EstatusBadge } from "@/components/estatus-badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,13 +14,7 @@ import {
 import type { DocumentApproval } from "@/lib/approvals/fetch"
 import { formatDate } from "@/lib/format/fecha"
 import { formatMXN } from "@/lib/utils"
-import {
-  enviarAAprobacion,
-  generarCaratula,
-  regenerarCaratula,
-} from "./actions"
-import { DeleteCaratulaButton } from "./delete-caratula-button"
-import { EnviarDialog } from "./enviar-dialog"
+import { CaratulaDetailDialog } from "./caratula-detail-dialog"
 import type { CaratulaEstimacion, CaratulaFirmanteRow } from "./page"
 
 type Props = {
@@ -45,17 +36,11 @@ export function CaratulaClient({
   isAdmin,
   approvalByEst,
 }: Props) {
+  const router = useRouter()
   const [estList, setEstList] = useState(estimaciones)
   const [contratistaId, setContratistaId] = useState<string>("")
   const [selectedId, setSelectedId] = useState<string>("")
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [genError, setGenError] = useState<string | null>(null)
-  const [enviarOpen, setEnviarOpen] = useState(false)
-  const [generating, startGen] = useTransition()
-  const [sendingAprob, startAprob] = useTransition()
-  const [aprobError, setAprobError] = useState<string | null>(null)
-  const [regenerating, startRegen] = useTransition()
-  const router = useRouter()
+  const [detailOpen, setDetailOpen] = useState(false)
 
   // Step 1: contratistas que tienen estimaciones (únicos, ordenados).
   const contratistaOptions = useMemo(() => {
@@ -78,98 +63,35 @@ export function CaratulaClient({
 
   const selected = estList.find((e) => e.id === selectedId)
   const approval = selected ? approvalByEst[selected.id] : undefined
-  const aprobada = approval?.latestStatus === "aprobada"
-
-  function handleEnviarAprob() {
-    if (!selected) return
-    setAprobError(null)
-    startAprob(async () => {
-      const r = await enviarAAprobacion(selected.id, projectId)
-      if ("error" in r) setAprobError(r.error)
-    })
-  }
 
   function selectContratista(id: string) {
     setContratistaId(id)
     setSelectedId("")
-    setPreviewUrl(null)
-    setGenError(null)
   }
 
   function selectEstimacion(id: string) {
     setSelectedId(id)
-    setPreviewUrl(null)
-    setGenError(null)
+    setDetailOpen(true)
   }
 
-  function handleGenerar() {
-    if (!selected) return
-    setGenError(null)
-    startGen(async () => {
-      const r = await generarCaratula(selected.id, projectId)
-      if ("error" in r) {
-        setGenError(r.error)
-        return
-      }
-      setPreviewUrl(r.signedUrl)
-      setEstList((list) =>
-        list.map((e) =>
-          e.id === selected.id ? { ...e, yaGenerada: true } : e,
-        ),
-      )
-    })
-  }
-
-  function handleRegenerar() {
-    if (!selected) return
-    setGenError(null)
-    startRegen(async () => {
-      const r = await regenerarCaratula(selected.id, projectId)
-      if ("error" in r) {
-        setGenError(r.error)
-        return
-      }
-      setPreviewUrl(r.signedUrl)
-      setEstList((list) =>
-        list.map((e) =>
-          e.id === selected.id ? { ...e, yaGenerada: true } : e,
-        ),
-      )
-    })
-  }
-
-  function handleCaratulaDeleted() {
-    if (!selected) return
+  function patchSelected(patch: Partial<CaratulaEstimacion>) {
     setEstList((list) =>
-      list.map((e) =>
-        e.id === selected.id
-          ? {
-              ...e,
-              yaGenerada: false,
-              enviadaAt: null,
-              destinatariosPrev: null,
-            }
-          : e,
-      ),
+      list.map((e) => (e.id === selectedId ? { ...e, ...patch } : e)),
     )
-    setPreviewUrl(null)
-    setGenError(null)
+  }
+  const onGenerated = () => patchSelected({ yaGenerada: true })
+  const onSent = (info: { enviadaAt: string; destinatarios: string[] }) =>
+    patchSelected({
+      enviadaAt: info.enviadaAt,
+      destinatariosPrev: info.destinatarios,
+    })
+  function onDeleted() {
+    patchSelected({
+      yaGenerada: false,
+      enviadaAt: null,
+      destinatariosPrev: null,
+    })
     router.refresh()
-  }
-
-  function handleSent(info: { enviadaAt: string; destinatarios: string[] }) {
-    if (!selected) return
-    setEstList((list) =>
-      list.map((e) =>
-        e.id === selected.id
-          ? {
-              ...e,
-              enviadaAt: info.enviadaAt,
-              destinatariosPrev: info.destinatarios,
-            }
-          : e,
-      ),
-    )
   }
 
   if (estList.length === 0) {
@@ -183,20 +105,6 @@ export function CaratulaClient({
       </div>
     )
   }
-
-  // Destinatarios por defecto: emails del proyecto + email del PAGADOR (no del
-  // contratista). Si el pagador no tiene email, solo van los del proyecto.
-  const prefillEmails = selected
-    ? Array.from(
-        new Set(
-          [...defaultEmails, selected.pagadorEmail].filter((x): x is string =>
-            Boolean(x),
-          ),
-        ),
-      )
-    : []
-
-  const canEnviar = Boolean(selected && (selected.yaGenerada || previewUrl))
 
   return (
     <div className="flex flex-col gap-6">
@@ -264,7 +172,6 @@ export function CaratulaClient({
 
       {selected && (
         <>
-          {/* Panel de detalle */}
           <div className="rounded-2xl border border-nauka-card-border bg-white p-6 shadow-nauka-card">
             <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
               <Detail label="Contratista" value={selected.contratistaNombre} />
@@ -275,7 +182,7 @@ export function CaratulaClient({
                 value={formatMXN(selected.monto)}
               />
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground">Estatus</span>
+                <span className="text-xs text-muted-foreground">Pago</span>
                 <span>
                   <EstatusBadge status={selected.status} />
                 </span>
@@ -291,194 +198,27 @@ export function CaratulaClient({
                 </span>
               </div>
             </div>
-
-            {/* Firmantes que aparecerán */}
             <div className="mt-4 border-t border-nauka-subtle pt-3">
-              <p className="mb-1 text-xs text-muted-foreground">
-                Firmantes en la carátula
-              </p>
-              {firmantes.length > 0 ? (
-                <ul className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                  {firmantes.map((f) => (
-                    <li key={`${f.nombre}-${f.empresa}`}>
-                      {f.nombre}{" "}
-                      <span className="text-muted-foreground">
-                        · {f.cargo}, {f.empresa}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm italic text-muted-foreground">
-                  Sin firmantes asignados.
-                </p>
-              )}
-            </div>
-
-            {/* Acciones de admin (generar / enviar al pagador) */}
-            {isAdmin && (
-              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-nauka-subtle pt-3">
-                <Button onClick={handleGenerar} disabled={generating}>
-                  {generating ? "Generando..." : "Generar carátula"}
-                </Button>
-                {selected.yaGenerada && !approval?.isOpen && (
-                  <Button
-                    variant="outline"
-                    onClick={handleRegenerar}
-                    disabled={regenerating}
-                    title="Re-renderiza la carátula con los datos actuales"
-                  >
-                    {regenerating ? "Regenerando..." : "Regenerar"}
-                  </Button>
-                )}
-                {aprobada ? (
-                  <Button
-                    variant="outline"
-                    disabled={!canEnviar}
-                    onClick={() => setEnviarOpen(true)}
-                  >
-                    Enviar al pagador
-                  </Button>
-                ) : (
-                  <>
-                    <Button
-                      variant="outline"
-                      disabled
-                      title="Disponible cuando la carátula esté aprobada"
-                    >
-                      Enviar al pagador
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      disabled={!canEnviar}
-                      onClick={() => setEnviarOpen(true)}
-                      title="Enviar al pagador sin esperar la aprobación"
-                    >
-                      Enviar sin aprobación
-                    </Button>
-                  </>
-                )}
-                {(selected.yaGenerada ||
-                  selected.enviadaAt ||
-                  approval?.hasRequests) && (
-                  <DeleteCaratulaButton
-                    estimacionId={selected.id}
-                    projectId={projectId}
-                    onDeleted={handleCaratulaDeleted}
-                  />
-                )}
-              </div>
-            )}
-
-            {genError && (
-              <p className="mt-3 text-sm text-destructive" role="alert">
-                {genError}
-              </p>
-            )}
-
-            {/* Aprobación in-platform */}
-            <div className="mt-4 border-t border-nauka-subtle pt-3">
-              <p className="mb-2 text-xs text-muted-foreground">Aprobación</p>
-              {approval?.hasRequests ? (
-                <ApprovalStatusChips
-                  status={approval.latestStatus ?? "en_aprobacion"}
-                  votes={approval.chips}
-                />
-              ) : (
-                <p className="text-sm italic text-muted-foreground">
-                  Esta carátula no se ha enviado a aprobación.
-                </p>
-              )}
-
-              {approval?.rejectionMotivo && (
-                <p className="mt-2 text-sm text-red-700">
-                  Motivo del rechazo: {approval.rejectionMotivo}
-                </p>
-              )}
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                {isAdmin && !approval?.isOpen && (
-                  <Button
-                    variant="outline"
-                    onClick={handleEnviarAprob}
-                    disabled={sendingAprob || firmantes.length === 0}
-                  >
-                    {sendingAprob
-                      ? "Enviando..."
-                      : approval?.hasRequests
-                        ? "Reenviar a aprobación"
-                        : "Enviar a aprobación"}
-                  </Button>
-                )}
-
-                {approval?.myPendingApprovalId && (
-                  <ApproveRejectDialog
-                    approvalId={approval.myPendingApprovalId}
-                    caratulaTitulo={`Est. ${selected.numero} · ${selected.contratistaNombre}`}
-                    previewUrl={previewUrl}
-                    triggerLabel="Revisar y firmar"
-                  />
-                )}
-
-                {isAdmin &&
-                  approval?.pendingVotes
-                    .filter(
-                      (pv) => pv.approvalId !== approval.myPendingApprovalId,
-                    )
-                    .map((pv) => (
-                      <ApproveRejectDialog
-                        key={pv.approvalId}
-                        approvalId={pv.approvalId}
-                        caratulaTitulo={`Est. ${selected.numero} · ${selected.contratistaNombre}`}
-                        previewUrl={previewUrl}
-                        onBehalfFirmante={pv.firmanteNombre}
-                        triggerLabel={`Decidir por ${pv.firmanteNombre}`}
-                      />
-                    ))}
-              </div>
-
-              {aprobError && (
-                <p className="mt-2 text-sm text-destructive" role="alert">
-                  {aprobError}
-                </p>
-              )}
-
-              {approval?.hasRequests && (
-                <details className="mt-3">
-                  <summary className="cursor-pointer text-xs text-slate-500 hover:text-nauka-dark">
-                    Historial
-                  </summary>
-                  <div className="mt-2">
-                    <ApprovalTimeline rounds={approval.rounds} />
-                  </div>
-                </details>
-              )}
+              <Button onClick={() => setDetailOpen(true)}>
+                Ver carátula y acciones
+              </Button>
             </div>
           </div>
 
-          {/* Preview */}
-          {previewUrl && (
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium text-nauka-dark">
-                Vista previa
-              </p>
-              <iframe
-                src={previewUrl}
-                title="Vista previa de la carátula"
-                className="h-[640px] w-full rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card"
-              />
-            </div>
-          )}
-
-          <EnviarDialog
-            open={enviarOpen}
-            onOpenChange={setEnviarOpen}
-            estimacionId={selected.id}
+          <CaratulaDetailDialog
+            key={selected.id}
+            open={detailOpen}
+            onOpenChange={setDetailOpen}
+            estimacion={selected}
             projectId={projectId}
-            prefillEmails={prefillEmails}
-            enviadaAt={selected.enviadaAt}
-            destinatariosPrev={selected.destinatariosPrev}
-            onSent={handleSent}
+            conIva={conIva}
+            firmantes={firmantes}
+            defaultEmails={defaultEmails}
+            isAdmin={isAdmin}
+            approval={approval}
+            onGenerated={onGenerated}
+            onSent={onSent}
+            onDeleted={onDeleted}
           />
         </>
       )}
