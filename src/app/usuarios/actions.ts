@@ -1,7 +1,6 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { headers } from "next/headers"
 import { z } from "zod"
 import { requireAdmin } from "@/lib/auth/roles"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -16,12 +15,16 @@ const inviteSchema = z.object({
   firmanteId: z.string().uuid().nullable(),
 })
 
-/** Origen de la request (localhost y prod, sin hardcodear el host). */
-async function requestOrigin(): Promise<string> {
-  const h = await headers()
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000"
-  const proto = h.get("x-forwarded-proto") ?? "http"
-  return `${proto}://${host}`
+/**
+ * Base URL fija de la app desde NEXT_PUBLIC_APP_URL — NO del Host del request
+ * (fix A3: el Host es controlable por el cliente y podía envenenar el enlace
+ * de invitación). Fallback a localhost solo para dev local.
+ */
+function appOrigin(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
+    /\/$/,
+    "",
+  )
 }
 
 /**
@@ -54,7 +57,7 @@ export async function inviteUser(
     }
   }
 
-  const origin = await requestOrigin()
+  const origin = appOrigin()
   const { data: invited, error: inviteErr } =
     await admin.auth.admin.inviteUserByEmail(d.email, {
       data: { full_name: d.nombre },

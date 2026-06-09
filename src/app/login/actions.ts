@@ -1,6 +1,5 @@
 "use server"
 
-import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
@@ -43,12 +42,16 @@ export type MagicLinkState = { error: string | null; sent: boolean }
 
 const magicSchema = z.object({ email: z.string().email() })
 
-/** Origen de la request (sirve para localhost y prod sin hardcodear el host). */
-async function requestOrigin(): Promise<string> {
-  const h = await headers()
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000"
-  const proto = h.get("x-forwarded-proto") ?? "http"
-  return `${proto}://${host}`
+/**
+ * Base URL fija de la app desde NEXT_PUBLIC_APP_URL — NO del Host del request
+ * (fix A3: el Host es controlable por el cliente y podía envenenar el enlace
+ * del magic-link). Fallback a localhost solo para dev local.
+ */
+function appOrigin(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
+    /\/$/,
+    "",
+  )
 }
 
 export async function sendMagicLink(
@@ -66,7 +69,7 @@ export async function sendMagicLink(
     options: {
       // Solo usuarios ya invitados (creados en /usuarios) pueden entrar.
       shouldCreateUser: false,
-      emailRedirectTo: `${await requestOrigin()}/auth/callback?next=/`,
+      emailRedirectTo: `${appOrigin()}/auth/callback?next=/`,
     },
   })
 
