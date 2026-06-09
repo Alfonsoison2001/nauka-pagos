@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useMemo, useState, useTransition } from "react"
 import { ApprovalStatusChips } from "@/components/approvals/approval-status-chips"
 import { ApprovalTimeline } from "@/components/approvals/approval-timeline"
@@ -16,7 +17,12 @@ import {
 import type { DocumentApproval } from "@/lib/approvals/fetch"
 import { formatDate } from "@/lib/format/fecha"
 import { formatMXN } from "@/lib/utils"
-import { enviarAAprobacion, generarCaratula } from "./actions"
+import {
+  enviarAAprobacion,
+  generarCaratula,
+  regenerarCaratula,
+} from "./actions"
+import { DeleteCaratulaButton } from "./delete-caratula-button"
 import { EnviarDialog } from "./enviar-dialog"
 import type { CaratulaEstimacion, CaratulaFirmanteRow } from "./page"
 
@@ -48,6 +54,8 @@ export function CaratulaClient({
   const [generating, startGen] = useTransition()
   const [sendingAprob, startAprob] = useTransition()
   const [aprobError, setAprobError] = useState<string | null>(null)
+  const [regenerating, startRegen] = useTransition()
+  const router = useRouter()
 
   // Step 1: contratistas que tienen estimaciones (únicos, ordenados).
   const contratistaOptions = useMemo(() => {
@@ -110,6 +118,43 @@ export function CaratulaClient({
         ),
       )
     })
+  }
+
+  function handleRegenerar() {
+    if (!selected) return
+    setGenError(null)
+    startRegen(async () => {
+      const r = await regenerarCaratula(selected.id, projectId)
+      if ("error" in r) {
+        setGenError(r.error)
+        return
+      }
+      setPreviewUrl(r.signedUrl)
+      setEstList((list) =>
+        list.map((e) =>
+          e.id === selected.id ? { ...e, yaGenerada: true } : e,
+        ),
+      )
+    })
+  }
+
+  function handleCaratulaDeleted() {
+    if (!selected) return
+    setEstList((list) =>
+      list.map((e) =>
+        e.id === selected.id
+          ? {
+              ...e,
+              yaGenerada: false,
+              enviadaAt: null,
+              destinatariosPrev: null,
+            }
+          : e,
+      ),
+    )
+    setPreviewUrl(null)
+    setGenError(null)
+    router.refresh()
   }
 
   function handleSent(info: { enviadaAt: string; destinatarios: string[] }) {
@@ -276,6 +321,16 @@ export function CaratulaClient({
                 <Button onClick={handleGenerar} disabled={generating}>
                   {generating ? "Generando..." : "Generar carátula"}
                 </Button>
+                {selected.yaGenerada && !approval?.isOpen && (
+                  <Button
+                    variant="outline"
+                    onClick={handleRegenerar}
+                    disabled={regenerating}
+                    title="Re-renderiza la carátula con los datos actuales"
+                  >
+                    {regenerating ? "Regenerando..." : "Regenerar"}
+                  </Button>
+                )}
                 {aprobada ? (
                   <Button
                     variant="outline"
@@ -302,6 +357,15 @@ export function CaratulaClient({
                       Enviar sin aprobación
                     </Button>
                   </>
+                )}
+                {(selected.yaGenerada ||
+                  selected.enviadaAt ||
+                  approval?.hasRequests) && (
+                  <DeleteCaratulaButton
+                    estimacionId={selected.id}
+                    projectId={projectId}
+                    onDeleted={handleCaratulaDeleted}
+                  />
                 )}
               </div>
             )}

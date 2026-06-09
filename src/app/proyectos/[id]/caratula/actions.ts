@@ -32,6 +32,7 @@ export async function generarCaratula(
   estimacionId: string,
   projectId: string,
 ): Promise<GenerarResult> {
+  await requireAdmin()
   const built = await buildCaratulaData(estimacionId, projectId)
   if ("error" in built) return { error: built.error }
 
@@ -71,6 +72,7 @@ export async function enviarCaratula(
   projectId: string,
   formData: FormData,
 ): Promise<EnviarResult> {
+  await requireAdmin()
   const raw = (formData.get("emails") as string) || ""
   const emails = raw
     .split(/[\n,;]+/)
@@ -227,4 +229,97 @@ export async function enviarAAprobacion(
   revalidatePath(`/proyectos/${projectId}/caratula`)
   revalidatePath("/aprobaciones")
   return { ok: true }
+}
+
+// ── Borrar carátula (admin) ──────────────────────────────────────────────────
+// Hard-delete: PDFs de Storage (prefijo {estId}_ en caratulas/ + constancias) +
+// approval_requests (cascade borra approvals, vía policy DELETE admin de la
+// migración 20260608210244) + reset de los campos de carátula en la estimación.
+// MANTIENE comprobante_pago_url y status (manual). El audit_log registra vía triggers.
+
+export type DeleteCaratulaResult = { error: string } | { ok: true }
+
+export async function deleteCaratula(
+  estimacionId: string,
+  projectId: string,
+): Promise<DeleteCaratulaResult> {
+  await requireAdmin()
+  const sb = await createClient()
+
+  // Recolecta paths de Storage: todo en caratulas/ con prefijo {estId}_ + constancias.
+  const { data: files } = await sb.storage
+    .from("proyectos")
+    .list(`${projectId}/caratulas`, { limit: 1000 })
+  const toRemove = (files ?? [])
+    .filter((f) => f.name.startsWith(`${estimacionId}_`))
+    .map((f) => `${projectId}/caratulas/${f.name}`)
+  const { data: reqRows } = await sb
+    .from("approval_requests")
+    .select("constancia_pdf_path")
+    .eq("document_type", "caratula")
+    .eq("document_id", estimacionId)
+  for (const r of reqRows ?? []) {
+    const p = r.constancia_pdf_path as string | null
+    if (p) toRemove.push(p)
+  }
+
+  // DB primero: borra solicitudes (cascade borra votos). Si falla, aborta antes de Storage.
+  const { error: delReqErr } = await sb
+    .from("approval_requests")
+    .delete()
+    .eq("document_type", "caratula")
+    .eq("document_id", estimacionId)
+  if (delReqErr)
+    return { error: `Error borrando aprobaciones: ${delReqErr.message}` }
+
+  const { error: updErr } = await sb
+    .from("estimaciones")
+    .update({
+      caratula_generada_url: null,
+      caratula_pdf_path: null,
+      caratula_enviada_at: null,
+      destinatarios_email: null,
+      caratula_firmada_url: null,
+    })
+    .eq("id", estimacionId)
+    .is("deleted_at", null)
+  if (updErr) return { error: updErr.message }
+
+  // Storage al final (huérfanos en caso de fallo son benignos).
+  if (toRemove.length > 0) {
+    const { error: rmErr } = await sb.storage.from("proyectos").remove(toRemove)
+    if (rmErr)
+      return {
+        error: `Registro borrado, pero error en Storage: ${rmErr.message}`,
+      }
+  }
+
+  revalidatePath(`/proyectos/${projectId}/caratula`)
+  revalidatePath("/aprobaciones")
+  return { ok: true }
+}
+
+// ── Regenerar carátula (admin) ───────────────────────────────────────────────
+// Re-renderiza con los datos actuales. Bloqueada si hay una ronda de aprobación
+// abierta (la UI también oculta el botón en ese caso).
+
+export async function regenerarCaratula(
+  estimacionId: string,
+  projectId: string,
+): Promise<GenerarResult> {
+  await requireAdmin()
+  const sb = await createClient()
+  const { data: openReq } = await sb
+    .from("approval_requests")
+    .select("id")
+    .eq("document_type", "caratula")
+    .eq("document_id", estimacionId)
+    .eq("status", "en_aprobacion")
+    .limit(1)
+  if (openReq && openReq.length > 0) {
+    return {
+      error: "No puedes regenerar mientras la carátula está en aprobación.",
+    }
+  }
+  return generarCaratula(estimacionId, projectId)
 }
