@@ -72,6 +72,11 @@ export default async function CaratulaPage({
   const contratistasMap = new Map(contratistas.map((c) => [c.id, c]))
 
   let estimaciones: CaratulaEstimacion[] = []
+  const contratistaPresupuesto: Record<string, number> = {}
+  const partidasByContratista: Record<
+    string,
+    { id: string; nombre: string }[]
+  > = {}
   if (cIds.length > 0) {
     const { data: pRows } = await sb
       .from("partidas")
@@ -79,6 +84,14 @@ export default async function CaratulaPage({
       .in("contratista_id", cIds)
       .is("deleted_at", null)
     const partidas = pRows ?? []
+    for (const p of partidas) {
+      const cid = p.contratista_id as string
+      contratistaPresupuesto[cid] =
+        (contratistaPresupuesto[cid] ?? 0) + Number(p.presupuesto_con_iva)
+      const arr = partidasByContratista[cid] ?? []
+      arr.push({ id: p.id as string, nombre: p.nombre as string })
+      partidasByContratista[cid] = arr
+    }
     const partidasMap = new Map(partidas.map((p) => [p.id, p]))
     const pIds = partidas.map((p) => p.id)
 
@@ -164,6 +177,18 @@ export default async function CaratulaPage({
     }
   }
 
+  // Pagadores disponibles para el alta inline (globales + del proyecto).
+  const { data: pagRows } = await sb
+    .from("pagadores")
+    .select("id, nombre")
+    .or(`project_id.is.null,project_id.eq.${id}`)
+    .is("deleted_at", null)
+    .order("nombre")
+  const pagadorOptions = (pagRows ?? []).map((p) => ({
+    id: p.id as string,
+    nombre: p.nombre as string,
+  }))
+
   // Estado de aprobación por estimación (rondas + votos).
   const profile = await getMyProfile()
   const estIds = estimaciones.map((e) => e.id)
@@ -196,6 +221,9 @@ export default async function CaratulaPage({
       defaultEmails={(project.default_emails as string[] | null) ?? []}
       isAdmin={profile?.role === "admin"}
       approvalByEst={approvalByEst}
+      contratistaPresupuesto={contratistaPresupuesto}
+      partidasByContratista={partidasByContratista}
+      pagadorOptions={pagadorOptions}
     />
   )
 }
