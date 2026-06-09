@@ -24,6 +24,8 @@ export type CaratulaEstimacion = {
   enviadaAt: string | null
   destinatariosPrev: string[] | null
   pagadorEmail: string | null
+  fechaEstimacion: string
+  pagadorNombre: string | null
 }
 
 export type CaratulaFirmanteRow = {
@@ -73,7 +75,7 @@ export default async function CaratulaPage({
   if (cIds.length > 0) {
     const { data: pRows } = await sb
       .from("partidas")
-      .select("id, contratista_id, nombre")
+      .select("id, contratista_id, nombre, presupuesto_con_iva")
       .in("contratista_id", cIds)
       .is("deleted_at", null)
     const partidas = pRows ?? []
@@ -99,15 +101,20 @@ export default async function CaratulaPage({
         ),
       ]
       const pagadorEmailMap = new Map<string, string | null>()
+      const pagadorNombreMap = new Map<string, string | null>()
       if (pagadorIds.length > 0) {
         const { data: pagEmailRows } = await sb
           .from("pagadores")
-          .select("id, email")
+          .select("id, email, nombre")
           .in("id", pagadorIds)
         for (const p of pagEmailRows ?? []) {
           pagadorEmailMap.set(
             p.id as string,
             (p.email as string | null) ?? null,
+          )
+          pagadorNombreMap.set(
+            p.id as string,
+            (p.nombre as string | null) ?? null,
           )
         }
       }
@@ -129,6 +136,10 @@ export default async function CaratulaPage({
           destinatariosPrev: (e.destinatarios_email as string[] | null) ?? null,
           pagadorEmail: pagadorId
             ? (pagadorEmailMap.get(pagadorId) ?? null)
+            : null,
+          fechaEstimacion: e.fecha_estimacion as string,
+          pagadorNombre: pagadorId
+            ? (pagadorNombreMap.get(pagadorId) ?? null)
             : null,
         }
       })

@@ -7,6 +7,9 @@ import { createClient } from "@/lib/supabase/server"
 // ── Shared types ──────────────────────────────────────────────────────────────
 
 export type ActionResult = { error: string } | { ok: true }
+export type CreateEstimacionResult =
+  | { error: string }
+  | { ok: true; estimacionId: string }
 
 export type EstimacionRow = {
   id: string
@@ -79,7 +82,7 @@ function parseFormData(fd: FormData) {
 export async function createEstimacion(
   projectId: string,
   formData: FormData,
-): Promise<ActionResult> {
+): Promise<CreateEstimacionResult> {
   const parsed = parseFormData(formData)
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
@@ -96,21 +99,27 @@ export async function createEstimacion(
     .maybeSingle()
   if (!partida) return { error: "Partida no encontrada" }
 
-  const { error } = await sb.from("estimaciones").insert({
-    partida_id: d.partida_id,
-    pagador_id: d.pagador_id,
-    numero: d.numero,
-    concepto: d.concepto ?? null,
-    fecha_estimacion: d.fecha_estimacion,
-    monto_sin_iva: d.monto_sin_iva,
-    iva_pct: d.iva_pct,
-    status: d.status,
-    notas: d.notas ?? null,
-  })
-  if (error) return { error: error.message }
+  const { data: created, error } = await sb
+    .from("estimaciones")
+    .insert({
+      partida_id: d.partida_id,
+      pagador_id: d.pagador_id,
+      numero: d.numero,
+      concepto: d.concepto ?? null,
+      fecha_estimacion: d.fecha_estimacion,
+      monto_sin_iva: d.monto_sin_iva,
+      iva_pct: d.iva_pct,
+      status: d.status,
+      notas: d.notas ?? null,
+    })
+    .select("id")
+    .single()
+  if (error || !created) {
+    return { error: error?.message ?? "Error al crear estimación" }
+  }
 
   revalidatePath(`/proyectos/${projectId}/flujo-de-pagos`)
-  return { ok: true }
+  return { ok: true, estimacionId: created.id as string }
 }
 
 // ── updateEstimacion ──────────────────────────────────────────────────────────
