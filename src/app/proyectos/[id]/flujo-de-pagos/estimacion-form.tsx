@@ -282,7 +282,15 @@ export function EstimacionFormFields({
           render={({ field }) => (
             <div className="flex flex-col gap-2">
               <Label htmlFor="ef-status">Estatus</Label>
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                items={[
+                  { value: "pendiente", label: "Pendiente" },
+                  { value: "enviada", label: "Enviada" },
+                  { value: "pagada", label: "Pagada" },
+                ]}
+              >
                 <SelectTrigger id="ef-status" className="w-full">
                   <SelectValue />
                 </SelectTrigger>

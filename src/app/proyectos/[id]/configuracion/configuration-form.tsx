@@ -169,7 +169,14 @@ export function ConfigurationForm({ project }: { project: Project }) {
               render={({ field }) => (
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="cf-iva">IVA en carátula</Label>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    items={[
+                      { value: "con_iva", label: "Con IVA" },
+                      { value: "sin_iva", label: "Sin IVA" },
+                    ]}
+                  >
                     <SelectTrigger id="cf-iva">
                       <SelectValue />
                     </SelectTrigger>

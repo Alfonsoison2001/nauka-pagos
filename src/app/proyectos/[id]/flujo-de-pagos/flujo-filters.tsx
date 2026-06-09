@@ -49,6 +49,12 @@ export function FlujoFilters({
         onValueChange={(v) =>
           onFilterChange("status", !v || v === "__all__" ? "" : v)
         }
+        items={[
+          { value: "__all__", label: "Todos los estatus" },
+          { value: "pendiente", label: "Pendiente" },
+          { value: "enviada", label: "Enviada" },
+          { value: "pagada", label: "Pagada" },
+        ]}
       >
         <SelectTrigger className="h-8 w-36 rounded-full text-xs">
           <SelectValue placeholder="Estatus" />

@@ -98,7 +98,14 @@ export function NewProjectDialog({ open, onOpenChange }: Props) {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="np-iva">IVA en carátula</Label>
-            <Select name="caratula_iva_mode" defaultValue="con_iva">
+            <Select
+              name="caratula_iva_mode"
+              defaultValue="con_iva"
+              items={[
+                { value: "con_iva", label: "Con IVA" },
+                { value: "sin_iva", label: "Sin IVA" },
+              ]}
+            >
               <SelectTrigger id="np-iva">
                 <SelectValue />
               </SelectTrigger>
