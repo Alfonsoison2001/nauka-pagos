@@ -61,6 +61,25 @@ export async function generarCaratula(
   return { ok: true, signedUrl: signed.signedUrl }
 }
 
+// ── Descargar (signed URL del PDF generado) ──────────────────────────────────
+
+export async function getCaratulaSignedUrl(
+  estimacionId: string,
+): Promise<string | null> {
+  const sb = await createClient()
+  const { data: est } = await sb
+    .from("estimaciones")
+    .select("caratula_generada_url")
+    .eq("id", estimacionId)
+    .maybeSingle()
+  const path = (est?.caratula_generada_url as string | null) ?? null
+  if (!path) return null
+  const { data } = await sb.storage
+    .from("proyectos")
+    .createSignedUrl(path, PREVIEW_TTL)
+  return data?.signedUrl ?? null
+}
+
 // ── Enviar ──────────────────────────────────────────────────────────────────
 
 const emailsSchema = z
