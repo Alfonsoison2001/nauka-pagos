@@ -121,6 +121,15 @@ export default async function ResumenPage({
     })),
   })
 
+  // Orden de mayor a menor por Presupuesto Total — alimenta tanto la tabla como
+  // las barras del chart (ambos consumen este mismo array).
+  const porPartidaSorted = [...r.porPartida].sort(
+    (a, b) =>
+      b.presupuesto - a.presupuesto ||
+      a.contratistaNombre.localeCompare(b.contratistaNombre) ||
+      a.partidaNombre.localeCompare(b.partidaNombre),
+  )
+
   const sobreEjercidoNames = r.porPartida
     .filter((p) => p.sobreEjercido)
     .map((p) => `${p.contratistaNombre} — ${p.partidaNombre}`)
@@ -133,7 +142,7 @@ export default async function ResumenPage({
     .sort(byFechaDesc)
     .slice(0, PAGOS_LIMIT)
 
-  const chartData: ChartDatum[] = r.porPartida.map((p) => ({
+  const chartData: ChartDatum[] = porPartidaSorted.map((p) => ({
     name: truncate(p.partidaNombre, 16),
     full: `${p.contratistaNombre} — ${p.partidaNombre}`,
     presupuesto: p.presupuesto,
@@ -190,7 +199,7 @@ export default async function ResumenPage({
 
       <PartidaResumenTable
         projectId={id}
-        porPartida={r.porPartida}
+        porPartida={porPartidaSorted}
         estimaciones={estimacionRows}
         totalPresupuesto={r.totalPresupuesto}
         totalEjercido={r.totalEjercido}
