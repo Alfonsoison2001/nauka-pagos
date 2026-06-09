@@ -157,6 +157,10 @@ export function EstimacionFormFields({
                   field.onChange(v)
                   setValue("partida_id", "")
                 }}
+                items={contratistas.map((c) => ({
+                  value: c.id,
+                  label: c.nombre,
+                }))}
               >
                 <SelectTrigger id="ef-contratista" className="w-full">
                   <SelectValue placeholder="Selecciona" />
@@ -194,7 +198,14 @@ export function EstimacionFormFields({
           render={({ field }) => (
             <div className="flex flex-col gap-2">
               <Label htmlFor="ef-partida">Partida</Label>
-              <Select value={field.value ?? ""} onValueChange={field.onChange}>
+              <Select
+                value={field.value ?? ""}
+                onValueChange={field.onChange}
+                items={filteredPartidas.map((p) => ({
+                  value: p.id,
+                  label: p.nombre,
+                }))}
+              >
                 <SelectTrigger id="ef-partida" className="w-full">
                   <SelectValue placeholder="Selecciona" />
                 </SelectTrigger>

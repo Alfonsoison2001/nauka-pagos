@@ -67,6 +67,10 @@ export function FlujoFilters({
         onValueChange={(v) =>
           onFilterChange("contratista_id", !v || v === "__all__" ? "" : v)
         }
+        items={[
+          { value: "__all__", label: "Todos los contratistas" },
+          ...contratistas.map((c) => ({ value: c.id, label: c.nombre })),
+        ]}
       >
         <SelectTrigger className="h-8 w-44 rounded-full text-xs">
           <SelectValue placeholder="Contratista" />
@@ -87,6 +91,10 @@ export function FlujoFilters({
         onValueChange={(v) =>
           onFilterChange("partida_id", !v || v === "__all__" ? "" : v)
         }
+        items={[
+          { value: "__all__", label: "Todas las partidas" },
+          ...visiblePartidas.map((p) => ({ value: p.id, label: p.nombre })),
+        ]}
       >
         <SelectTrigger className="h-8 w-44 rounded-full text-xs">
           <SelectValue placeholder="Partida" />

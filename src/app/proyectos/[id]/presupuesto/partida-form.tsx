@@ -79,7 +79,17 @@ export function PartidaFormFields({
             name="contratista_id"
             control={control}
             render={({ field }) => (
-              <Select value={field.value ?? ""} onValueChange={field.onChange}>
+              <Select
+                value={field.value ?? ""}
+                onValueChange={field.onChange}
+                items={[
+                  ...contratistas.map((c) => ({
+                    value: c.id,
+                    label: c.nombre,
+                  })),
+                  { value: "crear_nuevo", label: "+ Crear nuevo" },
+                ]}
+              >
                 <SelectTrigger id="pf-contratista" className="w-full">
                   <SelectValue placeholder="Selecciona un contratista" />
                 </SelectTrigger>
