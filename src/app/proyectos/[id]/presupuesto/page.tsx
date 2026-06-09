@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import { formatDate } from "@/lib/format"
 import { createClient } from "@/lib/supabase/server"
 import { formatMXN } from "@/lib/utils"
 import type { ContratistaOption, PartidaRow } from "./actions"
@@ -132,6 +133,7 @@ function PresupuestoTable({
             <th className="px-3 py-2.5 text-right">IVA%</th>
             <th className="px-3 py-2.5 text-right">IVA monto</th>
             <th className="px-3 py-2.5 text-right">Total con IVA</th>
+            <th className="px-3 py-2.5 text-left">Fecha presupuesto</th>
             <th className="px-3 py-2.5 text-left">Notas</th>
             <th className="px-3 py-2.5 text-left">PDF</th>
             <th className="px-3 py-2.5" />
@@ -157,6 +159,9 @@ function PresupuestoTable({
               <td className="px-3 py-2 text-right">{formatMXN(p.iva_monto)}</td>
               <td className="px-3 py-2 text-right font-medium">
                 {formatMXN(p.presupuesto_con_iva)}
+              </td>
+              <td className="px-3 py-2 text-muted-foreground">
+                {formatDate(p.fecha_firma)}
               </td>
               <td className="px-3 py-2 text-muted-foreground">
                 {p.notas ?? "—"}

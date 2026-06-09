@@ -190,7 +190,7 @@ export function PartidaFormFields({
         control={control}
         render={({ field }) => (
           <div className="flex flex-col gap-2">
-            <Label htmlFor="pf-fecha">Fecha de firma (opcional)</Label>
+            <Label htmlFor="pf-fecha">Fecha presupuesto (opcional)</Label>
             <Input id="pf-fecha" type="date" {...field} />
           </div>
         )}
