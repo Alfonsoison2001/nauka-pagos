@@ -1,19 +1,25 @@
 # STATE — NAUKA Pagos
 
-> Snapshot de handoff · **2026-06-09 (tarde)** · rama `main` @ `d15b18e` · rediseño Carátula COMPLETO, verificado en prod por Alfonso
+> Snapshot de handoff · **2026-06-10** · rama `main` @ `823dd93` · Fase 0 del security audit (código) COMPLETA — 4 fixes en prod, Vercel verde
 
 ## Dónde estamos AHORA MISMO
 
-**Rediseño tab Carátula COMPLETO — los 4 commits verdes en Vercel.** Working tree limpio, nada en vuelo.
+**Fase 0 del security audit (código) COMPLETA — los 4 fixes commiteados, pusheados y verdes en Vercel.** Working tree limpio, nada en vuelo.
 
-El plan vivió en `docs/changes/rediseno-caratula-cards.md`. Los 4 commits:
-
-| # | Commit | Hash | Estado |
+| # | Fix | Hash | Estado |
 |---|---|---|---|
-| 1 | feat(caratula-redesign): backend prep (extiende createEstimacion + query) | `8fd1024` | ✅ verde |
-| 2 | refactor(caratula): extract CaratulaDetailDialog reusable component | `1afef8e` | ✅ verde |
-| 3 | feat(caratula-redesign): card components | `8b58805` | ✅ verde |
-| 4 | feat(caratula-redesign): cards horizontales agrupadas por contratista | `d15b18e` | ✅ verde |
+| 1 | fix(security-A1): storage write/delete solo admin (migración `20260609201429_harden_storage_rls`, aplicada a prod vía `supabase db push`) | `33128c1` | ✅ verde |
+| 2 | fix(security-A3): usar NEXT_PUBLIC_APP_URL en auth redirects | `c01f70e` | ✅ (ver nota) |
+| 3 | feat(security-M1): security headers | `9e366b2` | ✅ verde |
+| 4 | fix(security-M3): revocar sesión al desactivar usuario | `823dd93` | ✅ verde |
+
+**Nota A3:** Vercel no creó deployment para `c01f70e` (webhook perdido, transitorio — único caso en el repo); su código viajó y quedó verde en el deploy de M1 (`9e366b2`). M1 y M3 desplegaron normal después. No requiere acción.
+
+**As-built de los 4 fixes:**
+- **A1:** policies nuevas `storage_proyectos_{select,insert,update,delete}` y `storage_firmas_*` reemplazan a las 2 `FOR ALL` de initial_schema. SELECT abierto a authenticated; write/delete `public.is_admin()`. `firmas` deja prevista escritura de aprobador SOLO bajo su prefijo `{firmante_id}/…` (para el canvas 8e; hoy inerte — nada escribe ese bucket). Solo policies, grants intactos (sin 42501). Revisión adversarial pre-push con 3 lentes (RLS correctness / Storage gotchas / regresión admin): SAFE TO PUSH unánime.
+- **A3:** `requestOrigin()` (Host header, spoofeable) → `appOrigin()` desde `NEXT_PUBLIC_APP_URL`, en `login/actions.ts` (magic-link) y `usuarios/actions.ts` (invitación). Alfonso confirmó la env en Vercel Production ANTES del push. Fallback localhost solo dev.
+- **M1:** `async headers()` en `next.config.ts` para `/(.*)`: HSTS (2 años + includeSubDomains), X-Frame-Options DENY, nosniff, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy mínima. **CSP en Report-Only a propósito** (observar violaciones antes de enforce; permite `'unsafe-inline'` de Next/Tailwind y orígenes `*.supabase.co`). Verificado local con curl: los 6 headers se emiten.
+- **M3:** `setUserActive(false)` ahora banea el auth.user vía Admin API (`updateUserById`, `ban_duration: "876000h"`); reactivar = `"none"`. NO se usó `admin.signOut` — requiere el JWT del propio usuario y auth-js 2.106.2 no tiene signOut-por-id. El ban corta refresh, logins nuevos y `getUser()` del middleware al instante. El cliente admin se valida ANTES de mutar (sin estados parciales).
 
 ## Cómo quedó el rediseño Carátula (as-built)
 
@@ -30,17 +36,19 @@ El plan vivió en `docs/changes/rediseno-caratula-cards.md`. Los 4 commits:
 
 Componentes nuevos (en `src/app/proyectos/[id]/caratula/`): `caratula-badge.tsx`, `caratula-estimacion-card.tsx`, `nueva-caratula-dialog.tsx`, `caratula-contratista-group.tsx`, `caratula-detail-dialog.tsx`. Acción nueva `getCaratulaSignedUrl` (descarga). `createEstimacion` ahora devuelve `estimacionId`.
 
-## Qué está en producción (Vercel verde hasta d15b18e)
+## Qué está en producción (Vercel verde hasta 823dd93)
 
-- App completa: Home con 3 project cards, 6 tabs por proyecto, carátula PDF + Resend, aprobaciones in-platform (8a `cc40ecd` + 8b `a76116a`), `/auth/recovery` (`ca388f2`), design system NAUKA, **tab Carátula rediseñada a cards**.
+- App completa: Home con 3 project cards, 6 tabs por proyecto, carátula PDF + Resend, aprobaciones in-platform (8a `cc40ecd` + 8b `a76116a`), `/auth/recovery` (`ca388f2`), design system NAUKA, **tab Carátula rediseñada a cards**, **Fase 0 security (A1 `33128c1` + A3 `c01f70e` + M1 `9e366b2` + M3 `823dd93`)**.
 - **Lote 44 con DATA REAL**: 6 contratistas (SAMSTORGAM, Hector Triana, ABIKAR, Urarq, Aquaconcepts, TENCO), 6 partidas, 7 estimaciones todas pagadas, **ejercido $647,748.01 (cuadra al centavo con el Excel)**. Test data (CYVSA, R&R Imper) soft-deleted + storage huérfano limpiado (`592443f`).
 - Sesión 2026-06-08/09: `851286b` fecha presupuesto editable · `2d7ec46` resumen ordenado desc · `dcda9af` borrar/regenerar carátula + fix A2 · `c275c57` fix dropdowns UUID→nombre · `b49c4fb` labels capitalizados Status/IVA · rediseño Carátula `8fd1024`→`d15b18e`.
+- Sesión 2026-06-09/10: Fase 0 security — A1 `33128c1` · A3 `c01f70e` · M1 `9e366b2` · M3 `823dd93`.
 
 ## Seguridad (audit `docs/security-audit-2026-06-08.md`)
 
-- 0 críticos · 3 ALTOS: **A2 CERRADO** (`dcda9af`) · **A1 (Storage RLS write/delete abierto) PENDIENTE** · **A3 (host-header en redirects) PENDIENTE** · M1 (headers seguridad) y M3 (revocar sesión) pendientes · 9 medios · 13 bajos.
+- **Fase 0 (código) CERRADA:** A1 (`33128c1`) · A2 (`dcda9af`) · A3 (`c01f70e`) · M1 (`9e366b2`) · M3 (`823dd93`). Quedan Fase 1 (M2, M4–M9, B1–B13 — "esta semana" según el audit, agrupados) y Fase 2 (retención/erasure, 2FA, documentar lectura abierta con GFA).
+- **Verificaciones manuales pendientes (Alfonso, ~10 min):** A1 → como admin: generar/enviar/borrar/regenerar carátula, subir PDF de presupuesto, subir comprobante, subir logo (si algo da "violates row-level security" o 403, reportar). A3 → mandar magic-link o invitación de prueba y confirmar que el enlace del correo apunta al dominio prod. M1 → securityheaders.com contra prod + vigilar consola del navegador por reportes CSP (report-only) en uso normal; cuando esté limpia, decidir enforce. M3 → con una segunda cuenta (no aplica sobre uno mismo): desactivar → la sesión muere al instante; reactivar → vuelve a entrar.
 - Dashboard hardening hecho: signup off, redirect URLs acotadas, Site URL prod, Vercel preview protection, buckets privados, password de Alfonso cambiada vía `/auth/recovery`, password policy ≥12.
-- **BLOQUEANTE antes de invitar externos (José/Marcos):** cerrar A1+A3+M1+M3 + **rotar TODAS las keys** (ANON, SERVICE_ROLE, password Postgres —hubo leak de rol CLI en transcript—, RESEND) + re-`supabase login` + Network Restrictions ≠ 0.0.0.0/0. Memoria `pre-rotation-security-checklist`.
+- **BLOQUEANTE antes de invitar externos (José/Marcos):** SOLO queda **rotar TODAS las keys** (ANON, SERVICE_ROLE, password Postgres —hubo leak de rol CLI en transcript—, RESEND) + re-`supabase login` + Network Restrictions ≠ 0.0.0.0/0. Memoria `pre-rotation-security-checklist`. (A1+A3+M1+M3 ya cerrados en código.)
 - ✅ `.env.local`: `BACKUP_ADMIN_EMAIL/PASSWORD` BORRADAS (2026-06-09, cierre de migración). Quedan solo keys reales (Supabase + Resend). Los scripts de migración/backup ya no corren — migración one-shot completa. (Nota menor: quedaron 3 líneas de comentario huérfanas del bloque BACKUP en `.env.local`; inocuas.)
 
 ## Notas operativas clave
@@ -56,7 +64,7 @@ Componentes nuevos (en `src/app/proyectos/[id]/caratula/`): `caratula-badge.tsx`
 1. Confirmar sentido de barras del Resumen (¿la más grande arriba? si no: `reversed` en YAxis, 1 línea).
 2. **Auditoría de calidad anti-vibe-coding** (prompt de 10 dimensiones redactado en conversación previa; Alfonso decide cuándo). Output: `docs/audit-quality-2026-06-XX.md`.
 3. Alfonso sube PDFs de presupuestos firmados de L44 por la UI (manual, ~10 min).
-4. Fase 0 restante del security audit: A1, A3, M1, M3 (un commit por hallazgo).
+4. Verificación manual de los 4 fixes de Fase 0 (lista en sección Seguridad, ~10 min). Después, cuando Alfonso diga: Fase 1 del audit (M2, M4–M9, B1–B13, agrupados en ~3 commits).
 5. Rotación de keys (checklist en memoria) → recién entonces invitar a Jess→José→Marcos.
 6. Migración Beachfront y Lote 3 (clonar script, correr antes de editar en app).
 7. Sub-fases 8c+8e (canvas firma + constancia PDF — Alfonso duda si vale la pena) y 8d (notificaciones email + Recordar). Verificar dominio Resend antes de externos.
@@ -64,4 +72,4 @@ Componentes nuevos (en `src/app/proyectos/[id]/caratula/`): `caratula-badge.tsx`
 
 ## Decisiones que NO hay que re-grilear
 
-2 roles (admin: Alfonso+Jess / aprobador: José+Marcos+Edy) · visibilidad cross-project consciente (todos ven todo; dejarlo por escrito con GFA) · firmantes globales compartidos entre proyectos · status de pago 100% manual · una sola fecha (`fecha_estimacion`) · sin EOM · IVA por estimación = checkbox 16% (iva_pct 0 o 0.16, monto tecleado = lo que cuenta) · acumulado de carátula = todas las estimaciones fecha ≤ esta incluyéndola sin importar status · loop grill-me → openspec → aprobar → implementar · regression prevention de CLAUDE.md es ley · rediseño Carátula: 3 ajustes as-built aceptados (ver arriba).
+2 roles (admin: Alfonso+Jess / aprobador: José+Marcos+Edy) · visibilidad cross-project consciente (todos ven todo; dejarlo por escrito con GFA) · firmantes globales compartidos entre proyectos · status de pago 100% manual · una sola fecha (`fecha_estimacion`) · sin EOM · IVA por estimación = checkbox 16% (iva_pct 0 o 0.16, monto tecleado = lo que cuenta) · acumulado de carátula = todas las estimaciones fecha ≤ esta incluyéndola sin importar status · loop grill-me → openspec → aprobar → implementar · regression prevention de CLAUDE.md es ley · rediseño Carátula: 3 ajustes as-built aceptados (ver arriba) · Fase 0 as-built: M3 = ban vía Admin API (auth-js sin signOut-por-id) · CSP report-only primero, enforce después de observar · A3 ancla redirects a NEXT_PUBLIC_APP_URL.
