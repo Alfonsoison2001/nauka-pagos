@@ -181,6 +181,28 @@ export async function updateEstimacion(
   return { ok: true }
 }
 
+// ── marcarEstimacionEnviada ───────────────────────────────────────────────────
+// Atajo de un clic tras enviar la carátula al pagador: sube el status de pago de
+// 'pendiente' → 'enviada'. Solo aplica si seguía en 'pendiente' (no degrada
+// 'pagada'). El status es manual y ortogonal a la aprobación.
+
+export async function marcarEstimacionEnviada(
+  estimacionId: string,
+  projectId: string,
+): Promise<ActionResult> {
+  const sb = await createClient()
+  const { error } = await sb
+    .from("estimaciones")
+    .update({ status: "enviada" })
+    .eq("id", estimacionId)
+    .eq("status", "pendiente")
+    .is("deleted_at", null)
+  if (error) return { error: error.message }
+  revalidatePath(`/proyectos/${projectId}/flujo-de-pagos`)
+  revalidatePath(`/proyectos/${projectId}/caratula`)
+  return { ok: true }
+}
+
 // ── deleteEstimacion ──────────────────────────────────────────────────────────
 
 export async function deleteEstimacion(

@@ -343,6 +343,7 @@ export function CaratulaDetailDialog({
           prefillEmails={prefillEmails}
           enviadaAt={selected.enviadaAt}
           destinatariosPrev={selected.destinatariosPrev}
+          estimacionStatus={selected.status}
           onSent={onSent}
         />
       </DialogContent>
