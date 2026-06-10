@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import { requireAdmin } from "@/lib/auth/roles"
 import { createClient } from "@/lib/supabase/server"
 
 // ── Shared types ──────────────────────────────────────────────────────────────
@@ -275,4 +276,43 @@ export async function getComprobanteSignedUrl(
     .from("proyectos")
     .createSignedUrl(path, 60 * 5)
   return data?.signedUrl ?? null
+}
+
+// ── removeComprobante (admin) ─────────────────────────────────────────────────
+// Quita el comprobante: borra el objeto de Storage y limpia comprobante_pago_url.
+// Solo admin (requireAdmin + policy DELETE de Storage = is_admin). Se limpia la
+// columna primero (evita un link roto si el borrado de Storage fallara).
+
+export async function removeComprobante(
+  estimacionId: string,
+  projectId: string,
+): Promise<ActionResult> {
+  await requireAdmin()
+  const sb = await createClient()
+
+  const { data: est } = await sb
+    .from("estimaciones")
+    .select("comprobante_pago_url")
+    .eq("id", estimacionId)
+    .maybeSingle()
+  const path = (est?.comprobante_pago_url as string | null) ?? null
+
+  const { error: updErr } = await sb
+    .from("estimaciones")
+    .update({ comprobante_pago_url: null })
+    .eq("id", estimacionId)
+    .is("deleted_at", null)
+  if (updErr) return { error: updErr.message }
+
+  if (path) {
+    const { error: rmErr } = await sb.storage.from("proyectos").remove([path])
+    if (rmErr) {
+      return {
+        error: `Registro actualizado, pero error en Storage: ${rmErr.message}`,
+      }
+    }
+  }
+
+  revalidatePath(`/proyectos/${projectId}/flujo-de-pagos`)
+  return { ok: true }
 }

@@ -153,7 +153,11 @@ function FlujoRow({
         <ApprovalChip summary={aprobSummary} href="/aprobaciones" />
       </td>
       <td className="px-3 py-2">
-        <ComprobanteCell estimacion={row} projectId={projectId} />
+        <ComprobanteCell
+          estimacion={row}
+          projectId={projectId}
+          isAdmin={isAdmin}
+        />
       </td>
       <td className="max-w-[160px] truncate px-3 py-2 text-muted-foreground">
         {row.notas ?? "—"}

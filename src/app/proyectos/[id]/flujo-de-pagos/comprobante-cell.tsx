@@ -1,10 +1,22 @@
 "use client"
 
-import { Loader2, Paperclip, RefreshCw } from "lucide-react"
+import { Loader2, Paperclip, RefreshCw, X } from "lucide-react"
 import { useRef, useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import type { EstimacionRow } from "./actions"
-import { getComprobanteSignedUrl, uploadComprobante } from "./actions"
+import {
+  getComprobanteSignedUrl,
+  removeComprobante,
+  uploadComprobante,
+} from "./actions"
 
 const ACCEPTED = "application/pdf,image/png,image/jpeg,image/webp"
 const MAX_BYTES = 10 * 1024 * 1024
@@ -12,13 +24,17 @@ const MAX_BYTES = 10 * 1024 * 1024
 type Props = {
   estimacion: EstimacionRow
   projectId: string
+  isAdmin: boolean
 }
 
-export function ComprobanteCell({ estimacion, projectId }: Props) {
+export function ComprobanteCell({ estimacion, projectId, isAdmin }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [pending, startTransition] = useTransition()
   const [viewPending, startViewTransition] = useTransition()
+  const [removing, startRemoving] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [removeError, setRemoveError] = useState<string | null>(null)
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -57,6 +73,18 @@ export function ComprobanteCell({ estimacion, projectId }: Props) {
     })
   }
 
+  function handleRemove() {
+    setRemoveError(null)
+    startRemoving(async () => {
+      const r = await removeComprobante(estimacion.id, projectId)
+      if ("error" in r) {
+        setRemoveError(r.error)
+        return
+      }
+      setConfirmOpen(false)
+    })
+  }
+
   const hasFile = !!estimacion.comprobante_pago_url
 
   return (
@@ -91,6 +119,22 @@ export function ComprobanteCell({ estimacion, projectId }: Props) {
           )}
         </Button>
 
+        {/* Quitar (admin only) */}
+        {hasFile && isAdmin && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            type="button"
+            onClick={() => {
+              setRemoveError(null)
+              setConfirmOpen(true)
+            }}
+            aria-label="Quitar comprobante"
+          >
+            <X className="size-3 text-destructive" />
+          </Button>
+        )}
+
         <input
           ref={inputRef}
           type="file"
@@ -103,6 +147,44 @@ export function ComprobanteCell({ estimacion, projectId }: Props) {
       {error && (
         <p className="max-w-[120px] text-xs text-destructive">{error}</p>
       )}
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>¿Quitar el comprobante?</DialogTitle>
+            <DialogDescription>
+              {removeError ??
+                `Se borrará el archivo de la estimación #${estimacion.numero}. Esta acción no se puede deshacer.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            {removeError ? (
+              <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                Cerrar
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  type="button"
+                  disabled={removing}
+                  onClick={() => setConfirmOpen(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  type="button"
+                  disabled={removing}
+                  onClick={handleRemove}
+                >
+                  {removing ? "Quitando..." : "Sí, quitar"}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
