@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { headers } from "next/headers"
 import { z } from "zod"
-import { getMyProfile } from "@/lib/auth/roles"
+import { getMyProfile, requireAdmin } from "@/lib/auth/roles"
 import { createClient } from "@/lib/supabase/server"
 
 export type DecisionResult = { error: string } | { ok: true }
@@ -124,4 +124,47 @@ export async function rechazar(
     return { error: parsed.error.issues[0]?.message ?? "Motivo inválido" }
   }
   return decide(approvalId, "rechazada", parsed.data)
+}
+
+// ── Cancelar solicitud en curso (admin) ──────────────────────────────────────
+// Cierra una ronda 'en_aprobacion' → 'cancelada'. Los votos NO se tocan (quedan
+// en el historial). Desbloquea editar/regenerar y permite reenviar (ronda nueva).
+
+const cancelMotivoSchema = z.string().trim().max(500).optional()
+
+export async function cancelarAprobacion(
+  requestId: string,
+  motivo?: string,
+): Promise<DecisionResult> {
+  const me = await requireAdmin()
+  const sb = await createClient()
+
+  const { data: req } = await sb
+    .from("approval_requests")
+    .select("id, status, project_id")
+    .eq("id", requestId)
+    .maybeSingle()
+  if (!req) return { error: "Solicitud no encontrada." }
+  if (req.status !== "en_aprobacion") {
+    return { error: "Esta solicitud ya no está abierta." }
+  }
+
+  const parsed = cancelMotivoSchema.safeParse(motivo)
+  const motivoClean = parsed.success ? (parsed.data ?? null) : null
+
+  const { error } = await sb
+    .from("approval_requests")
+    .update({
+      status: "cancelada",
+      resolved_at: new Date().toISOString(),
+      canceled_by: me.authUserId,
+      cancel_motivo: motivoClean,
+    })
+    .eq("id", requestId)
+  if (error) return { error: error.message }
+
+  revalidatePath("/aprobaciones")
+  revalidatePath(`/proyectos/${req.project_id}/caratula`)
+  revalidatePath(`/proyectos/${req.project_id}/flujo-de-pagos`)
+  return { ok: true }
 }

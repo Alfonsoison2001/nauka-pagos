@@ -16,6 +16,9 @@ export type ApprovalRequestRow = {
   status: RequestStatus
   requestedAt: string
   resolvedAt: string | null
+  /** Solo en rondas canceladas: nombre del admin que canceló + motivo. */
+  canceledByNombre: string | null
+  cancelMotivo: string | null
 }
 export type ApprovalVoteRow = {
   id: string
@@ -36,6 +39,8 @@ type RawRequest = {
   status: string
   requested_at: string
   resolved_at: string | null
+  canceled_by: string | null
+  cancel_motivo: string | null
 }
 type RawVote = {
   id: string
@@ -47,7 +52,10 @@ type RawVote = {
   motivo: string | null
 }
 
-function mapRequest(r: RawRequest): ApprovalRequestRow {
+function mapRequest(
+  r: RawRequest,
+  cancelerNames: Map<string, string>,
+): ApprovalRequestRow {
   return {
     id: r.id,
     documentId: r.document_id,
@@ -56,7 +64,28 @@ function mapRequest(r: RawRequest): ApprovalRequestRow {
     status: r.status as RequestStatus,
     requestedAt: r.requested_at,
     resolvedAt: r.resolved_at,
+    canceledByNombre: r.canceled_by
+      ? (cancelerNames.get(r.canceled_by) ?? null)
+      : null,
+    cancelMotivo: r.cancel_motivo,
   }
+}
+
+/** Resuelve auth_user_id → nombre vía profiles (para "quién canceló"). */
+async function resolveProfileNames(
+  sb: ServerClient,
+  authUserIds: string[],
+): Promise<Map<string, string>> {
+  const m = new Map<string, string>()
+  if (authUserIds.length === 0) return m
+  const { data } = await sb
+    .from("profiles")
+    .select("auth_user_id, nombre")
+    .in("auth_user_id", authUserIds)
+  for (const p of (data ?? []) as { auth_user_id: string; nombre: string }[]) {
+    m.set(p.auth_user_id, p.nombre)
+  }
+  return m
 }
 
 /** Solicitudes de carátula; opcionalmente acotadas a ciertos document_id. */
@@ -68,12 +97,18 @@ export async function fetchCaratulaRequests(
   let q = sb
     .from("approval_requests")
     .select(
-      "id, document_id, project_id, round, status, requested_at, resolved_at",
+      "id, document_id, project_id, round, status, requested_at, resolved_at, canceled_by, cancel_motivo",
     )
     .eq("document_type", "caratula")
   if (documentIds) q = q.in("document_id", documentIds)
   const { data } = await q.order("requested_at", { ascending: false })
-  return ((data ?? []) as RawRequest[]).map(mapRequest)
+  const raw = (data ?? []) as RawRequest[]
+  const cancelerNames = await resolveProfileNames(sb, [
+    ...new Set(
+      raw.map((r) => r.canceled_by).filter((x): x is string => Boolean(x)),
+    ),
+  ])
+  return raw.map((r) => mapRequest(r, cancelerNames))
 }
 
 async function resolveFirmanteNames(
@@ -130,6 +165,8 @@ export type DocumentApproval = {
   latestStatus: RequestStatus | null
   latestRound: number
   isOpen: boolean
+  /** id de la solicitud abierta (status='en_aprobacion'), o null. Para cancelar. */
+  openRequestId: string | null
   chips: VoteDisplay[]
   rounds: TimelineRound[]
   /** Voto pendiente del usuario actual en la ronda abierta (para firmar). */
@@ -154,6 +191,7 @@ export function buildDocumentApproval(
       latestStatus: null,
       latestRound: 0,
       isOpen: false,
+      openRequestId: null,
       chips: [],
       rounds: [],
       myPendingApprovalId: null,
@@ -168,9 +206,12 @@ export function buildDocumentApproval(
   const isOpen = latest.status === "en_aprobacion"
 
   const rounds: TimelineRound[] = sorted.map((r) => ({
+    requestId: r.id,
     round: r.round,
     status: r.status,
     requestedAt: r.requestedAt,
+    canceledByNombre: r.canceledByNombre,
+    cancelMotivo: r.cancelMotivo,
     votes: (votesByRequest.get(r.id) ?? []).map((v) => ({
       firmanteNombre: v.firmanteNombre,
       status: v.status,
@@ -197,6 +238,7 @@ export function buildDocumentApproval(
     latestStatus: latest.status,
     latestRound: latest.round,
     isOpen,
+    openRequestId: isOpen ? latest.id : null,
     chips: latestVotes.map((v) => ({
       firmanteNombre: v.firmanteNombre,
       status: v.status,

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { ApprovalStatusChips } from "@/components/approvals/approval-status-chips"
 import { ApprovalTimeline } from "@/components/approvals/approval-timeline"
 import { ApproveRejectDialog } from "@/components/approvals/approve-reject-dialog"
+import { CancelarAprobacionButton } from "@/components/approvals/cancelar-aprobacion-button"
 import {
   type CaratulaBanner,
   CaratulaPreviewButton,
@@ -304,6 +305,9 @@ function ItemCard({ item, isAdmin }: { item: Item; isAdmin: boolean }) {
                   />
                 ))
             : null}
+          {isAdmin && approval.openRequestId ? (
+            <CancelarAprobacionButton requestId={approval.openRequestId} />
+          ) : null}
         </div>
       ) : null}
 

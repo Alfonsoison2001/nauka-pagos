@@ -5,6 +5,7 @@ import { useState, useTransition } from "react"
 import { ApprovalStatusChips } from "@/components/approvals/approval-status-chips"
 import { ApprovalTimeline } from "@/components/approvals/approval-timeline"
 import { ApproveRejectDialog } from "@/components/approvals/approve-reject-dialog"
+import { CancelarAprobacionButton } from "@/components/approvals/cancelar-aprobacion-button"
 import { EstatusBadge } from "@/components/estatus-badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -263,6 +264,13 @@ export function CaratulaDetailDialog({
                       ? "Reenviar a aprobación"
                       : "Enviar a aprobación"}
                 </Button>
+              )}
+
+              {isAdmin && approval?.isOpen && approval.openRequestId && (
+                <CancelarAprobacionButton
+                  requestId={approval.openRequestId}
+                  onCanceled={() => router.refresh()}
+                />
               )}
 
               {approval?.myPendingApprovalId && (

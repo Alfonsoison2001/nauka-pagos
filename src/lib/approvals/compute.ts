@@ -83,8 +83,13 @@ export type TimelineVote = {
 
 /** Una ronda de aprobación, para la línea de tiempo. */
 export type TimelineRound = {
+  /** id de la solicitud (approval_requests.id) — para eliminar rondas del historial. */
+  requestId: string
   round: number
   status: RequestStatus
   requestedAt: string
+  /** Solo en rondas canceladas: quién canceló y por qué (mejor esfuerzo). */
+  canceledByNombre?: string | null
+  cancelMotivo?: string | null
   votes: TimelineVote[]
 }

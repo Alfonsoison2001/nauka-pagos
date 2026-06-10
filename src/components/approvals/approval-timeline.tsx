@@ -27,6 +27,12 @@ export function ApprovalTimeline({ rounds }: { rounds: TimelineRound[] }) {
           <p className="text-xs font-medium text-nauka-dark">
             Ronda {r.round} · enviada {formatDateTime(r.requestedAt)}
           </p>
+          {r.status === "cancelada" && (
+            <p className="mt-0.5 text-xs text-amber-700">
+              Cancelada{r.canceledByNombre ? ` por ${r.canceledByNombre}` : ""}
+              {r.cancelMotivo ? ` — “${r.cancelMotivo}”` : ""}
+            </p>
+          )}
           <ul className="mt-1 flex flex-col gap-0.5">
             {r.votes.map((v) => (
               <li
