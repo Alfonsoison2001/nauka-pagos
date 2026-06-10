@@ -1,10 +1,32 @@
 # STATE — NAUKA Pagos
 
-> Snapshot de handoff · **2026-06-10** · rama `main` @ `823dd93` · Fase 0 del security audit (código) COMPLETA — 4 fixes en prod, Vercel verde
+> Snapshot de handoff · **2026-06-10** · rama `main` @ `c9ee75a` · Flujo ágil de aprobaciones (9 features) en prod, Vercel verde · Fase 0 security (código) COMPLETA
 
 ## Dónde estamos AHORA MISMO
 
-**Fase 0 del security audit (código) COMPLETA — los 4 fixes commiteados, pusheados y verdes en Vercel.** Working tree limpio, nada en vuelo.
+**Sesión 2026-06-10 — Flujo ágil de aprobaciones (9 features en 9 commits) COMPLETA, todo verde en Vercel.** Working tree limpio, nada en vuelo. (Más temprano en la semana: Fase 0 del security audit — 4 fixes en prod, tabla abajo.)
+
+### Esta sesión: 9 features (Bloques A/B/C), un commit cada una
+
+| # | Feature | Commit |
+|---|---|---|
+| A1 | Cancelar solicitud de aprobación en curso (admin) — votos quedan en historial, carátula vuelve a Generada | `624593d` |
+| A2 | Eliminar del historial rondas canceladas/rechazadas (admin; aprobadas nunca) | `efc577b` |
+| A3 | Bloquear edición de estimación con aprobación en curso (server + UI + cancelar inline) | `225d331` |
+| B4 | Enviar a aprobación al crear carátula (checkbox default ON en "+ Nueva carátula") | `a132dc9` |
+| B5 | Sugerir marcar Enviada de un clic tras enviar al pagador | `cbac384` |
+| B6 | Subir comprobante inline al marcar Pagada (un solo guardado) | `2ba2267` |
+| B7 | Copiar link de la bandeja para compartir por WhatsApp | `09754b4` |
+| C8 | Quitar comprobante (admin only) en la celda del Flujo | `852e806` |
+| C9 | Página `/guia` "¿Cómo funciona?" (sidebar, todos los roles) | `c9ee75a` |
+
+**Migración nueva (única de la sesión):** `20260610185323_add_cancel_fields_approval_requests` — columnas aditivas nullable `approval_requests.canceled_by` (uuid → auth.users) + `cancel_motivo` (text). Aplicada a prod con `supabase db push`. Sin cambios de RLS/grants (la policy UPDATE admin existente las cubre).
+
+**El flujo ágil quedó así:** capturar → aprobar en **1 paso** (checkbox "Enviar a aprobación al guardar" default ON: `createEstimacion → generarCaratula → enviarAAprobacion`); el admin puede **cancelar** una solicitud en curso y **eliminar** del historial rondas canceladas/rechazadas; **editar con aprobación en curso está bloqueado** (validación en el server action + banner/cancelar en la UI); tras enviar al pagador se **sugiere marcar Enviada** de un clic; al marcar **Pagada** se adjunta el **comprobante inline** en el mismo guardado; **"Copiar link"** comparte la bandeja por WhatsApp; **quitar comprobante** (admin); y la **guía publicada** en `/guia` documenta todo el proceso ya con estas features.
+
+**Infra compartida nueva (para el próximo que toque aprobaciones):** `DocumentApproval.openRequestId` (id de la ronda abierta) · `TimelineRound.requestId` + `canceledByNombre`/`cancelMotivo` · `ApprovalSummary.openRequestId` · `fetchCaratulaRequests` resuelve `canceled_by`→nombre vía `profiles` · la página de Flujo de Pagos ahora obtiene `isAdmin` (threaded a tabla → celdas) · componentes nuevos en `src/components/approvals/`: `cancelar-aprobacion-button`, `eliminar-ronda-button`, `copiar-link-button`.
+
+### Previo en la semana — Fase 0 security (código), 4 fixes
 
 | # | Fix | Hash | Estado |
 |---|---|---|---|
@@ -38,10 +60,11 @@ Componentes nuevos (en `src/app/proyectos/[id]/caratula/`): `caratula-badge.tsx`
 
 ## Qué está en producción (Vercel verde hasta 823dd93)
 
-- App completa: Home con 3 project cards, 6 tabs por proyecto, carátula PDF + Resend, aprobaciones in-platform (8a `cc40ecd` + 8b `a76116a`), `/auth/recovery` (`ca388f2`), design system NAUKA, **tab Carátula rediseñada a cards**, **Fase 0 security (A1 `33128c1` + A3 `c01f70e` + M1 `9e366b2` + M3 `823dd93`)**.
+- App completa: Home con 3 project cards, 6 tabs por proyecto, carátula PDF + Resend, aprobaciones in-platform (8a `cc40ecd` + 8b `a76116a`), `/auth/recovery` (`ca388f2`), design system NAUKA, **tab Carátula rediseñada a cards**, **Fase 0 security (A1 `33128c1` + A3 `c01f70e` + M1 `9e366b2` + M3 `823dd93`)**, **flujo ágil de aprobaciones 2026-06-10 (cancelar/eliminar rondas, envío directo al crear, guard de edición, comprobante inline, copiar link) + guía `/guia`**.
 - **Lote 44 con DATA REAL**: 6 contratistas (SAMSTORGAM, Hector Triana, ABIKAR, Urarq, Aquaconcepts, TENCO), 6 partidas, 7 estimaciones todas pagadas, **ejercido $647,748.01 (cuadra al centavo con el Excel)**. Test data (CYVSA, R&R Imper) soft-deleted + storage huérfano limpiado (`592443f`).
 - Sesión 2026-06-08/09: `851286b` fecha presupuesto editable · `2d7ec46` resumen ordenado desc · `dcda9af` borrar/regenerar carátula + fix A2 · `c275c57` fix dropdowns UUID→nombre · `b49c4fb` labels capitalizados Status/IVA · rediseño Carátula `8fd1024`→`d15b18e`.
 - Sesión 2026-06-09/10: Fase 0 security — A1 `33128c1` · A3 `c01f70e` · M1 `9e366b2` · M3 `823dd93`.
+- Sesión 2026-06-10: flujo ágil de aprobaciones (9 features) — A1 `624593d` · A2 `efc577b` · A3 `225d331` · B4 `a132dc9` · B5 `cbac384` · B6 `2ba2267` · B7 `09754b4` · C8 `852e806` · C9 `c9ee75a` + migración `20260610185323` (canceled_by/cancel_motivo).
 
 ## Seguridad (audit `docs/security-audit-2026-06-08.md`)
 
@@ -72,4 +95,4 @@ Componentes nuevos (en `src/app/proyectos/[id]/caratula/`): `caratula-badge.tsx`
 
 ## Decisiones que NO hay que re-grilear
 
-2 roles (admin: Alfonso+Jess / aprobador: José+Marcos+Edy) · visibilidad cross-project consciente (todos ven todo; dejarlo por escrito con GFA) · firmantes globales compartidos entre proyectos · status de pago 100% manual · una sola fecha (`fecha_estimacion`) · sin EOM · IVA por estimación = checkbox 16% (iva_pct 0 o 0.16, monto tecleado = lo que cuenta) · acumulado de carátula = todas las estimaciones fecha ≤ esta incluyéndola sin importar status · loop grill-me → openspec → aprobar → implementar · regression prevention de CLAUDE.md es ley · rediseño Carátula: 3 ajustes as-built aceptados (ver arriba) · Fase 0 as-built: M3 = ban vía Admin API (auth-js sin signOut-por-id) · CSP report-only primero, enforce después de observar · A3 ancla redirects a NEXT_PUBLIC_APP_URL.
+2 roles (admin: Alfonso+Jess / aprobador: José+Marcos+Edy) · visibilidad cross-project consciente (todos ven todo; dejarlo por escrito con GFA) · firmantes globales compartidos entre proyectos · status de pago 100% manual · una sola fecha (`fecha_estimacion`) · sin EOM · IVA por estimación = checkbox 16% (iva_pct 0 o 0.16, monto tecleado = lo que cuenta) · acumulado de carátula = todas las estimaciones fecha ≤ esta incluyéndola sin importar status · loop grill-me → openspec → aprobar → implementar · regression prevention de CLAUDE.md es ley · rediseño Carátula: 3 ajustes as-built aceptados (ver arriba) · Fase 0 as-built: M3 = ban vía Admin API (auth-js sin signOut-por-id) · CSP report-only primero, enforce después de observar · A3 ancla redirects a NEXT_PUBLIC_APP_URL · cancelar guarda quién/por qué en columnas nuevas de approval_requests (Alfonso eligió migración aditiva sobre la versión sin persistencia, 2026-06-10) · guard de edición valida en el server action (no solo UI) · sugerencias de status (Enviada) y comprobante inline NO cambian que el status de pago siga siendo manual.
