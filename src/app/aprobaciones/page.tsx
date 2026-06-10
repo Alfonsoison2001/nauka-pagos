@@ -7,6 +7,7 @@ import {
   type CaratulaBanner,
   CaratulaPreviewButton,
 } from "@/components/approvals/caratula-preview-button"
+import { CopiarLinkButton } from "@/components/approvals/copiar-link-button"
 import { BackButton } from "@/components/back-button"
 import { Sidebar } from "@/components/sidebar"
 import {
@@ -308,6 +309,7 @@ function ItemCard({ item, isAdmin }: { item: Item; isAdmin: boolean }) {
           {isAdmin && approval.openRequestId ? (
             <CancelarAprobacionButton requestId={approval.openRequestId} />
           ) : null}
+          <CopiarLinkButton projectId={item.projectId} />
         </div>
       ) : null}
 

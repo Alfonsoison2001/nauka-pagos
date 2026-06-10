@@ -6,6 +6,7 @@ import { ApprovalStatusChips } from "@/components/approvals/approval-status-chip
 import { ApprovalTimeline } from "@/components/approvals/approval-timeline"
 import { ApproveRejectDialog } from "@/components/approvals/approve-reject-dialog"
 import { CancelarAprobacionButton } from "@/components/approvals/cancelar-aprobacion-button"
+import { CopiarLinkButton } from "@/components/approvals/copiar-link-button"
 import { EstatusBadge } from "@/components/estatus-badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -272,6 +273,8 @@ export function CaratulaDetailDialog({
                   onCanceled={() => router.refresh()}
                 />
               )}
+
+              {approval?.isOpen && <CopiarLinkButton projectId={projectId} />}
 
               {approval?.myPendingApprovalId && (
                 <ApproveRejectDialog
