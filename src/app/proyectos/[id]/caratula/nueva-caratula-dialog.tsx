@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { createEstimacion } from "../flujo-de-pagos/actions"
-import { generarCaratula } from "./actions"
+import { enviarAAprobacion, generarCaratula } from "./actions"
 
 type Option = { id: string; nombre: string }
 
@@ -53,8 +53,12 @@ export function NuevaCaratulaDialog({
   const [agregarIva, setAgregarIva] = useState(true)
   const [fecha, setFecha] = useState("")
   const [pagadorId, setPagadorId] = useState("")
+  const [enviarAprob, setEnviarAprob] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [submitting, startSubmit] = useTransition()
+  // Si create+generate ya corrieron pero el envío a aprobación falló, guardamos
+  // el id para reintentar solo ese paso (sin duplicar la estimación).
+  const createdIdRef = useRef<string | null>(null)
 
   function reset() {
     setPartidaId("")
@@ -63,7 +67,9 @@ export function NuevaCaratulaDialog({
     setAgregarIva(true)
     setFecha("")
     setPagadorId("")
+    setEnviarAprob(true)
     setError(null)
+    createdIdRef.current = null
   }
 
   function close(o: boolean) {
@@ -78,21 +84,40 @@ export function NuevaCaratulaDialog({
       return
     }
     startSubmit(async () => {
-      const fd = new FormData()
-      fd.set("partida_id", partidaId)
-      fd.set("pagador_id", pagadorId)
-      fd.set("numero", numero.trim())
-      fd.set("fecha_estimacion", fecha)
-      fd.set("monto_sin_iva", monto)
-      fd.set("iva_pct", agregarIva ? "0.16" : "0")
-      fd.set("status", "pendiente")
-      const created = await createEstimacion(projectId, fd)
-      if ("error" in created) {
-        setError(created.error)
-        return
+      // Crea la estimación solo si no se creó antes (reintento de aprobación).
+      let estId = createdIdRef.current
+      if (!estId) {
+        const fd = new FormData()
+        fd.set("partida_id", partidaId)
+        fd.set("pagador_id", pagadorId)
+        fd.set("numero", numero.trim())
+        fd.set("fecha_estimacion", fecha)
+        fd.set("monto_sin_iva", monto)
+        fd.set("iva_pct", agregarIva ? "0.16" : "0")
+        fd.set("status", "pendiente")
+        const created = await createEstimacion(projectId, fd)
+        if ("error" in created) {
+          setError(created.error)
+          return
+        }
+        estId = created.estimacionId
+        createdIdRef.current = estId
+        // Genera la carátula automáticamente (no bloqueante si falla).
+        await generarCaratula(estId, projectId)
       }
-      // Genera la carátula automáticamente (no bloqueante si falla).
-      await generarCaratula(created.estimacionId, projectId)
+
+      // Envío a aprobación opcional (default ON) en la misma pasada.
+      if (enviarAprob) {
+        const r = await enviarAAprobacion(estId, projectId)
+        if ("error" in r) {
+          // La estimación + carátula ya existen (como "Generada"). Mantén el
+          // diálogo abierto para reintentar solo el envío tras corregir.
+          setError(`Carátula creada, pero no se envió a aprobación: ${r.error}`)
+          onCreated()
+          return
+        }
+      }
+
       reset()
       onOpenChange(false)
       onCreated()
@@ -189,6 +214,22 @@ export function NuevaCaratulaDialog({
             </Select>
           </div>
 
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-nauka-card-border bg-nauka-bg p-2.5 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-primary"
+              checked={enviarAprob}
+              onChange={(e) => setEnviarAprob(e.target.checked)}
+            />
+            <span>
+              Enviar a aprobación al guardar
+              <span className="block text-xs text-muted-foreground">
+                Crea la solicitud para que los firmantes la revisen. Si lo
+                desmarcas, queda solo generada.
+              </span>
+            </span>
+          </label>
+
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
@@ -201,7 +242,11 @@ export function NuevaCaratulaDialog({
             Cancelar
           </Button>
           <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Creando..." : "Crear y generar"}
+            {submitting
+              ? "Creando..."
+              : enviarAprob
+                ? "Crear y enviar a aprobación"
+                : "Crear y generar"}
           </Button>
         </DialogFooter>
       </DialogContent>
