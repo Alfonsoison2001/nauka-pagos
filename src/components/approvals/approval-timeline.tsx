@@ -1,5 +1,6 @@
 import type { TimelineRound, TimelineVote } from "@/lib/approvals/compute"
 import { formatDateTime } from "@/lib/format/fecha"
+import { EliminarRondaButton } from "./eliminar-ronda-button"
 
 export type { TimelineRound, TimelineVote }
 
@@ -16,7 +17,14 @@ function voteLine(v: TimelineVote): string {
 }
 
 /** Línea de tiempo legible de la aprobación (visible para todos). Más reciente arriba. */
-export function ApprovalTimeline({ rounds }: { rounds: TimelineRound[] }) {
+export function ApprovalTimeline({
+  rounds,
+  isAdmin = false,
+}: {
+  rounds: TimelineRound[]
+  /** Admin: muestra "Eliminar del historial" en rondas canceladas/rechazadas. */
+  isAdmin?: boolean
+}) {
   if (rounds.length === 0) return null
   const ordered = [...rounds].sort((a, b) => b.round - a.round)
 
@@ -43,6 +51,11 @@ export function ApprovalTimeline({ rounds }: { rounds: TimelineRound[] }) {
               </li>
             ))}
           </ul>
+          {isAdmin && (r.status === "cancelada" || r.status === "rechazada") ? (
+            <div className="mt-1.5">
+              <EliminarRondaButton requestId={r.requestId} round={r.round} />
+            </div>
+          ) : null}
         </li>
       ))}
     </ol>

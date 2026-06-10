@@ -168,3 +168,42 @@ export async function cancelarAprobacion(
   revalidatePath(`/proyectos/${req.project_id}/flujo-de-pagos`)
   return { ok: true }
 }
+
+// ── Eliminar ronda del historial (admin, ACOTADO) ────────────────────────────
+// Hard-delete de UNA ronda 'cancelada' o 'rechazada' (cascade borra sus votos vía
+// FK ON DELETE CASCADE + policy DELETE admin). Las rondas APROBADAS nunca se
+// eliminan individualmente (constancia probatoria): solo desaparecen al borrar la
+// carátula completa. Tampoco se borra una ronda abierta (primero cancélala).
+
+export async function eliminarRonda(
+  requestId: string,
+): Promise<DecisionResult> {
+  await requireAdmin()
+  const sb = await createClient()
+
+  const { data: req } = await sb
+    .from("approval_requests")
+    .select("id, status, project_id")
+    .eq("id", requestId)
+    .maybeSingle()
+  if (!req) return { error: "Ronda no encontrada." }
+  if (req.status !== "cancelada" && req.status !== "rechazada") {
+    return {
+      error:
+        "Solo se pueden eliminar rondas canceladas o rechazadas. Las aprobadas son constancia.",
+    }
+  }
+
+  // Filtro de status en el DELETE también: blindaje ante cambios concurrentes.
+  const { error } = await sb
+    .from("approval_requests")
+    .delete()
+    .eq("id", requestId)
+    .in("status", ["cancelada", "rechazada"])
+  if (error) return { error: error.message }
+
+  revalidatePath("/aprobaciones")
+  revalidatePath(`/proyectos/${req.project_id}/caratula`)
+  revalidatePath(`/proyectos/${req.project_id}/flujo-de-pagos`)
+  return { ok: true }
+}

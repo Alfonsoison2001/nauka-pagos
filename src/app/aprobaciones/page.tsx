@@ -316,7 +316,7 @@ function ItemCard({ item, isAdmin }: { item: Item; isAdmin: boolean }) {
           Historial
         </summary>
         <div className="mt-2">
-          <ApprovalTimeline rounds={approval.rounds} />
+          <ApprovalTimeline rounds={approval.rounds} isAdmin={isAdmin} />
         </div>
       </details>
     </article>

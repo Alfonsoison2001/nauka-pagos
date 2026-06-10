@@ -311,7 +311,10 @@ export function CaratulaDetailDialog({
                   Historial
                 </summary>
                 <div className="mt-2">
-                  <ApprovalTimeline rounds={approval.rounds} />
+                  <ApprovalTimeline
+                    rounds={approval.rounds}
+                    isAdmin={isAdmin}
+                  />
                 </div>
               </details>
             )}
