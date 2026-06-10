@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   FileText,
+  HelpCircle,
   Home,
   LayoutDashboard,
   LogOut,
@@ -110,6 +111,14 @@ export function Sidebar({
               />
             </li>
           ) : null}
+          <li className="mt-1">
+            <SidebarLink
+              href="/guia"
+              label="¿Cómo funciona?"
+              Icon={HelpCircle}
+              active={pathname === "/guia"}
+            />
+          </li>
         </ul>
       </nav>
 
