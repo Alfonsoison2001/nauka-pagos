@@ -6,6 +6,8 @@ export type ApprovalSummary = {
   status: RequestStatus | null
   aprobadas: number
   total: number
+  /** id de la ronda abierta (status='en_aprobacion'), o null. Para bloquear/cancelar. */
+  openRequestId: string | null
   /** "Edy ✓, José pendiente, Marcos ✓" — para el tooltip. */
   tooltip: string
 }

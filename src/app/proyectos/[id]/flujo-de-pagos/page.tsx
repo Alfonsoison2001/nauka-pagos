@@ -7,6 +7,7 @@ import {
   fetchCaratulaRequests,
   fetchVotesByRequest,
 } from "@/lib/approvals/fetch"
+import { getMyProfile } from "@/lib/auth/roles"
 import { createClient } from "@/lib/supabase/server"
 import type {
   ContratistaOption,
@@ -34,6 +35,9 @@ export default async function FlujoDePagosPage({
     .is("deleted_at", null)
     .maybeSingle()
   if (!project) notFound()
+
+  const profile = await getMyProfile()
+  const isAdmin = profile?.role === "admin"
 
   // ── Contratistas ──────────────────────────────────────────────────────────
   const { data: cRows } = await sb
@@ -184,6 +188,7 @@ export default async function FlujoDePagosPage({
         status: a.latestStatus,
         aprobadas: a.chips.filter((c) => c.status === "aprobada").length,
         total: a.chips.length,
+        openRequestId: a.openRequestId,
         tooltip: a.chips
           .map(
             (c) =>
@@ -209,6 +214,7 @@ export default async function FlujoDePagosPage({
           pagadoAcumByPartida={pagadoAcumByPartida}
           aprobacionByEst={aprobacionByEst}
           projectId={id}
+          isAdmin={isAdmin}
         />
       </Suspense>
     )
@@ -225,6 +231,7 @@ export default async function FlujoDePagosPage({
         pagadoAcumByPartida={{}}
         aprobacionByEst={{}}
         projectId={id}
+        isAdmin={isAdmin}
       />
     </Suspense>
   )

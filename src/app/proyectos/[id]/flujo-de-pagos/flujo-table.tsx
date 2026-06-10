@@ -38,6 +38,7 @@ type Props = {
   pagadores: PagadorOption[]
   pagadoAcumByPartida: Record<string, number>
   aprobacionByEst: Record<string, ApprovalSummary>
+  isAdmin: boolean
 }
 
 export function FlujoTable({
@@ -48,6 +49,7 @@ export function FlujoTable({
   pagadores,
   pagadoAcumByPartida,
   aprobacionByEst,
+  isAdmin,
 }: Props) {
   return (
     <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
@@ -85,6 +87,7 @@ export function FlujoTable({
               pagadores={pagadores}
               pagadoAcumByPartida={pagadoAcumByPartida}
               aprobacion={aprobacionByEst[row.id]}
+              isAdmin={isAdmin}
             />
           ))}
         </tbody>
@@ -104,6 +107,7 @@ type RowProps = {
   pagadores: PagadorOption[]
   pagadoAcumByPartida: Record<string, number>
   aprobacion: ApprovalSummary | undefined
+  isAdmin: boolean
 }
 
 function FlujoRow({
@@ -115,11 +119,13 @@ function FlujoRow({
   pagadores,
   pagadoAcumByPartida,
   aprobacion,
+  isAdmin,
 }: RowProps) {
   const aprobSummary: ApprovalSummary = aprobacion ?? {
     status: null,
     aprobadas: 0,
     total: 0,
+    openRequestId: null,
     tooltip: "",
   }
   return (
@@ -161,6 +167,8 @@ function FlujoRow({
             partidas={partidas}
             pagadores={pagadores}
             pagadoAcumByPartida={pagadoAcumByPartida}
+            aprobacion={aprobacion}
+            isAdmin={isAdmin}
           />
           <DeleteEstimacionButton estimacion={row} projectId={projectId} />
         </div>

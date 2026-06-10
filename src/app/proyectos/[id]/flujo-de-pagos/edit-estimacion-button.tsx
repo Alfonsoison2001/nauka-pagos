@@ -2,6 +2,7 @@
 
 import { Pencil } from "lucide-react"
 import { useState } from "react"
+import type { ApprovalSummary } from "@/components/approvals/approval-chip"
 import { Button } from "@/components/ui/button"
 import type {
   ContratistaOption,
@@ -18,6 +19,8 @@ type Props = {
   partidas: PartidaOption[]
   pagadores: PagadorOption[]
   pagadoAcumByPartida: Record<string, number>
+  aprobacion: ApprovalSummary | undefined
+  isAdmin: boolean
 }
 
 export function EditEstimacionButton({
@@ -27,6 +30,8 @@ export function EditEstimacionButton({
   partidas,
   pagadores,
   pagadoAcumByPartida,
+  aprobacion,
+  isAdmin,
 }: Props) {
   const [open, setOpen] = useState(false)
   return (
@@ -49,6 +54,8 @@ export function EditEstimacionButton({
         partidas={partidas}
         pagadores={pagadores}
         pagadoAcumByPartida={pagadoAcumByPartida}
+        aprobacion={aprobacion}
+        isAdmin={isAdmin}
         open={open}
         onOpenChange={setOpen}
       />

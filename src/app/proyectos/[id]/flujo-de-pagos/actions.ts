@@ -136,6 +136,30 @@ export async function updateEstimacion(
   const d = parsed.data
 
   const sb = await createClient()
+
+  // Guard: si la carátula de esta estimación tiene una ronda de aprobación en
+  // curso, bloquear la edición (editar desincronizaría el PDF que los firmantes
+  // están revisando). Hay que cancelar la solicitud primero. Server = fuente de
+  // verdad; la UI también lo refleja pero esta validación es la autoritativa.
+  const { data: openReqs } = await sb
+    .from("approval_requests")
+    .select("id")
+    .eq("document_type", "caratula")
+    .eq("document_id", estimacionId)
+    .eq("status", "en_aprobacion")
+    .limit(1)
+  if (openReqs && openReqs.length > 0) {
+    const { data: votes } = await sb
+      .from("approvals")
+      .select("status")
+      .eq("request_id", openReqs[0].id as string)
+    const total = votes?.length ?? 0
+    const aprob = (votes ?? []).filter((v) => v.status === "aprobada").length
+    return {
+      error: `Aprobación en curso (${aprob}/${total} firmas). Cancela la solicitud antes de editar, o los firmantes verán un PDF desactualizado.`,
+    }
+  }
+
   const { error } = await sb
     .from("estimaciones")
     .update({

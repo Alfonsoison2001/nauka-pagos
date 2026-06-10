@@ -3,6 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
+import type { ApprovalSummary } from "@/components/approvals/approval-chip"
+import { CancelarAprobacionButton } from "@/components/approvals/cancelar-aprobacion-button"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -32,6 +34,9 @@ type SharedProps = {
   pagadoAcumByPartida: Record<string, number>
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Estado de aprobación de la carátula (solo relevante en modo edit). */
+  aprobacion?: ApprovalSummary
+  isAdmin?: boolean
 }
 
 type NewProps = SharedProps & { mode: "new" }
@@ -126,6 +131,16 @@ export function EstimacionDialog(props: Props) {
 
   const isNew = props.mode === "new"
 
+  // Guard de edición (F3): si la carátula tiene una ronda abierta, bloquear el
+  // guardado en la UI (el server action es la validación autoritativa).
+  const openReqId =
+    props.mode === "edit" && props.aprobacion?.status === "en_aprobacion"
+      ? props.aprobacion.openRequestId
+      : null
+  const blocked = Boolean(openReqId)
+  const aprob = props.aprobacion?.aprobadas ?? 0
+  const totalFirmas = props.aprobacion?.total ?? 0
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false} className="sm:max-w-lg">
@@ -134,6 +149,22 @@ export function EstimacionDialog(props: Props) {
             {isNew ? "Nueva estimación" : "Editar estimación"}
           </DialogTitle>
         </DialogHeader>
+        {blocked && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-medium">
+              Aprobación en curso ({aprob}/{totalFirmas} firmas).
+            </p>
+            <p className="mt-0.5">
+              Cancela la solicitud antes de editar, o los firmantes verán un PDF
+              desactualizado.
+            </p>
+            {props.isAdmin && openReqId && (
+              <div className="mt-2">
+                <CancelarAprobacionButton requestId={openReqId} />
+              </div>
+            )}
+          </div>
+        )}
         <form onSubmit={onSubmit} noValidate>
           <div className="max-h-[70vh] overflow-y-auto pr-1">
             <EstimacionFormFields
@@ -170,7 +201,7 @@ export function EstimacionDialog(props: Props) {
             >
               Cancelar
             </DialogClose>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || blocked}>
               {pending
                 ? "Guardando..."
                 : isNew

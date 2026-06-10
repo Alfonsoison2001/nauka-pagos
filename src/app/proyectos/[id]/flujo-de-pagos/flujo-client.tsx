@@ -22,6 +22,7 @@ type Props = {
   pagadoAcumByPartida: Record<string, number>
   aprobacionByEst: Record<string, ApprovalSummary>
   projectId: string
+  isAdmin: boolean
 }
 
 export function FlujoClient({
@@ -32,6 +33,7 @@ export function FlujoClient({
   pagadoAcumByPartida,
   aprobacionByEst,
   projectId,
+  isAdmin,
 }: Props) {
   const sp = useSearchParams()
   const router = useRouter()
@@ -129,6 +131,7 @@ export function FlujoClient({
           pagadores={pagadores}
           pagadoAcumByPartida={pagadoAcumByPartida}
           aprobacionByEst={aprobacionByEst}
+          isAdmin={isAdmin}
         />
       )}
     </div>
