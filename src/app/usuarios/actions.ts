@@ -111,7 +111,16 @@ export async function updateUserRole(
   return { ok: true }
 }
 
-/** Activa/desactiva (soft-delete) un usuario. No sobre uno mismo. */
+/**
+ * Activa/desactiva un usuario. No sobre uno mismo.
+ *
+ * Fix M3 — al desactivar no basta el soft-delete del perfil: el usuario conserva
+ * su JWT y sigue pasando el middleware (lectura abierta) hasta que el token
+ * expira. Aquí, además del soft-delete, se REVOCA el acceso de Auth baneando al
+ * auth.user vía Admin API (no se puede usar admin.signOut: requiere el JWT del
+ * propio usuario, que un admin no tiene). El ban bloquea el refresh del token y
+ * nuevos logins de inmediato. Reactivar restaura el perfil y quita el ban.
+ */
 export async function setUserActive(
   profileId: string,
   active: boolean,
@@ -120,12 +129,39 @@ export async function setUserActive(
   if (profileId === me.id) {
     return { error: "No puedes desactivar tu propio acceso." }
   }
+
   const sb = await createClient()
+  const { data: target, error: findErr } = await sb
+    .from("profiles")
+    .select("auth_user_id")
+    .eq("id", profileId)
+    .maybeSingle()
+  if (findErr) return { error: findErr.message }
+  if (!target) return { error: "Usuario no encontrado" }
+
+  // Admin API lista ANTES de mutar (evita perfil desactivado sin revocar).
+  const admin = createAdminClient()
+  if (!admin) {
+    return { error: "Falta SUPABASE_SERVICE_ROLE_KEY en el servidor." }
+  }
+
   const { error } = await sb
     .from("profiles")
     .update({ deleted_at: active ? null : new Date().toISOString() })
     .eq("id", profileId)
   if (error) return { error: error.message }
+
+  // Revocar (ban) / restaurar (none) el acceso de Auth. ~100 años ≈ permanente.
+  const { error: banErr } = await admin.auth.admin.updateUserById(
+    target.auth_user_id as string,
+    { ban_duration: active ? "none" : "876000h" },
+  )
+  if (banErr) {
+    const accion = active ? "reactivar" : "revocar"
+    return {
+      error: `Perfil actualizado pero no se pudo ${accion} el acceso: ${banErr.message}`,
+    }
+  }
 
   revalidatePath("/usuarios")
   return { ok: true }
