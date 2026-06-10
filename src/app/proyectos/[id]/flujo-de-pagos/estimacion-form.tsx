@@ -115,6 +115,12 @@ type Props = {
   /** Edit mode only: display-only name instead of a disabled Select */
   contratistaName?: string
   partidaName?: string
+  /** ¿La estimación ya tiene comprobante? (no ofrecer el upload inline) */
+  hasComprobante?: boolean
+  comprobanteFileName?: string | null
+  comprobanteError?: string | null
+  /** Comprobante inline al marcar "Pagada" (F6). */
+  onComprobanteChange?: (file: File | null) => void
 }
 
 export function EstimacionFormFields({
@@ -128,8 +134,13 @@ export function EstimacionFormFields({
   mode,
   contratistaName,
   partidaName,
+  hasComprobante = false,
+  comprobanteFileName,
+  comprobanteError,
+  onComprobanteChange,
 }: Props) {
   const contratistaId = useWatch({ control, name: "contratista_id" })
+  const status = useWatch({ control, name: "status" })
   const filteredPartidas = contratistaId
     ? partidas.filter((p) => p.contratista_id === contratistaId)
     : partidas
@@ -304,6 +315,35 @@ export function EstimacionFormFields({
           )}
         />
       </div>
+
+      {/* Comprobante inline al marcar Pagada (F6) */}
+      {status === "pagada" && !hasComprobante && onComprobanteChange && (
+        <div className="flex flex-col gap-1.5 rounded-md border border-nauka-card-border bg-nauka-bg p-3">
+          <Label htmlFor="ef-comprobante">Comprobante de pago (opcional)</Label>
+          <input
+            id="ef-comprobante"
+            type="file"
+            accept="application/pdf,image/png,image/jpeg,image/webp"
+            className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:text-primary-foreground hover:file:opacity-90"
+            onChange={(e) => onComprobanteChange(e.target.files?.[0] ?? null)}
+          />
+          {comprobanteFileName && !comprobanteError && (
+            <p className="text-xs text-muted-foreground">
+              Adjunto:{" "}
+              <span className="font-medium">{comprobanteFileName}</span> · se
+              sube al guardar.
+            </p>
+          )}
+          {comprobanteError ? (
+            <p className="text-xs text-destructive">{comprobanteError}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              PDF o imagen, máx. 10 MB. Opcional: puedes subirlo después desde
+              la columna Comprobante.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Concepto */}
       <Controller

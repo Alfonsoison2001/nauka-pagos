@@ -20,9 +20,17 @@ import type {
   PagadorOption,
   PartidaOption,
 } from "./actions"
-import { createEstimacion, updateEstimacion } from "./actions"
+import {
+  createEstimacion,
+  updateEstimacion,
+  uploadComprobante,
+} from "./actions"
 import type { FormValues } from "./estimacion-form"
 import { EstimacionFormFields, formSchema } from "./estimacion-form"
+
+// Validación de comprobante inline (mismo criterio que ComprobanteCell).
+const COMPROBANTE_ACCEPTED = "application/pdf,image/png,image/jpeg,image/webp"
+const COMPROBANTE_MAX_BYTES = 10 * 1024 * 1024
 
 // ── Shared props ──────────────────────────────────────────────────────────────
 
@@ -81,6 +89,10 @@ export function EstimacionDialog(props: Props) {
   const { open, onOpenChange, projectId } = props
   const [pending, startTransition] = useTransition()
   const [submitError, setSubmitError] = useState<string | null>(null)
+  // Comprobante inline (F6): cuando el status pasa a "pagada" y no hay
+  // comprobante todavía, se puede adjuntar uno en el mismo guardado.
+  const [comprobanteFile, setComprobanteFile] = useState<File | null>(null)
+  const [comprobanteError, setComprobanteError] = useState<string | null>(null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -88,16 +100,42 @@ export function EstimacionDialog(props: Props) {
   })
   const errors = form.formState.errors
 
+  const hasComprobante =
+    props.mode === "edit" && Boolean(props.estimacion.comprobante_pago_url)
+
+  function handleComprobanteChange(file: File | null) {
+    if (!file) {
+      setComprobanteFile(null)
+      setComprobanteError(null)
+      return
+    }
+    if (!COMPROBANTE_ACCEPTED.split(",").includes(file.type)) {
+      setComprobanteFile(null)
+      setComprobanteError("Solo PDF, PNG, JPG o WEBP")
+      return
+    }
+    if (file.size > COMPROBANTE_MAX_BYTES) {
+      setComprobanteFile(null)
+      setComprobanteError("Máximo 10 MB")
+      return
+    }
+    setComprobanteError(null)
+    setComprobanteFile(file)
+  }
+
   function handleOpenChange(next: boolean) {
     if (!next) {
       form.reset(getDefaults(props))
       setSubmitError(null)
+      setComprobanteFile(null)
+      setComprobanteError(null)
     }
     onOpenChange(next)
   }
 
   const onSubmit = form.handleSubmit((values) => {
     setSubmitError(null)
+    if (comprobanteError) return
     startTransition(async () => {
       // iva_pct: 0.16 if checkbox on, 0 if off
       const ivaPct = values.agregar_iva ? 0.16 : 0
@@ -113,18 +151,43 @@ export function EstimacionDialog(props: Props) {
       fd.append("status", values.status)
       if (values.notas) fd.append("notas", values.notas)
 
-      let result: { error: string } | { ok: true }
+      let estimacionId: string
       if (props.mode === "new") {
-        result = await createEstimacion(projectId, fd)
+        const result = await createEstimacion(projectId, fd)
+        if ("error" in result) {
+          setSubmitError(result.error)
+          return
+        }
+        estimacionId = result.estimacionId
       } else {
-        result = await updateEstimacion(props.estimacion.id, projectId, fd)
+        const result = await updateEstimacion(
+          props.estimacion.id,
+          projectId,
+          fd,
+        )
+        if ("error" in result) {
+          setSubmitError(result.error)
+          return
+        }
+        estimacionId = props.estimacion.id
       }
 
-      if ("error" in result) {
-        setSubmitError(result.error)
-        return
+      // Comprobante inline: un solo guardado sube la estimación y el archivo.
+      if (comprobanteFile && values.status === "pagada") {
+        const cfd = new FormData()
+        cfd.append("file", comprobanteFile)
+        const up = await uploadComprobante(estimacionId, projectId, cfd)
+        if ("error" in up) {
+          setSubmitError(
+            `Estimación guardada, pero el comprobante no se subió: ${up.error}`,
+          )
+          return
+        }
       }
+
       form.reset(values)
+      setComprobanteFile(null)
+      setComprobanteError(null)
       onOpenChange(false)
     })
   })
@@ -186,6 +249,10 @@ export function EstimacionDialog(props: Props) {
                   ? props.estimacion.partida_nombre
                   : undefined
               }
+              hasComprobante={hasComprobante}
+              comprobanteFileName={comprobanteFile?.name ?? null}
+              comprobanteError={comprobanteError}
+              onComprobanteChange={handleComprobanteChange}
             />
           </div>
           {submitError && (
