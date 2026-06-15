@@ -16,11 +16,11 @@ import {
   type DocumentApproval,
   fetchCaratulaRequests,
   fetchVotesByRequest,
-  getPendingApprovalsCount,
 } from "@/lib/approvals/fetch"
 import { getMyProfile } from "@/lib/auth/roles"
 import { formatDate } from "@/lib/format/fecha"
 import { getLastProjectIdCookie } from "@/lib/last-project-server"
+import { getUnreadNotificationsCount } from "@/lib/notifications/fetch"
 import { createClient } from "@/lib/supabase/server"
 import { formatMXN } from "@/lib/utils"
 import { ProyectoFilter } from "./proyecto-filter"
@@ -119,13 +119,8 @@ export default async function AprobacionesPage({
     )
   const resolved = visibleItems.filter((i) => !i.approval.isOpen)
 
-  // Badge context-aware: cuenta según el filtro actual (proyecto, o global).
-  const pendingCount = await getPendingApprovalsCount(
-    sb,
-    profile.role,
-    profile.firmanteId,
-    selectedProyecto || undefined,
-  )
+  // Badge del sidebar = notificaciones no leídas (8d).
+  const unreadCount = await getUnreadNotificationsCount(sb)
   // Tabs del sidebar → último proyecto visitado (cookie). Badge/link → filtro.
   const cookieProjectId = await getLastProjectIdCookie()
   const sidebarProjectId =
@@ -142,7 +137,7 @@ export default async function AprobacionesPage({
         projectId={sidebarProjectId}
         greetingName={firstNameOf(profile.nombre)}
         isAdmin={isAdmin}
-        pendingCount={pendingCount}
+        unreadCount={unreadCount}
         aprobacionesHref={aprobacionesHref}
       />
       <div className="flex min-w-0 flex-1 flex-col bg-nauka-bg">
@@ -251,7 +246,10 @@ function ItemCard({ item, isAdmin }: { item: Item; isAdmin: boolean }) {
   const titulo = `Est. ${item.numero} · ${item.contratista}`
 
   return (
-    <article className="rounded-2xl border border-nauka-card-border bg-white p-5 shadow-nauka-card">
+    <article
+      id={`est-${item.documentId}`}
+      className="scroll-mt-6 rounded-2xl border border-nauka-card-border bg-white p-5 shadow-nauka-card"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">

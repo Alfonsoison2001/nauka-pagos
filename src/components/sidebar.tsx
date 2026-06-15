@@ -17,6 +17,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ComponentType } from "react"
 import { signOut } from "@/app/logout/actions"
+import { NotificationsBell } from "@/components/notifications/notifications-bell"
 import { cn } from "@/lib/utils"
 
 type IconType = ComponentType<{ className?: string }>
@@ -34,7 +35,8 @@ type Props = {
   projectId: string
   greetingName: string
   isAdmin?: boolean
-  pendingCount?: number
+  /** Notificaciones no leídas → badge de la campana (8d). */
+  unreadCount?: number
   /** Override del href de Aprobaciones (lo usa /aprobaciones para conservar el
    * filtro actual). Por defecto apunta al proyecto del sidebar. */
   aprobacionesHref?: string
@@ -44,7 +46,7 @@ export function Sidebar({
   projectId,
   greetingName,
   isAdmin = false,
-  pendingCount = 0,
+  unreadCount = 0,
   aprobacionesHref,
 }: Props) {
   const pathname = usePathname()
@@ -63,7 +65,10 @@ export function Sidebar({
           {/* biome-ignore lint/performance/noImgElement: logo estático del sidebar */}
           <img src="/logo-nauka-white.png" alt="NAUKA" className="w-[70%]" />
         </Link>
-        <p className="mt-4 text-sm text-white/70">¡Hola, {greetingName}!</p>
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <p className="text-sm text-white/70">¡Hola, {greetingName}!</p>
+          <NotificationsBell unreadCount={unreadCount} />
+        </div>
       </div>
 
       <div className="mx-6 my-5 border-t border-white/10" />
@@ -98,7 +103,6 @@ export function Sidebar({
               label="Aprobaciones"
               Icon={ClipboardCheck}
               active={pathname === "/aprobaciones"}
-              badge={pendingCount}
             />
           </li>
           {isAdmin ? (

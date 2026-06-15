@@ -16,9 +16,9 @@ import {
 import { BackButton } from "@/components/back-button"
 import { EstatusBadge } from "@/components/estatus-badge"
 import { Sidebar } from "@/components/sidebar"
-import { getPendingApprovalsCount } from "@/lib/approvals/fetch"
 import { getMyProfile } from "@/lib/auth/roles"
 import { getLastProjectIdCookie } from "@/lib/last-project-server"
+import { getUnreadNotificationsCount } from "@/lib/notifications/fetch"
 import { createClient } from "@/lib/supabase/server"
 
 export const metadata = { title: "¿Cómo funciona?" }
@@ -46,11 +46,7 @@ export default async function GuiaPage() {
     cookieProjectId && projects.some((p) => p.id === cookieProjectId)
       ? cookieProjectId
       : (projects[0]?.id ?? "")
-  const pendingCount = await getPendingApprovalsCount(
-    sb,
-    profile.role,
-    profile.firmanteId,
-  )
+  const unreadCount = await getUnreadNotificationsCount(sb)
 
   return (
     <div className="flex min-h-svh">
@@ -58,7 +54,7 @@ export default async function GuiaPage() {
         projectId={sidebarProjectId}
         greetingName={firstNameOf(profile.nombre)}
         isAdmin={isAdmin}
-        pendingCount={pendingCount}
+        unreadCount={unreadCount}
       />
       <div className="flex min-w-0 flex-1 flex-col bg-nauka-bg">
         <main className="px-6 py-8 sm:px-12 sm:py-10">
