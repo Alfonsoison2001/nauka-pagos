@@ -337,7 +337,7 @@ export function CaratulaDetailDialog({
               <iframe
                 src={previewUrl}
                 title="Vista previa de la carátula"
-                className="h-[560px] w-full rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card"
+                className="h-[55vh] w-full rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card sm:h-[560px]"
               />
             </div>
           )}

@@ -40,6 +40,8 @@ type Props = {
   /** Override del href de Aprobaciones (lo usa /aprobaciones para conservar el
    * filtro actual). Por defecto apunta al proyecto del sidebar. */
   aprobacionesHref?: string
+  /** Oculta el sidebar en móvil (flujo de aprobación responsive). Default: no. */
+  hideOnMobile?: boolean
 }
 
 export function Sidebar({
@@ -48,6 +50,7 @@ export function Sidebar({
   isAdmin = false,
   unreadCount = 0,
   aprobacionesHref,
+  hideOnMobile = false,
 }: Props) {
   const pathname = usePathname()
   const base = `/proyectos/${projectId}`
@@ -58,7 +61,12 @@ export function Sidebar({
     (projectId ? `/aprobaciones?proyecto=${projectId}` : "/aprobaciones")
 
   return (
-    <aside className="sticky top-0 flex h-svh w-[260px] shrink-0 flex-col bg-gradient-to-b from-nauka-dark to-nauka-dark-2 text-white">
+    <aside
+      className={cn(
+        "sticky top-0 h-svh w-[260px] shrink-0 flex-col bg-gradient-to-b from-nauka-dark to-nauka-dark-2 text-white",
+        hideOnMobile ? "hidden md:flex" : "flex",
+      )}
+    >
       {/* Logo NAUKA (PNG blanco transparente) → Home */}
       <div className="px-6 pt-10">
         <Link href="/" className="block transition-opacity hover:opacity-80">

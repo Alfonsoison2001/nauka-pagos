@@ -140,11 +140,12 @@ export default async function AprobacionesPage({
         isAdmin={isAdmin}
         unreadCount={unreadCount}
         aprobacionesHref={aprobacionesHref}
+        hideOnMobile
       />
       <div className="flex min-w-0 flex-1 flex-col bg-nauka-bg">
         <main className="px-6 py-8 sm:px-12 sm:py-10">
           <div className="mx-auto max-w-3xl">
-            <header className="mb-8 flex items-start justify-between gap-4">
+            <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
               <div>
                 <BackButton />
                 <h1 className="text-3xl font-medium text-nauka-dark">
