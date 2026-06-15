@@ -217,7 +217,22 @@ export async function deleteEstimacion(
     .eq("id", estimacionId)
     .is("deleted_at", null)
   if (error) return { error: error.message }
+
+  // Limpia las rondas de aprobación de esta estimación (cascade borra los votos).
+  // Se borran TODAS las rondas, no solo las no-aprobadas: al salir la estimación
+  // del set operativo no queda carátula viva detrás, así que cualquier ronda
+  // (incluso aprobada) sería huérfana en la bandeja. Es consistente con
+  // deleteCaratula, que ya hard-deletea todas las rondas. El audit_log conserva
+  // el before-image de cada borrado (constancia probatoria). Best-effort: si
+  // falla, la exclusión en fetch/badge es la red de seguridad.
+  await sb
+    .from("approval_requests")
+    .delete()
+    .eq("document_type", "caratula")
+    .eq("document_id", estimacionId)
+
   revalidatePath(`/proyectos/${projectId}/flujo-de-pagos`)
+  revalidatePath("/aprobaciones")
   return { ok: true }
 }
 

@@ -102,13 +102,35 @@ export async function fetchCaratulaRequests(
     .eq("document_type", "caratula")
   if (documentIds) q = q.in("document_id", documentIds)
   const { data } = await q.order("requested_at", { ascending: false })
-  const raw = (data ?? []) as RawRequest[]
+  const all = (data ?? []) as RawRequest[]
+
+  // Excluir rondas huérfanas: cuyo document_id apunta a una estimación
+  // soft-deleted (deleted_at IS NOT NULL) o inexistente. La bandeja y el badge
+  // no deben mostrarlas (no hay carátula viva detrás).
+  const raw = await filterLiveCaratulaRequests(sb, all)
+
   const cancelerNames = await resolveProfileNames(sb, [
     ...new Set(
       raw.map((r) => r.canceled_by).filter((x): x is string => Boolean(x)),
     ),
   ])
   return raw.map((r) => mapRequest(r, cancelerNames))
+}
+
+/** Conserva solo las solicitudes cuyo document_id es una estimación viva. */
+async function filterLiveCaratulaRequests(
+  sb: ServerClient,
+  requests: RawRequest[],
+): Promise<RawRequest[]> {
+  if (requests.length === 0) return requests
+  const docIds = [...new Set(requests.map((r) => r.document_id))]
+  const { data } = await sb
+    .from("estimaciones")
+    .select("id")
+    .in("id", docIds)
+    .is("deleted_at", null)
+  const live = new Set((data ?? []).map((e) => e.id as string))
+  return requests.filter((r) => live.has(r.document_id))
 }
 
 async function resolveFirmanteNames(
@@ -267,27 +289,31 @@ export async function getPendingApprovalsCount(
   firmanteId: string | null,
   projectId?: string,
 ): Promise<number> {
-  if (role === "admin") {
-    let q = sb
-      .from("approval_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("document_type", "caratula")
-      .eq("status", "en_aprobacion")
-    if (projectId) q = q.eq("project_id", projectId)
-    const { count } = await q
-    return count ?? 0
-  }
-
-  if (!firmanteId) return 0
+  // Solicitudes abiertas de carátula (excluyendo huérfanas de estimaciones
+  // soft-deleted), opcionalmente acotadas a un proyecto.
   let openQ = sb
     .from("approval_requests")
-    .select("id")
+    .select("id, document_id")
+    .eq("document_type", "caratula")
     .eq("status", "en_aprobacion")
   if (projectId) openQ = openQ.eq("project_id", projectId)
-  const { data: openReqs } = await openQ
-  const ids = (openReqs ?? []).map((r) => r.id as string)
+  const { data: openRaw } = await openQ
+  const open = (openRaw ?? []) as { id: string; document_id: string }[]
+  if (open.length === 0) return 0
+
+  const docIds = [...new Set(open.map((r) => r.document_id))]
+  const { data: liveEst } = await sb
+    .from("estimaciones")
+    .select("id")
+    .in("id", docIds)
+    .is("deleted_at", null)
+  const live = new Set((liveEst ?? []).map((e) => e.id as string))
+  const ids = open.filter((r) => live.has(r.document_id)).map((r) => r.id)
   if (ids.length === 0) return 0
 
+  if (role === "admin") return ids.length
+
+  if (!firmanteId) return 0
   const { count } = await sb
     .from("approvals")
     .select("id", { count: "exact", head: true })
