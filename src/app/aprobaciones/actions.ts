@@ -3,6 +3,11 @@
 import { revalidatePath } from "next/cache"
 import { headers } from "next/headers"
 import { z } from "zod"
+import {
+  notifyAprobacionCompleta,
+  notifyProgreso,
+  notifyRechazo,
+} from "@/lib/approvals/notify"
 import { getMyProfile, requireAdmin } from "@/lib/auth/roles"
 import { createClient } from "@/lib/supabase/server"
 
@@ -12,6 +17,7 @@ type RequestJoin = {
   id: string
   status: string
   project_id: string
+  document_id: string
 } | null
 
 type VoteRow = {
@@ -42,7 +48,7 @@ async function decide(
   const { data, error } = await sb
     .from("approvals")
     .select(
-      "id, request_id, firmante_id, status, approval_requests(id, status, project_id)",
+      "id, request_id, firmante_id, status, approval_requests(id, status, project_id, document_id)",
     )
     .eq("id", approvalId)
     .maybeSingle()
@@ -80,15 +86,41 @@ async function decide(
     .eq("id", approvalId)
   if (updErr) return { error: updErr.message }
 
-  await recomputeRequest(vote.request_id)
+  const newStatus = await recomputeRequest(vote.request_id)
+
+  // 8d (B/C/D): notifica el resultado de este voto (best-effort).
+  const { data: fRow } = await sb
+    .from("firmantes")
+    .select("nombre")
+    .eq("id", vote.firmante_id)
+    .maybeSingle()
+  const firmanteNombre = (fRow?.nombre as string | undefined) ?? "Un firmante"
+  const notifArgs = {
+    estimacionId: req.document_id,
+    projectId: req.project_id,
+    requestId: vote.request_id,
+  }
+  if (newStatus === "aprobada") {
+    await notifyAprobacionCompleta(sb, notifArgs)
+  } else if (newStatus === "rechazada") {
+    await notifyRechazo(sb, {
+      ...notifArgs,
+      motivo: motivo ?? "",
+      firmanteNombre,
+    })
+  } else {
+    await notifyProgreso(sb, { ...notifArgs, firmanteNombre })
+  }
 
   revalidatePath("/aprobaciones")
   revalidatePath(`/proyectos/${req.project_id}/caratula`)
   return { ok: true }
 }
 
-/** Recalcula el estado de la solicitud tras un voto. */
-async function recomputeRequest(requestId: string): Promise<void> {
+/** Recalcula el estado de la solicitud tras un voto; devuelve el estado nuevo. */
+async function recomputeRequest(
+  requestId: string,
+): Promise<"en_aprobacion" | "aprobada" | "rechazada"> {
   const sb = await createClient()
   const { data: votes } = await sb
     .from("approvals")
@@ -107,6 +139,7 @@ async function recomputeRequest(requestId: string): Promise<void> {
       .update({ status, resolved_at: new Date().toISOString() })
       .eq("id", requestId)
   }
+  return status
 }
 
 export async function aprobar(approvalId: string): Promise<DecisionResult> {

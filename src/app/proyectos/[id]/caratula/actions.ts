@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { renderCaratulaPdf } from "@/components/caratula/render-caratula"
+import { notifyNuevaAprobacion } from "@/lib/approvals/notify"
 import { requireAdmin } from "@/lib/auth/roles"
 import {
   caratulaSubject,
@@ -244,6 +245,14 @@ export async function enviarAAprobacion(
     })),
   )
   if (votesErr) return { error: votesErr.message }
+
+  // 8d (A): notifica + email a los aprobadores (best-effort, no rompe el flujo).
+  await notifyNuevaAprobacion(sb, {
+    estimacionId,
+    projectId,
+    requestId: request.id,
+    firmanteIds,
+  })
 
   revalidatePath(`/proyectos/${projectId}/caratula`)
   revalidatePath("/aprobaciones")
