@@ -1,12 +1,27 @@
 # STATE — NAUKA Pagos
 
-> Snapshot de handoff · **2026-06-10** · rama `main` @ `c9ee75a` · Flujo ágil de aprobaciones (9 features) en prod, Vercel verde · Fase 0 security (código) COMPLETA
+> Snapshot de handoff · **2026-06-15** · rama `main` @ `d819c1c` · Sub-fase 8d (notificaciones + emails + Recordar) + fix rondas huérfanas + responsive móvil, en prod, Vercel verde · (previo: flujo ágil 9 features, Fase 0 security)
 
 ## Dónde estamos AHORA MISMO
 
-**Sesión 2026-06-10 — Flujo ágil de aprobaciones (9 features en 9 commits) COMPLETA, todo verde en Vercel.** Working tree limpio, nada en vuelo. (Más temprano en la semana: Fase 0 del security audit — 4 fixes en prod, tabla abajo.)
+**Sesión 2026-06-15 — Fix de rondas huérfanas + sub-fase 8d (notificaciones in-app + emails + Recordar) + responsive móvil del flujo. Todo verde en Vercel.** Working tree limpio, nada en vuelo. Contexto: RESEND_API_KEY ya en Vercel (Prod+Preview) → el envío real funciona en prod (Resend en modo prueba); las 9 features del flujo ágil quedaron verificadas por Alfonso.
 
-### Esta sesión: 9 features (Bloques A/B/C), un commit cada una
+### Esta sesión (2026-06-15): 7 commits
+
+| # | Cambio | Commit |
+|---|---|---|
+| O1 | fix rondas huérfanas: bandeja/badge excluyen rondas de estimaciones soft-deleted; `deleteEstimacion` borra TODAS las rondas en el mismo paso | `240d6f5` |
+| O2a | 8d migración: tabla `notifications` + `fn_create_notification` (RLS solo propias) | `c00ecde` |
+| O2b | 8d templates + envío: 3 emails React (deep-link) + `notify.ts` + cableado A/B/C/D + migración `fn_notify_admins` | `5970af9` |
+| O2c | 8d badge + feed: campana en el sidebar (no-leídas) + dropdown; el badge pasa de "pendientes" → "notificaciones no leídas" | `55f00aa` |
+| O2d | 8d Recordar: reenvía email + notif a los firmantes pendientes (admin) | `c44a222` |
+| O3 | responsive móvil del flujo (sidebar oculto en móvil SOLO en /aprobaciones; diálogos ya full-width) | `d819c1c` |
+
+**Migraciones nuevas a prod (db push):** `20260615201623_add_notifications` + `20260615202834_notify_admins_fn`.
+
+**8d as-built:** in-app (badge = no-leídas + dropdown feed perezoso vía `getMyNotifications`; **Home conserva su propio badge de pendientes**) + emails best-effort (nunca rompen la acción; envueltos en try/catch). Eventos: **A** enviada→aprobadores (notif+email) · **B** voto parcial→admins (solo in-app) · **C** rechazo→admins (notif+email) · **D** aprobación completa→admins (notif+email con **PDF de la carátula generada** — la constancia 8c sigue diferida). Deep-link = `NEXT_PUBLIC_APP_URL/aprobaciones?proyecto=…#est-<estId>` (ancla `id="est-<id>"` en cada card). `fn_notify_admins` (SECURITY DEFINER) inserta la notif a cada admin y devuelve sus correos, porque un voto de aprobador NO puede leer perfiles de admin por RLS. **Resend en modo prueba** → emails a terceros quedan listos pero solo entregan al dueño hasta verificar el dominio `izarquitectos.mx` (fuera de scope). Componentes nuevos: `notifications-bell`, `recordar-button`; libs `lib/notifications/{actions,fetch}.ts`, `lib/approvals/notify.ts`, `lib/email/aprobacion-emails.tsx`.
+
+### Sesión 2026-06-10 — Flujo ágil (9 features), un commit cada una
 
 | # | Feature | Commit |
 |---|---|---|
@@ -60,11 +75,12 @@ Componentes nuevos (en `src/app/proyectos/[id]/caratula/`): `caratula-badge.tsx`
 
 ## Qué está en producción (Vercel verde hasta 823dd93)
 
-- App completa: Home con 3 project cards, 6 tabs por proyecto, carátula PDF + Resend, aprobaciones in-platform (8a `cc40ecd` + 8b `a76116a`), `/auth/recovery` (`ca388f2`), design system NAUKA, **tab Carátula rediseñada a cards**, **Fase 0 security (A1 `33128c1` + A3 `c01f70e` + M1 `9e366b2` + M3 `823dd93`)**, **flujo ágil de aprobaciones 2026-06-10 (cancelar/eliminar rondas, envío directo al crear, guard de edición, comprobante inline, copiar link) + guía `/guia`**.
+- App completa: Home con 3 project cards, 6 tabs por proyecto, carátula PDF + Resend, aprobaciones in-platform (8a `cc40ecd` + 8b `a76116a`), `/auth/recovery` (`ca388f2`), design system NAUKA, **tab Carátula rediseñada a cards**, **Fase 0 security (A1 `33128c1` + A3 `c01f70e` + M1 `9e366b2` + M3 `823dd93`)**, **flujo ágil de aprobaciones 2026-06-10 (cancelar/eliminar rondas, envío directo al crear, guard de edición, comprobante inline, copiar link) + guía `/guia`**, **8d notificaciones in-app + emails + Recordar + responsive móvil + fix rondas huérfanas 2026-06-15**.
 - **Lote 44 con DATA REAL**: 6 contratistas (SAMSTORGAM, Hector Triana, ABIKAR, Urarq, Aquaconcepts, TENCO), 6 partidas, 7 estimaciones todas pagadas, **ejercido $647,748.01 (cuadra al centavo con el Excel)**. Test data (CYVSA, R&R Imper) soft-deleted + storage huérfano limpiado (`592443f`).
 - Sesión 2026-06-08/09: `851286b` fecha presupuesto editable · `2d7ec46` resumen ordenado desc · `dcda9af` borrar/regenerar carátula + fix A2 · `c275c57` fix dropdowns UUID→nombre · `b49c4fb` labels capitalizados Status/IVA · rediseño Carátula `8fd1024`→`d15b18e`.
 - Sesión 2026-06-09/10: Fase 0 security — A1 `33128c1` · A3 `c01f70e` · M1 `9e366b2` · M3 `823dd93`.
 - Sesión 2026-06-10: flujo ágil de aprobaciones (9 features) — A1 `624593d` · A2 `efc577b` · A3 `225d331` · B4 `a132dc9` · B5 `cbac384` · B6 `2ba2267` · B7 `09754b4` · C8 `852e806` · C9 `c9ee75a` + migración `20260610185323` (canceled_by/cancel_motivo).
+- Sesión 2026-06-15: fix huérfanas `240d6f5` + 8d notificaciones/emails/Recordar (`c00ecde` · `5970af9` · `55f00aa` · `c44a222`) + responsive móvil `d819c1c` + migraciones `20260615201623` (notifications) · `20260615202834` (fn_notify_admins).
 
 ## Seguridad (audit `docs/security-audit-2026-06-08.md`)
 
@@ -90,9 +106,9 @@ Componentes nuevos (en `src/app/proyectos/[id]/caratula/`): `caratula-badge.tsx`
 4. Verificación manual de los 4 fixes de Fase 0 (lista en sección Seguridad, ~10 min). Después, cuando Alfonso diga: Fase 1 del audit (M2, M4–M9, B1–B13, agrupados en ~3 commits).
 5. Rotación de keys (checklist en memoria) → recién entonces invitar a Jess→José→Marcos.
 6. Migración Beachfront y Lote 3 (clonar script, correr antes de editar en app).
-7. Sub-fases 8c+8e (canvas firma + constancia PDF — Alfonso duda si vale la pena) y 8d (notificaciones email + Recordar). Verificar dominio Resend antes de externos.
+7. ✅ **8d (notificaciones in-app + emails + Recordar) HECHA 2026-06-15.** Quedan sub-fases 8c (constancia PDF anexa) + 8e (canvas de firma) — Alfonso duda si valen la pena. **Verificar dominio Resend (`izarquitectos.mx`)** para que los emails de aprobación entreguen a terceros (hoy modo prueba: solo al dueño de la cuenta).
 8. (Opcional) Kebab de accesos rápidos en las cards de Carátula, si se quiere.
 
 ## Decisiones que NO hay que re-grilear
 
-2 roles (admin: Alfonso+Jess / aprobador: José+Marcos+Edy) · visibilidad cross-project consciente (todos ven todo; dejarlo por escrito con GFA) · firmantes globales compartidos entre proyectos · status de pago 100% manual · una sola fecha (`fecha_estimacion`) · sin EOM · IVA por estimación = checkbox 16% (iva_pct 0 o 0.16, monto tecleado = lo que cuenta) · acumulado de carátula = todas las estimaciones fecha ≤ esta incluyéndola sin importar status · loop grill-me → openspec → aprobar → implementar · regression prevention de CLAUDE.md es ley · rediseño Carátula: 3 ajustes as-built aceptados (ver arriba) · Fase 0 as-built: M3 = ban vía Admin API (auth-js sin signOut-por-id) · CSP report-only primero, enforce después de observar · A3 ancla redirects a NEXT_PUBLIC_APP_URL · cancelar guarda quién/por qué en columnas nuevas de approval_requests (Alfonso eligió migración aditiva sobre la versión sin persistencia, 2026-06-10) · guard de edición valida en el server action (no solo UI) · sugerencias de status (Enviada) y comprobante inline NO cambian que el status de pago siga siendo manual.
+2 roles (admin: Alfonso+Jess / aprobador: José+Marcos+Edy) · visibilidad cross-project consciente (todos ven todo; dejarlo por escrito con GFA) · firmantes globales compartidos entre proyectos · status de pago 100% manual · una sola fecha (`fecha_estimacion`) · sin EOM · IVA por estimación = checkbox 16% (iva_pct 0 o 0.16, monto tecleado = lo que cuenta) · acumulado de carátula = todas las estimaciones fecha ≤ esta incluyéndola sin importar status · loop grill-me → openspec → aprobar → implementar · regression prevention de CLAUDE.md es ley · rediseño Carátula: 3 ajustes as-built aceptados (ver arriba) · Fase 0 as-built: M3 = ban vía Admin API (auth-js sin signOut-por-id) · CSP report-only primero, enforce después de observar · A3 ancla redirects a NEXT_PUBLIC_APP_URL · cancelar guarda quién/por qué en columnas nuevas de approval_requests (Alfonso eligió migración aditiva sobre la versión sin persistencia, 2026-06-10) · guard de edición valida en el server action (no solo UI) · sugerencias de status (Enviada) y comprobante inline NO cambian que el status de pago siga siendo manual · 8d: badge del sidebar = notificaciones no leídas (Home mantiene su badge de pendientes propio) · emails/notifs best-effort (try/catch, nunca rompen el voto) · email "aprobación completa" adjunta la carátula generada (constancia 8c diferida) · deep-link = /aprobaciones?proyecto=…#est-<id> · al borrar/soft-delete una estimación se borran TODAS sus rondas (huérfanas) · responsive solo del flujo de aprobación (sidebar oculto en móvil únicamente en /aprobaciones).
