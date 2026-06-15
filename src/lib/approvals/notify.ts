@@ -77,11 +77,13 @@ export async function notifyNuevaAprobacion(
     projectId: string
     requestId: string
     firmanteIds: string[]
+    /** Recordatorio manual (reusa el email accionable). */
+    reminder?: boolean
   },
 ): Promise<void> {
   try {
     if (args.firmanteIds.length === 0) return
-    // El que envía es admin → RLS de profiles le deja leer a los aprobadores.
+    // El que envía/recuerda es admin → RLS de profiles le deja leer a los aprobadores.
     const { data: profs } = await sb
       .from("profiles")
       .select("auth_user_id, email, nombre")
@@ -94,12 +96,13 @@ export async function notifyNuevaAprobacion(
     if (!loaded) return
     const { meta } = loaded
     const link = deepLink(args.projectId, args.estimacionId)
+    const reminder = args.reminder ?? false
 
     for (const r of recipients) {
       await sb.rpc("fn_create_notification", {
         p_user_id: r.auth_user_id,
-        p_type: "nueva_aprobacion",
-        p_title: `Carátula por aprobar · Est. ${meta.numero}`,
+        p_type: reminder ? "recordatorio" : "nueva_aprobacion",
+        p_title: `${reminder ? "Recordatorio · " : ""}Carátula por aprobar · Est. ${meta.numero}`,
         p_body: `${meta.contratista} · ${meta.partida} · ${meta.montoFormatted}`,
         p_link: link,
         p_request_id: args.requestId,
@@ -108,7 +111,8 @@ export async function notifyNuevaAprobacion(
 
     const bundle = getResend()
     if (!bundle) return
-    const subject = nuevaAprobacionSubject(meta)
+    const base = nuevaAprobacionSubject(meta)
+    const subject = reminder ? `Recordatorio — ${base}` : base
     for (const r of recipients) {
       const html = await renderNuevaAprobacionHtml({
         ...meta,

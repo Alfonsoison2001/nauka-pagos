@@ -5,6 +5,7 @@ import { headers } from "next/headers"
 import { z } from "zod"
 import {
   notifyAprobacionCompleta,
+  notifyNuevaAprobacion,
   notifyProgreso,
   notifyRechazo,
 } from "@/lib/approvals/notify"
@@ -238,5 +239,45 @@ export async function eliminarRonda(
   revalidatePath("/aprobaciones")
   revalidatePath(`/proyectos/${req.project_id}/caratula`)
   revalidatePath(`/proyectos/${req.project_id}/flujo-de-pagos`)
+  return { ok: true }
+}
+
+// ── Recordar (admin) ──────────────────────────────────────────────────────────
+// 8d (§6.5): reenvía el email accionable + notif a los firmantes con voto aún
+// pendiente de la ronda abierta. Sin cron.
+
+export async function recordar(requestId: string): Promise<DecisionResult> {
+  await requireAdmin()
+  const sb = await createClient()
+
+  const { data: req } = await sb
+    .from("approval_requests")
+    .select("id, status, project_id, document_id")
+    .eq("id", requestId)
+    .maybeSingle()
+  if (!req) return { error: "Solicitud no encontrada." }
+  if (req.status !== "en_aprobacion") {
+    return { error: "Esta solicitud ya no está abierta." }
+  }
+
+  const { data: pend } = await sb
+    .from("approvals")
+    .select("firmante_id")
+    .eq("request_id", requestId)
+    .eq("status", "pendiente")
+  const firmanteIds = (pend ?? []).map((p) => p.firmante_id as string)
+  if (firmanteIds.length === 0) {
+    return { error: "No quedan firmantes pendientes." }
+  }
+
+  await notifyNuevaAprobacion(sb, {
+    estimacionId: req.document_id,
+    projectId: req.project_id,
+    requestId,
+    firmanteIds,
+    reminder: true,
+  })
+
+  revalidatePath("/aprobaciones")
   return { ok: true }
 }

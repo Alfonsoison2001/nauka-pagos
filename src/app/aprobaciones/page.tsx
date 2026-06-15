@@ -8,6 +8,7 @@ import {
   CaratulaPreviewButton,
 } from "@/components/approvals/caratula-preview-button"
 import { CopiarLinkButton } from "@/components/approvals/copiar-link-button"
+import { RecordarButton } from "@/components/approvals/recordar-button"
 import { BackButton } from "@/components/back-button"
 import { Sidebar } from "@/components/sidebar"
 import {
@@ -304,6 +305,9 @@ function ItemCard({ item, isAdmin }: { item: Item; isAdmin: boolean }) {
                   />
                 ))
             : null}
+          {isAdmin && approval.openRequestId ? (
+            <RecordarButton requestId={approval.openRequestId} />
+          ) : null}
           {isAdmin && approval.openRequestId ? (
             <CancelarAprobacionButton requestId={approval.openRequestId} />
           ) : null}

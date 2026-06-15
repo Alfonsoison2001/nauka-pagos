@@ -7,6 +7,7 @@ import { ApprovalTimeline } from "@/components/approvals/approval-timeline"
 import { ApproveRejectDialog } from "@/components/approvals/approve-reject-dialog"
 import { CancelarAprobacionButton } from "@/components/approvals/cancelar-aprobacion-button"
 import { CopiarLinkButton } from "@/components/approvals/copiar-link-button"
+import { RecordarButton } from "@/components/approvals/recordar-button"
 import { EstatusBadge } from "@/components/estatus-badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -265,6 +266,10 @@ export function CaratulaDetailDialog({
                       ? "Reenviar a aprobación"
                       : "Enviar a aprobación"}
                 </Button>
+              )}
+
+              {isAdmin && approval?.isOpen && approval.openRequestId && (
+                <RecordarButton requestId={approval.openRequestId} />
               )}
 
               {isAdmin && approval?.isOpen && approval.openRequestId && (
