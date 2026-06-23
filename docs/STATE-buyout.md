@@ -107,8 +107,12 @@ el **estado vacío** correcto.
 `docs/SPEC-buyout.md` §6 se editó (no por mí): el módulo es **principalmente informativo**,
 el Resumen gana la columna **"Última actualización (fecha de la cotización vigente)"**, y el
 **Estado** debe mostrar los **2 ejes** (ppto/paramétrico + contratado/no). El armazón ya
-refleja la columna nueva; el render de los 2 ejes del Estado se llena con datos (Slice 4).
-**Dejé el cambio de `SPEC-buyout.md` SIN commitear** por si Alfonso sigue afinándolo.
+refleja la columna **Última actualización** y los **2 slots del Estado** (madurez arriba ·
+contratación abajo) como placeholders neutros vacíos + leyenda al pie; con datos (Slice 4)
+cada slot toma su badge con color (patrón `estatus-badge.tsx`). El diseño de la celda de 2
+ejes se eligió con un mini-panel de propuestas + verificación adversarial (server-safe, DS,
+fidelidad al spec). **Dejé el cambio de `SPEC-buyout.md` SIN commitear** por si Alfonso sigue
+afinándolo.
 
 ### Gate local (verde)
 

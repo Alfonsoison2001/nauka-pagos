@@ -134,7 +134,12 @@ export default async function BuyoutResumenPage({
               <th className="px-3 py-2.5 text-right">Dif</th>
               <th className="px-3 py-2.5 text-right">$/m²</th>
               <th className="px-3 py-2.5 text-left">Última actualización</th>
-              <th className="px-3 py-2.5 text-left">Estado</th>
+              <th className="px-3 py-2.5 text-left">
+                Estado{" "}
+                <span className="font-normal normal-case tracking-normal text-white/40">
+                  (madurez · contratación)
+                </span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -190,6 +195,18 @@ export default async function BuyoutResumenPage({
           {usdRate ? ` · TC ${usdRate}` : " · TC —"}
         </span>
       </div>
+
+      {/* Leyenda: el Estado son 2 ejes (vacíos en el armazón; con datos = Slice 4). */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <EstadoSlots />
+        <span>
+          Estado · 2 ejes:{" "}
+          <span className="font-medium text-nauka-dark">arriba</span> madurez
+          (Paramétrico / Ppto),{" "}
+          <span className="font-medium text-nauka-dark">abajo</span>{" "}
+          contratación (Contratado / No contratado). Sin datos aún (Slice 4).
+        </span>
+      </div>
     </div>
   )
 }
@@ -231,7 +248,9 @@ function ChapterGroup({
             <td className="px-3 py-2 text-right text-muted-foreground">—</td>
             <td className="px-3 py-2 text-right">{formatMXN(0)}</td>
             <td className="px-3 py-2 text-muted-foreground">—</td>
-            <td className="px-3 py-2 text-muted-foreground">—</td>
+            <td className="px-3 py-2">
+              <EstadoSlots />
+            </td>
           </tr>
         ))
       )}
@@ -250,5 +269,23 @@ function ChapterGroup({
         <td className="px-3 py-2" />
       </tr>
     </Fragment>
+  )
+}
+
+const ESTADO_SLOT_CLS =
+  "inline-flex h-5 w-fit shrink-0 items-center rounded-full border border-dashed border-nauka-neutral/50 px-2 text-[11px] font-medium leading-none text-nauka-neutral"
+
+/**
+ * Estado como 2 ejes independientes (spec §6): madurez (arriba: Paramétrico /
+ * Ppto) + contratación (abajo: Contratado / No contratado). En el Slice 2a van
+ * VACÍOS (placeholder neutro dashed); con datos (Slice 4) cada slot toma su
+ * badge/etiqueta con color (mismo patrón que estatus-badge.tsx).
+ */
+function EstadoSlots() {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className={ESTADO_SLOT_CLS}>—</span>
+      <span className={ESTADO_SLOT_CLS}>—</span>
+    </div>
   )
 }
