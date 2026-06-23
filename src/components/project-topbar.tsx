@@ -10,6 +10,7 @@ const TITLES: Record<string, string> = {
   caratula: "Carátula",
   "resumen-mensual": "Resumen Mensual",
   configuracion: "Configuración",
+  buyout: "Buy-Out",
 }
 
 type Props = {

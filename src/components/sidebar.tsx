@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LogOut,
   Settings,
+  ShoppingCart,
   Users,
   Wallet,
 } from "lucide-react"
@@ -105,6 +106,18 @@ export function Sidebar({
               </li>
             )
           })}
+          {/* Buy-Out: sección aparte (un "libro distinto"), no una 7ª tab de
+              Pagos. Separada por un divisor; solo dentro de un proyecto. */}
+          {projectId ? (
+            <li className="mt-2 border-t border-white/10 pt-2">
+              <SidebarLink
+                href={`${base}/buyout`}
+                label="Buy-Out"
+                Icon={ShoppingCart}
+                active={pathname.startsWith(`${base}/buyout`)}
+              />
+            </li>
+          ) : null}
           <li className="mt-1">
             <SidebarLink
               href={aprobHref}

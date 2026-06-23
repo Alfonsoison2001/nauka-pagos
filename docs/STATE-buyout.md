@@ -1,12 +1,14 @@
 # STATE — Módulo Buy-Out
 
-> Bitácora de avance del módulo. Última actualización: **2026-06-18**.
+> Bitácora de avance del módulo. Última actualización: **2026-06-23**.
 > Spec: [`docs/SPEC-buyout.md`](SPEC-buyout.md) · Análisis del Excel: [`docs/future-modules/buyout-L3-estructura.md`](future-modules/buyout-L3-estructura.md).
 
 ## Estado actual
 
 ✅ **Slice 1 (§9.1) COMPLETO** — esquema `buyout_*` + catálogos sembrados de Lote 3.
-⏸️ **PAUSA para revisión de Alfonso** antes de arrancar el Slice 2 (importador).
+✅ **Slice 2a COMPLETO** — armazón navegable de la sección Buy-Out (ruta `/buyout` + 3
+   pantallas vacías que LEEN de `buyout_*`, sin importador y sin escribir datos).
+⏸️ **PAUSA para que Alfonso revise el layout** antes de arrancar el Slice 2b (importador).
 
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
@@ -69,8 +71,62 @@ Todas con `id uuid pk`, `created_at`, `deleted_at` (soft-delete), dinero `numeri
 
 Crear una down-migration que haga `DROP TABLE public.buyout_* CASCADE` (las 14) — limpio, no toca Pagos. (No la creé aún; se hace en 1 archivo si decides descartar.)
 
+## Slice 2a — armazón navegable (hecho 2026-06-23)
+
+Solo **UI/lectura**: ni subida de archivos, ni parseo, ni escritura. Las 3 pantallas son
+Server Components que leen de las tablas `buyout_*` (vacías en lo transaccional) y muestran
+el **estado vacío** correcto.
+
+### Archivos nuevos (todo aditivo, nada de Pagos tocado en su lógica)
+
+- `src/components/buyout/buyout-sub-nav.tsx` — sub-nav propia de las 3 pantallas (Resumen ·
+  Partida · Subcategoría) + link **"Volver a Pagos"**. Es un "libro distinto", no una 7ª tab.
+- `src/app/proyectos/[id]/buyout/layout.tsx` — layout anidado que monta la sub-nav. El
+  proyecto ya lo valida el layout padre de Pagos (sidebar + topbar siguen visibles).
+- `src/app/proyectos/[id]/buyout/page.tsx` — **Resumen** (tablero): lee `buyout_chapter`,
+  `buyout_partida_catalog`, `buyout_project_meta`, `buyout_fx`. Capítulos → partidas
+  agrupadas; columnas **Concepto · Proveedor · Ppto Base · Ppto · Dif · $/m² · Última
+  actualización · Estado**; subtotales, TOTAL y `$/m² + USD/m²` al pie, todo en **0**.
+- `src/app/proyectos/[id]/buyout/partida/page.tsx` — **Partida** (formato verde): las **22
+  columnas** (B…W) como encabezados, tabla vacía, botón **"Importar" deshabilitado**
+  (placeholder; el importador llega en 2b). Lee `buyout_item` para el estado vacío.
+- `src/app/proyectos/[id]/buyout/subcategoria/page.tsx` — **Subcategoría**: placeholder del
+  historial de versiones (lee `buyout_item`; describe lo que vivirá ahí en slices posteriores).
+
+### Toques aditivos al chrome de Pagos (2, ambos sin cambiar comportamiento de las 6 tabs)
+
+- `src/components/sidebar.tsx` — **+** un link **"Buy-Out"** (icono `ShoppingCart`), separado
+  por un divisor, dentro de cada proyecto (guardado por `projectId`, como `aprobHref`). Las 6
+  tabs y su lógica de `active` quedan idénticas.
+- `src/components/project-topbar.tsx` — **+** una entrada `buyout: "Buy-Out"` en `TITLES`
+  para que el título del header diga "Buy-Out" en `/buyout/*` (si no, caía al fallback
+  "Resumen"). Una sola línea.
+
+### Spec refinada por Alfonso a mitad de sesión (incorporada)
+
+`docs/SPEC-buyout.md` §6 se editó (no por mí): el módulo es **principalmente informativo**,
+el Resumen gana la columna **"Última actualización (fecha de la cotización vigente)"**, y el
+**Estado** debe mostrar los **2 ejes** (ppto/paramétrico + contratado/no). El armazón ya
+refleja la columna nueva; el render de los 2 ejes del Estado se llena con datos (Slice 4).
+**Dejé el cambio de `SPEC-buyout.md` SIN commitear** por si Alfonso sigue afinándolo.
+
+### Gate local (verde)
+
+`pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (las 3 rutas
+`/buyout`, `/buyout/partida`, `/buyout/subcategoria` compilan como dinámicas `ƒ`; las 6 rutas
+de Pagos siguen idénticas en el manifest). Smoke test en dev: las 3 rutas responden **307 →
+/login** igual que `/resumen` (ruteo + middleware OK, sin 500). **El render visual de las
+tablas vacías queda detrás de auth/RLS → es justo lo que Alfonso revisa en su sesión.**
+
 ## Qué sigue
 
-- **Slice 2 — Importador con preview (§5):** subir un tab `.xlsx` de una partida → parsear → **preview** → confirmar → crear `buyout_quote` + `buyout_line` agrupados por proveedor (col H), con PDF opcional. Validar "cuadra al centavo" contra el `Total` del tab. Re-subir = versión nueva fechada (`buyout_import_batch`).
-- Luego: Slice 3 Resumen (rollup + $/m² + modos) · Slice 4 estados + qué falta · Slice 5 historial/comparativo + marcar contratado (botón manual a Pagos) · Slice 6 carga real de L3 + cuadre.
-- **Pendiente de datos:** reconciliar las partidas canónicas (~26) y, si aplica, las áreas Villa/Casita, contra `NAUKA - BUY OUT L3 150626.xlsx`.
+- **Slice 2b — Importador con preview (§5):** subir un tab `.xlsx` de una partida → parsear →
+  **preview** → confirmar → crear `buyout_quote` + `buyout_line` agrupados por proveedor (col
+  H), con PDF opcional. Validar "cuadra al centavo" contra el `Total` del tab. Re-subir =
+  versión nueva fechada (`buyout_import_batch`). Aquí se activa el botón "Importar" de la
+  pantalla Partida y empiezan a poblarse las tablas (los totales/$ del Resumen dejan de ser 0).
+- Luego: Slice 3 Resumen (rollup + $/m² + modos) · Slice 4 estados + qué falta · Slice 5
+  historial/comparativo + marcar contratado (botón manual a Pagos) · Slice 6 carga real de L3
+  + cuadre.
+- **Pendiente de datos:** reconciliar las partidas canónicas (~26) y, si aplica, las áreas
+  Villa/Casita, contra `NAUKA - BUY OUT L3 150626.xlsx`.
