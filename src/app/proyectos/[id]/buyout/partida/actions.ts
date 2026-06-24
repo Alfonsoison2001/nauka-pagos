@@ -15,6 +15,7 @@ export type UnitOption = { id: string; nombre: string }
 export type UomOption = { codigo: string; nombre: string }
 export type CurrencyOption = { currency: string; rate: number }
 export type PartidaOption = { id: string; nombre: string }
+export type ConceptoOption = { id: string; nombre: string }
 
 /** Una línea capturada = renglón (22 col) + los campos de su cotización vigente. */
 export type LineaRow = {
@@ -196,67 +197,30 @@ async function uploadBuyoutPdf(
 }
 
 // ---------------------------------------------------------------------------
-// createLinea — item (si nuevo) → quote (vigente) → line
+// Helper compartido: cotización VIGENTE (baja la anterior) + su renglón.
+// Lo usan createLinea (concepto nuevo) y addBudgetVersion (nueva versión).
 // ---------------------------------------------------------------------------
 
-export async function createLinea(
+type ParsedLinea = z.infer<typeof baseSchema>
+
+async function insertVigenteQuoteAndLine(
+  sb: Sb,
   projectId: string,
-  formData: FormData,
+  itemId: string,
+  conceptoNombre: string,
+  partidaNombre: string,
+  sup: { id: string | null; nombre: string | null },
+  villaCasita: string | null,
+  d: ParsedLinea,
+  pdfFile: File | null,
 ): Promise<ActionResult> {
-  const parsed = createSchema.safeParse(parseForm(formData))
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
-  }
-  const d = parsed.data
-  const sb = await createClient()
-
-  const sup = await resolveSupplier(sb, d.supplier_id, d.supplier_nombre)
-  if ("error" in sup) return { error: sup.error }
-  const { nombre: partidaNombre, chapterId } = await resolvePartidaMeta(
-    sb,
-    projectId,
-    d.partida_catalog_id,
-  )
-  const unitId = d.unit_id || null
-  const villaCasita = await resolveUnitName(sb, unitId ?? undefined)
-
-  // Concepto existente en la partida = re-captura (versión nueva fechada).
-  const { data: existingItem } = await sb
-    .from("buyout_item")
-    .select("id")
-    .eq("project_id", projectId)
-    .eq("partida_catalog_id", d.partida_catalog_id)
-    .eq("concepto", d.concepto)
+  // Baja la vigente anterior del item (índice único: 1 vigente por item).
+  await sb
+    .from("buyout_quote")
+    .update({ is_selected: false })
+    .eq("item_id", itemId)
+    .eq("is_selected", true)
     .is("deleted_at", null)
-    .maybeSingle()
-
-  let itemId: string
-  if (existingItem) {
-    itemId = existingItem.id as string
-    // Baja la cotización vigente anterior (índice único: 1 vigente por item).
-    await sb
-      .from("buyout_quote")
-      .update({ is_selected: false })
-      .eq("item_id", itemId)
-      .eq("is_selected", true)
-      .is("deleted_at", null)
-  } else {
-    const { data: item, error: itemErr } = await sb
-      .from("buyout_item")
-      .insert({
-        project_id: projectId,
-        partida_catalog_id: d.partida_catalog_id,
-        chapter_id: chapterId,
-        concepto: d.concepto,
-        unit_id: unitId,
-      })
-      .select("id")
-      .single()
-    if (itemErr || !item) {
-      return { error: itemErr?.message ?? "Error al crear el concepto" }
-    }
-    itemId = item.id as string
-  }
 
   const { data: quote, error: quoteErr } = await sb
     .from("buyout_quote")
@@ -283,7 +247,6 @@ export async function createLinea(
     .update({ selected_quote_id: quoteId })
     .eq("id", itemId)
 
-  const pdfFile = formData.get("pdf") as File | null
   if (pdfFile && pdfFile.size > 0) {
     const up = await uploadBuyoutPdf(sb, pdfFile, projectId, quoteId)
     if ("error" in up) return { error: up.error }
@@ -293,7 +256,7 @@ export async function createLinea(
   const { error: lineErr } = await sb.from("buyout_line").insert({
     quote_id: quoteId,
     categoria: partidaNombre,
-    concepto: d.concepto,
+    concepto: conceptoNombre,
     detalle: d.detalle ?? null,
     villa_casita: villaCasita,
     piso: d.piso ?? null,
@@ -308,7 +271,114 @@ export async function createLinea(
     notas: d.notas ?? null,
   })
   if (lineErr) return { error: lineErr.message }
+  return { ok: true }
+}
 
+// ---------------------------------------------------------------------------
+// createLinea — "Agregar": SIEMPRE crea un concepto NUEVO (buyout_item nuevo)
+// ---------------------------------------------------------------------------
+
+export async function createLinea(
+  projectId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  const parsed = createSchema.safeParse(parseForm(formData))
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+  const d = parsed.data
+  const sb = await createClient()
+
+  const sup = await resolveSupplier(sb, d.supplier_id, d.supplier_nombre)
+  if ("error" in sup) return { error: sup.error }
+  const { nombre: partidaNombre, chapterId } = await resolvePartidaMeta(
+    sb,
+    projectId,
+    d.partida_catalog_id,
+  )
+  const unitId = d.unit_id || null
+  const villaCasita = await resolveUnitName(sb, unitId ?? undefined)
+
+  const { data: item, error: itemErr } = await sb
+    .from("buyout_item")
+    .insert({
+      project_id: projectId,
+      partida_catalog_id: d.partida_catalog_id,
+      chapter_id: chapterId,
+      concepto: d.concepto,
+      unit_id: unitId,
+    })
+    .select("id")
+    .single()
+  if (itemErr || !item) {
+    return { error: itemErr?.message ?? "Error al crear el concepto" }
+  }
+
+  const res = await insertVigenteQuoteAndLine(
+    sb,
+    projectId,
+    item.id as string,
+    d.concepto,
+    partidaNombre,
+    sup,
+    villaCasita,
+    d,
+    formData.get("pdf") as File | null,
+  )
+  if ("error" in res) return res
+  revalidatePath(`/proyectos/${projectId}/buyout/partida`)
+  return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
+// addBudgetVersion — "Actualizar presupuesto": nueva versión sobre el MISMO
+// concepto (item existente). Marca la nueva vigente, conserva la anterior.
+// ---------------------------------------------------------------------------
+
+export async function addBudgetVersion(
+  itemId: string,
+  projectId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  const parsed = baseSchema.safeParse(parseForm(formData))
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+  const d = parsed.data
+  const sb = await createClient()
+
+  // La partida se fija desde el item; el concepto es el de la línea vigente
+  // (lo envía el form, bloqueado). Así no diverge si la línea se editó antes.
+  const { data: item } = await sb
+    .from("buyout_item")
+    .select("id, partida_catalog_id")
+    .eq("id", itemId)
+    .eq("project_id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  if (!item) return { error: "Concepto no encontrado" }
+
+  const sup = await resolveSupplier(sb, d.supplier_id, d.supplier_nombre)
+  if ("error" in sup) return { error: sup.error }
+  const { nombre: partidaNombre } = await resolvePartidaMeta(
+    sb,
+    projectId,
+    item.partida_catalog_id as string,
+  )
+  const villaCasita = await resolveUnitName(sb, d.unit_id || undefined)
+
+  const res = await insertVigenteQuoteAndLine(
+    sb,
+    projectId,
+    itemId,
+    d.concepto,
+    partidaNombre,
+    sup,
+    villaCasita,
+    d,
+    formData.get("pdf") as File | null,
+  )
+  if ("error" in res) return res
   revalidatePath(`/proyectos/${projectId}/buyout/partida`)
   return { ok: true }
 }

@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { calcLinea } from "@/lib/buyout/calc"
 import { formatMXN } from "@/lib/utils"
 import type {
+  ConceptoOption,
   CurrencyOption,
   SupplierOption,
   UnitOption,
@@ -26,11 +27,23 @@ import type {
 // Sentinela para "sin valor" en selects (base-ui no admite value="").
 export const NONE = "ninguno"
 export const CREAR = "crear_nuevo"
+export const OTRO = "otro_escribir"
+
+// Opciones de Piso (dropdown). El Excel usa una lista fija; incluye "NA".
+const PISO_OPTIONS: Option[] = [
+  { value: "NA", label: "NA" },
+  { value: "Sótano", label: "Sótano" },
+  { value: "PB", label: "PB" },
+  { value: "N1", label: "N1" },
+  { value: "N2", label: "N2" },
+  { value: "Azotea", label: "Azotea" },
+]
 
 const isNum = (v: string) => v.trim() !== "" && !Number.isNaN(Number(v))
 
 export const formSchema = z.object({
   concepto: z.string().trim().min(1, "Concepto requerido"),
+  concepto_otro: z.string().optional(),
   detalle: z.string().optional(),
   unit_id: z.string().optional(),
   piso: z.string().optional(),
@@ -163,25 +176,33 @@ function ControlledSelect({
 type Props = {
   control: Control<FormValues>
   errors: FieldErrors<FormValues>
+  conceptos: ConceptoOption[]
   suppliers: SupplierOption[]
   units: UnitOption[]
   uoms: UomOption[]
   currencies: CurrencyOption[]
   pdfInputRef: RefObject<HTMLInputElement | null>
   hasPdf?: boolean
+  /** En modo "version" el concepto es fijo (misma subcategoría) → solo lectura. */
+  conceptoLocked?: boolean
+  conceptoName?: string
 }
 
 export function LineaFormFields({
   control,
   errors,
+  conceptos,
   suppliers,
   units,
   uoms,
   currencies,
   pdfInputRef,
   hasPdf,
+  conceptoLocked,
+  conceptoName,
 }: Props) {
   const supplierId = useWatch({ control, name: "supplier_id" })
+  const conceptoSel = useWatch({ control, name: "concepto" })
   const [cantidad, unitario, sobre, iva, moneda] = useWatch({
     control,
     name: ["cantidad", "unitario", "sobrecosto_pct", "iva_pct", "moneda"],
@@ -213,16 +234,45 @@ export function LineaFormFields({
     value: c.currency,
     label: c.currency,
   }))
+  const conceptoOptions: Option[] = [
+    ...conceptos.map((c) => ({ value: c.nombre, label: c.nombre })),
+    { value: OTRO, label: "Otro… (escribir)" },
+  ]
 
   return (
     <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto pr-1">
-      <ControlledInput
-        control={control}
-        name="concepto"
-        label="Concepto (subcategoría)"
-        errors={errors}
-        placeholder="Ej. Cisterna (WS-06)"
-      />
+      {conceptoLocked ? (
+        <div className="flex flex-col gap-1.5">
+          <Label>Concepto (subcategoría)</Label>
+          <p className="rounded-lg border border-input bg-muted/40 px-3 py-2 text-sm">
+            {conceptoName}
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <ControlledSelect
+            control={control}
+            name="concepto"
+            label="Concepto (subcategoría)"
+            placeholder="Selecciona un concepto del catálogo"
+            options={conceptoOptions}
+          />
+          {conceptoSel === OTRO ? (
+            <Controller
+              name="concepto_otro"
+              control={control}
+              render={({ field }) => (
+                <Input placeholder="Escribe el concepto nuevo" {...field} />
+              )}
+            />
+          ) : null}
+          {errors.concepto ? (
+            <p className="text-xs text-destructive">
+              {String(errors.concepto.message)}
+            </p>
+          ) : null}
+        </div>
+      )}
       <ControlledInput
         control={control}
         name="detalle"
@@ -238,12 +288,12 @@ export function LineaFormFields({
           placeholder="—"
           options={unitOptions}
         />
-        <ControlledInput
+        <ControlledSelect
           control={control}
           name="piso"
           label="Piso"
-          errors={errors}
-          placeholder="PB / N1 / Sótano…"
+          placeholder="—"
+          options={PISO_OPTIONS}
         />
       </div>
 

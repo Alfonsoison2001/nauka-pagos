@@ -11,7 +11,10 @@
 ✅ **Slice 2b COMPLETO** — **captura MANUAL** de líneas en la pantalla Partida (sin parseo de
    Excel, §5). Escribe a `buyout_item → buyout_quote → buyout_line`, con cálculos tipo Excel,
    PDF opcional por cotización y editar/borrar (soft-delete) admin-only.
-⏸️ **PAUSA para que Alfonso pruebe agregando líneas reales** antes de la Fase 3 (rollup al Resumen).
+✅ **Slice 2c COMPLETO** — taxonomía oficial L3 sembrada (24 partidas + 92 conceptos) ·
+   concepto = dropdown · "Actualizar presupuesto" (nueva versión sin duplicar fila) ·
+   Villa+Casita y Piso "NA" · pantalla Partida = **tarjetas por capítulo** con totales.
+⏸️ **PAUSA para que Alfonso revise** antes de la Fase 3 (rollup al Resumen).
 
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
@@ -171,13 +174,59 @@ compilan; las 6 de Pagos idénticas en el manifest). Smoke test dev: `/buyout/pa
 el módulo real. **Agregar línea / subir PDF / RLS admin** quedan tras login → es lo que Alfonso
 prueba en su sesión.
 
+## Slice 2c — taxonomía + UX de captura (hecho 2026-06-24)
+
+Fuente de verdad: `docs/future-modules/buyout-catalogo-L3.md`.
+
+### Migración (aditiva, aplicada a prod con `supabase db push` — opción B)
+
+- `supabase/migrations/20260624130000_buyout_taxonomy_l3.sql`:
+  - **Tabla nueva `buyout_concepto_catalog`** (conceptos por partida) con RLS+audit+grants
+    igual que el resto.
+  - **Reconciliación NO destructiva del catálogo:** las 23 partidas viejas (glosario) se
+    **soft-deletean** (no se borran → el FK de la línea de prueba del 2b queda intacto, la
+    fila vieja existe pero invisible); se insertan las **24 partidas EXACTAS** del doc; se
+    renombra el capítulo L3 `JARDINERÍA → JARDINERIA Y RIEGO`; se siembran los **92 conceptos**.
+  - Unidad **`Villa + Casita`** agregada a `buyout_unit` (tipo `villa`; el CHECK no tiene combo).
+- **Verificación (table-stats, conexión directa):** `buyout_concepto_catalog`=**92** ·
+  `buyout_partida_catalog`=**47** (23 soft-deleted + 24 activas) · `buyout_unit`=**3**. Los 92
+  conceptos confirman que los 24 nombres de partida empataron en el JOIN. (El `service_role`
+  REST sigue bloqueado para leer por nombre — igual que en Slice 1; el dump pide Docker.)
+
+### Código (todo bajo `buyout/partida/`; cero Pagos tocado)
+
+- `actions.ts`: `createLinea` ("Agregar") ahora **SIEMPRE crea concepto nuevo** (item nuevo);
+  helper compartido `insertVigenteQuoteAndLine`; **`addBudgetVersion`** ("Actualizar
+  presupuesto") = nueva cotización vigente sobre el MISMO item (baja la anterior, conserva
+  historial). + `ConceptoOption`.
+- `linea-form.tsx`: **concepto = dropdown** del catálogo (por partida) + "Otro… (escribir)";
+  **piso = dropdown** con `NA`/Sótano/PB/N1/N2/Azotea; Villa/Casita toma `Villa + Casita` del
+  catálogo de unidades.
+- `linea-dialog.tsx`: modo **"version"** (Actualizar, concepto bloqueado) + resolución de "Otro".
+- `page.tsx`: pantalla Partida = **tarjetas por capítulo** (nombre · Σ total MXN de sus
+  conceptos vigentes · indicador de datos) → clic entra a la partida (tabla de 22 col, igual
+  que 2b) con su botón **Agregar** + por fila **↻ Actualizar** · ✎ Editar · 🗑 Borrar.
+- Nuevos: `partida-cards.tsx`, `update-budget-button.tsx`. Eliminado: `partida-select.tsx`.
+
+### Decisiones / notas para Alfonso
+
+- **Línea de prueba del 2b:** había 1 item/quote/line de prueba (la base NO estaba vacía pese
+  a lo asumido). Quedó **invisible y recuperable** (su partida vieja está soft-deleted); no la
+  borré. Dime si la quieres limpiar.
+- **"Agregar" vs "Actualizar":** Agregar = concepto NUEVO (fila nueva). Actualizar (↻ en la
+  fila) = versión nueva fechada del existente (NO duplica la fila; muestra la vigente).
+- **Piso** quedó con lista fija {NA, Sótano, PB, N1, N2, Azotea}. ¿Faltan pisos?
+- **Gate verde:** `tsc` ✓ · `biome` ✓ · `pnpm build` ✓. Pagos intacto (manifest idéntico).
+  Agregar/actualizar/PDF/RLS quedan tras login → tu prueba.
+
 ## Qué sigue
 
 - **Fase 3 — Resumen (rollup):** que los totales/$/m² del Resumen dejen de ser 0 sumando
   (SUMIFS) las líneas vigentes por partida → capítulo → total; columnas por mes, $/m² + USD/m².
-  Capturar el **presupuesto base** por partida (referencia del DIF).
+  Capturar el **presupuesto base** por partida (referencia del DIF). (El cálculo por-partida ya
+  existe en las tarjetas; falta el rollup a capítulo/total en el Resumen.)
 - Luego: Fase 4 estados + "qué falta" · Fase 5 historial/comparativo + marcar contratado
   (botón manual a Pagos) · Fase 6 carga real de L3 + cuadre.
 - **Import de Excel = diferido** (futuro opcional, §5); la captura es manual en V1.
-- **Pendiente de datos:** reconciliar las partidas canónicas (~26) y, si aplica, las áreas
-  Villa/Casita, contra `NAUKA - BUY OUT L3 150626.xlsx`.
+- **Taxonomía ya reconciliada** a las 24 partidas + 92 conceptos del doc oficial (Slice 2c).
+  Pendiente: áreas Villa/Casita finas si se necesitan para $/m² por unidad.

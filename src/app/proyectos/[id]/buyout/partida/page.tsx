@@ -1,15 +1,18 @@
+import { ArrowLeft } from "lucide-react"
+import Link from "next/link"
 import { notFound } from "next/navigation"
 import { isAdmin } from "@/lib/auth/roles"
 import { calcLinea } from "@/lib/buyout/calc"
 import { createClient } from "@/lib/supabase/server"
 import { cn, formatMXN } from "@/lib/utils"
-import type { LineaRow, PartidaOption } from "./actions"
+import type { ConceptoOption, CurrencyOption, LineaRow } from "./actions"
 import { BuyoutPdfCell } from "./buyout-pdf-cell"
 import { DeleteLineaButton } from "./delete-linea-button"
 import { EditLineaButton } from "./edit-linea-button"
 import type { Catalogs } from "./linea-dialog"
 import { NuevaLineaButton } from "./nueva-linea-button"
-import { PartidaSelect } from "./partida-select"
+import { type ChapterGroup, PartidaCards } from "./partida-cards"
+import { UpdateBudgetButton } from "./update-budget-button"
 
 export const metadata = { title: "Buy-Out · Partida" }
 
@@ -46,7 +49,13 @@ const numberFmt = new Intl.NumberFormat("es-MX", {
 })
 const pctLabel = (fraction: number) => `${+(fraction * 100).toFixed(2)}%`
 
-type LineaConCalc = LineaRow & { tc: number; partidaNombre: string }
+type Sb = Awaited<ReturnType<typeof createClient>>
+type PartidaCat = { id: string; nombre: string; chapter_default: string | null }
+type LineaConCalc = LineaRow & {
+  tc: number
+  partidaNombre: string
+  partida_catalog_id: string
+}
 
 export default async function BuyoutPartidaPage({
   params,
@@ -68,134 +77,240 @@ export default async function BuyoutPartidaPage({
   if (!project) notFound()
 
   const admin = await isAdmin()
-  const { data: catRows } = await sb
-    .from("buyout_partida_catalog")
-    .select("id, nombre")
-    .is("deleted_at", null)
-    .order("orden")
-  const partidas: PartidaOption[] = (catRows ?? []).map((p) => ({
+
+  // Capítulos (orden) + partidas (24, con su capítulo) + TC del proyecto.
+  const [chapterRes, partidaRes, fxRes] = await Promise.all([
+    sb
+      .from("buyout_chapter")
+      .select("nombre")
+      .eq("project_id", id)
+      .is("deleted_at", null)
+      .order("orden"),
+    sb
+      .from("buyout_partida_catalog")
+      .select("id, nombre, chapter_default")
+      .is("deleted_at", null)
+      .order("orden"),
+    sb
+      .from("buyout_fx")
+      .select("currency, rate")
+      .eq("project_id", id)
+      .is("deleted_at", null),
+  ])
+  const chapters = (chapterRes.data ?? []).map((c) => c.nombre as string)
+  const partidas: PartidaCat[] = (partidaRes.data ?? []).map((p) => ({
     id: p.id as string,
     nombre: p.nombre as string,
+    chapter_default: (p.chapter_default as string | null) ?? null,
   }))
-  const partidaNombre =
-    partidas.find((p) => p.id === selectedPartidaId)?.nombre ?? ""
+  const fxList: CurrencyOption[] = (fxRes.data ?? []).map((c) => ({
+    currency: c.currency as string,
+    rate: Number(c.rate),
+  }))
+  const partidaNombreById = new Map(partidas.map((p) => [p.id, p.nombre]))
 
-  // Catálogos del formulario + líneas de la partida elegida.
-  const empty: Catalogs = { suppliers: [], units: [], uoms: [], currencies: [] }
-  let catalogs = empty
-  let lineas: LineaConCalc[] = []
-
-  if (selectedPartidaId) {
-    const [supRes, unitRes, uomRes, fxRes] = await Promise.all([
-      sb
-        .from("buyout_supplier")
-        .select("id, nombre")
-        .is("deleted_at", null)
-        .order("nombre"),
-      sb
-        .from("buyout_unit")
-        .select("id, nombre")
-        .eq("project_id", id)
-        .is("deleted_at", null)
-        .order("nombre"),
-      sb
-        .from("buyout_uom")
-        .select("codigo, nombre")
-        .is("deleted_at", null)
-        .order("orden"),
-      sb
-        .from("buyout_fx")
-        .select("currency, rate")
-        .eq("project_id", id)
-        .is("deleted_at", null),
-    ])
-    catalogs = {
-      suppliers: (supRes.data ?? []).map((s) => ({
-        id: s.id as string,
-        nombre: s.nombre as string,
-      })),
-      units: (unitRes.data ?? []).map((u) => ({
-        id: u.id as string,
-        nombre: u.nombre as string,
-      })),
-      uoms: (uomRes.data ?? []).map((u) => ({
-        codigo: u.codigo as string,
-        nombre: u.nombre as string,
-      })),
-      currencies: (fxRes.data ?? []).map((c) => ({
-        currency: c.currency as string,
-        rate: Number(c.rate),
-      })),
+  // Todas las líneas vigentes del proyecto (una sola pasada) → totales por
+  // partida (para las tarjetas) y líneas de la partida elegida (para la tabla).
+  const allLineas = await loadAllVigenteLines(sb, id, fxList, partidaNombreById)
+  const totalsByPartida = new Map<string, { total: number; count: number }>()
+  for (const l of allLineas) {
+    const c = calcLinea({
+      cantidad: l.cantidad,
+      unitario: l.unitario,
+      sobrecostoPct: l.sobrecosto_pct,
+      ivaPct: l.iva_pct,
+      tc: l.tc,
+    })
+    const cur = totalsByPartida.get(l.partida_catalog_id) ?? {
+      total: 0,
+      count: 0,
     }
-    lineas = await loadLineas(
-      sb,
-      id,
-      selectedPartidaId,
-      catalogs,
-      partidaNombre,
+    cur.total += c.totalMxn
+    cur.count += 1
+    totalsByPartida.set(l.partida_catalog_id, cur)
+  }
+
+  if (partidas.length === 0) {
+    return (
+      <div className="rounded-2xl border border-nauka-card-border bg-white p-12 text-center shadow-nauka-card">
+        <p className="text-sm font-medium text-nauka-dark">
+          Este proyecto aún no tiene partidas de Buy-Out.
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          El catálogo (taxonomía L3) está sembrado para Lote 3.
+        </p>
+      </div>
     )
   }
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-nauka-dark">Partida</span>
-          <PartidaSelect
-            projectId={id}
-            partidas={partidas}
-            selected={selectedPartidaId}
-          />
+  // ── Vista de partida seleccionada ─────────────────────────────────────────
+  if (selectedPartidaId) {
+    const partidaNombre = partidaNombreById.get(selectedPartidaId) ?? "Partida"
+    const catalogs = await loadCatalogs(sb, id, selectedPartidaId)
+    const lineas = allLineas.filter(
+      (l) => l.partida_catalog_id === selectedPartidaId,
+    )
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <Link
+              href={`/proyectos/${id}/buyout/partida`}
+              className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-nauka-dark"
+            >
+              <ArrowLeft className="size-4" />
+              Todas las partidas
+            </Link>
+            <h2 className="text-lg font-semibold text-nauka-dark">
+              {partidaNombre}
+            </h2>
+          </div>
+          {admin ? (
+            <div className="flex flex-col items-end gap-1">
+              <NuevaLineaButton
+                projectId={id}
+                partidaCatalogId={selectedPartidaId}
+                catalogs={catalogs}
+              />
+              <span className="max-w-xs text-right text-xs text-muted-foreground">
+                “Agregar” = concepto nuevo. Para versionar uno existente, usa ↻
+                Actualizar presupuesto en su fila.
+              </span>
+            </div>
+          ) : null}
         </div>
-        {selectedPartidaId && admin ? (
-          <NuevaLineaButton
-            projectId={id}
-            partidaCatalogId={selectedPartidaId}
-            catalogs={catalogs}
-          />
-        ) : null}
-      </div>
-
-      {!selectedPartidaId ? (
-        <div className="rounded-2xl border border-nauka-card-border bg-white p-12 text-center shadow-nauka-card">
-          <p className="text-sm font-medium text-nauka-dark">
-            Selecciona una partida.
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Elige una partida del catálogo para capturar y ver sus líneas en el
-            formato verde de 22 columnas.
-          </p>
-        </div>
-      ) : (
         <LineasTable
           projectId={id}
           lineas={lineas}
           catalogs={catalogs}
           admin={admin}
         />
-      )}
+      </div>
+    )
+  }
+
+  // ── Vista de tarjetas (todas las partidas por capítulo) ───────────────────
+  const groups = buildGroups(chapters, partidas, totalsByPartida)
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-base font-semibold text-nauka-dark">Partidas</h2>
+        <p className="text-sm text-muted-foreground">
+          Elige una partida para capturar y ver sus conceptos (formato verde de
+          22 columnas). El total es la suma de sus conceptos vigentes.
+        </p>
+      </div>
+      <PartidaCards projectId={id} groups={groups} />
     </div>
   )
 }
 
-// --- carga de líneas (item → cotización vigente → renglón) ------------------
+/** Agrupa las partidas por capítulo (orden de capítulos), con sus totales. */
+function buildGroups(
+  chapters: string[],
+  partidas: PartidaCat[],
+  totals: Map<string, { total: number; count: number }>,
+): ChapterGroup[] {
+  const cardOf = (p: PartidaCat) => ({
+    id: p.id,
+    nombre: p.nombre,
+    total: totals.get(p.id)?.total ?? 0,
+    count: totals.get(p.id)?.count ?? 0,
+  })
+  const known = new Set(chapters)
+  const groups: ChapterGroup[] = chapters
+    .map((ch) => ({
+      nombre: ch,
+      partidas: partidas.filter((p) => p.chapter_default === ch).map(cardOf),
+    }))
+    .filter((g) => g.partidas.length > 0)
+  const sinCap = partidas.filter(
+    (p) => !p.chapter_default || !known.has(p.chapter_default),
+  )
+  if (sinCap.length > 0) {
+    groups.push({ nombre: "Sin capítulo", partidas: sinCap.map(cardOf) })
+  }
+  return groups
+}
 
-type Sb = Awaited<ReturnType<typeof createClient>>
+// --- carga de catálogos del formulario --------------------------------------
 
-async function loadLineas(
+async function loadCatalogs(
   sb: Sb,
   projectId: string,
   partidaCatalogId: string,
-  catalogs: Catalogs,
-  partidaNombre: string,
+): Promise<Catalogs> {
+  const [conRes, supRes, unitRes, uomRes, fxRes] = await Promise.all([
+    sb
+      .from("buyout_concepto_catalog")
+      .select("id, nombre")
+      .eq("partida_catalog_id", partidaCatalogId)
+      .is("deleted_at", null)
+      .order("orden"),
+    sb
+      .from("buyout_supplier")
+      .select("id, nombre")
+      .is("deleted_at", null)
+      .order("nombre"),
+    sb
+      .from("buyout_unit")
+      .select("id, nombre")
+      .eq("project_id", projectId)
+      .is("deleted_at", null)
+      .order("nombre"),
+    sb
+      .from("buyout_uom")
+      .select("codigo, nombre")
+      .is("deleted_at", null)
+      .order("orden"),
+    sb
+      .from("buyout_fx")
+      .select("currency, rate")
+      .eq("project_id", projectId)
+      .is("deleted_at", null),
+  ])
+  return {
+    conceptos: (conRes.data ?? []).map((c) => ({
+      id: c.id as string,
+      nombre: c.nombre as string,
+    })) satisfies ConceptoOption[],
+    suppliers: (supRes.data ?? []).map((s) => ({
+      id: s.id as string,
+      nombre: s.nombre as string,
+    })),
+    units: (unitRes.data ?? []).map((u) => ({
+      id: u.id as string,
+      nombre: u.nombre as string,
+    })),
+    uoms: (uomRes.data ?? []).map((u) => ({
+      codigo: u.codigo as string,
+      nombre: u.nombre as string,
+    })),
+    currencies: (fxRes.data ?? []).map((c) => ({
+      currency: c.currency as string,
+      rate: Number(c.rate),
+    })),
+  }
+}
+
+// --- carga de líneas vigentes del proyecto (item → cotización vigente → renglón)
+
+async function loadAllVigenteLines(
+  sb: Sb,
+  projectId: string,
+  fxList: CurrencyOption[],
+  partidaNombreById: Map<string, string>,
 ): Promise<LineaConCalc[]> {
   const { data: itemRows } = await sb
     .from("buyout_item")
-    .select("id")
+    .select("id, partida_catalog_id")
     .eq("project_id", projectId)
-    .eq("partida_catalog_id", partidaCatalogId)
     .is("deleted_at", null)
-  const itemIds = (itemRows ?? []).map((r) => r.id as string)
+  const items = itemRows ?? []
+  const itemPartida = new Map(
+    items.map((i) => [i.id as string, i.partida_catalog_id as string]),
+  )
+  const itemIds = items.map((i) => i.id as string)
   if (itemIds.length === 0) return []
 
   const { data: quoteRows } = await sb
@@ -219,15 +334,17 @@ async function loadLineas(
     .order("created_at")
 
   const rateOf = (cur: string) =>
-    catalogs.currencies.find((c) => c.currency === cur)?.rate ?? 1
+    fxList.find((c) => c.currency === cur)?.rate ?? 1
 
   return (lineRows ?? []).map((l) => {
     const q = quoteById.get(l.quote_id as string)
+    const itemId = (q?.item_id as string) ?? ""
+    const partidaId = itemPartida.get(itemId) ?? ""
     const moneda = (l.moneda as string) ?? "MXN"
     return {
       id: l.id as string,
       quote_id: l.quote_id as string,
-      item_id: (q?.item_id as string) ?? "",
+      item_id: itemId,
       concepto: (l.concepto as string) ?? "",
       detalle: (l.detalle as string | null) ?? null,
       villa_casita: (l.villa_casita as string | null) ?? null,
@@ -247,7 +364,8 @@ async function loadLineas(
       pdf_url: (q?.pdf_url as string | null) ?? null,
       supplier_id: (q?.supplier_id as string | null) ?? null,
       tc: rateOf(moneda),
-      partidaNombre,
+      partidaNombre: partidaNombreById.get(partidaId) ?? "",
+      partida_catalog_id: partidaId,
     }
   })
 }
@@ -302,7 +420,7 @@ function LineasTable({
                 colSpan={TOTAL_COLS}
                 className="px-3 py-10 text-center text-sm text-muted-foreground"
               >
-                Sin líneas. Usa “Agregar línea” para capturar la primera.
+                Sin líneas. Usa “Agregar” para capturar el primer concepto.
               </td>
             </tr>
           ) : (
@@ -400,6 +518,11 @@ function LineaRowCells({
           <BuyoutPdfCell pdfPath={linea.pdf_url} />
           {admin ? (
             <>
+              <UpdateBudgetButton
+                projectId={projectId}
+                linea={linea}
+                catalogs={catalogs}
+              />
               <EditLineaButton
                 projectId={projectId}
                 linea={linea}

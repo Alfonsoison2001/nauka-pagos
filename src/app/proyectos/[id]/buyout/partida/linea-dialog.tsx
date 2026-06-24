@@ -14,17 +14,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import type {
+  ConceptoOption,
   CurrencyOption,
   LineaRow,
   SupplierOption,
   UnitOption,
   UomOption,
 } from "./actions"
-import { createLinea, updateLinea } from "./actions"
+import { addBudgetVersion, createLinea, updateLinea } from "./actions"
 import type { FormValues } from "./linea-form"
-import { CREAR, formSchema, LineaFormFields, NONE } from "./linea-form"
+import { CREAR, formSchema, LineaFormFields, NONE, OTRO } from "./linea-form"
 
 export type Catalogs = {
+  conceptos: ConceptoOption[]
   suppliers: SupplierOption[]
   units: UnitOption[]
   uoms: UomOption[]
@@ -49,16 +51,37 @@ type EditProps = {
   onOpenChange: (open: boolean) => void
 }
 
-type Props = NewProps | EditProps
+// "version" = Actualizar presupuesto: nueva versión sobre el mismo concepto.
+type VersionProps = {
+  mode: "version"
+  projectId: string
+  linea: LineaRow
+  catalogs: Catalogs
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+type Props = NewProps | EditProps | VersionProps
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+/** Mapea el concepto guardado a la opción del dropdown, o a "Otro…" si es libre. */
+function conceptoDefaults(
+  concepto: string,
+  conceptos: ConceptoOption[],
+): { concepto: string; concepto_otro: string } {
+  return conceptos.some((c) => c.nombre === concepto)
+    ? { concepto, concepto_otro: "" }
+    : { concepto: OTRO, concepto_otro: concepto }
 }
 
 function getDefaults(props: Props): FormValues {
   if (props.mode === "new") {
     return {
       concepto: "",
+      concepto_otro: "",
       detalle: "",
       unit_id: NONE,
       piso: "",
@@ -80,8 +103,10 @@ function getDefaults(props: Props): FormValues {
   const l = props.linea
   const unitId =
     props.catalogs.units.find((u) => u.nombre === l.villa_casita)?.id ?? NONE
+  const cc = conceptoDefaults(l.concepto, props.catalogs.conceptos)
   return {
-    concepto: l.concepto,
+    concepto: cc.concepto,
+    concepto_otro: cc.concepto_otro,
     detalle: l.detalle ?? "",
     unit_id: unitId,
     piso: l.piso ?? "",
@@ -97,8 +122,30 @@ function getDefaults(props: Props): FormValues {
     notas: l.notas ?? "",
     madurez: l.kind,
     contratado: l.contratado ? "contratado" : "no_contratado",
-    quote_date: l.quote_date,
+    // Una versión nueva se fecha HOY; un edit conserva la fecha.
+    quote_date: props.mode === "version" ? todayISO() : l.quote_date,
   }
+}
+
+const COPY: Record<
+  Props["mode"],
+  { title: string; desc: string; cta: string }
+> = {
+  new: {
+    title: "Agregar línea",
+    desc: "Crea un concepto NUEVO en esta partida (un renglón nuevo).",
+    cta: "Guardar línea",
+  },
+  edit: {
+    title: "Editar línea",
+    desc: "Corrige la línea vigente en sitio (no crea versión).",
+    cta: "Actualizar",
+  },
+  version: {
+    title: "Actualizar presupuesto",
+    desc: "Nueva versión fechada del MISMO concepto; la anterior se conserva en el historial.",
+    cta: "Guardar versión",
+  },
 }
 
 export function LineaDialog(props: Props) {
@@ -122,6 +169,16 @@ export function LineaDialog(props: Props) {
   }
 
   const onSubmit = form.handleSubmit((v) => {
+    // Concepto: en "Otro…" exige el nombre escrito (salvo version, que lo fija el server).
+    let concepto = v.concepto
+    if (props.mode !== "version" && v.concepto === OTRO) {
+      const otro = v.concepto_otro?.trim()
+      if (!otro) {
+        form.setError("concepto_otro", { message: "Escribe el concepto" })
+        return
+      }
+      concepto = otro
+    }
     if (v.supplier_id === CREAR && !v.supplier_nombre?.trim()) {
       form.setError("supplier_nombre", {
         message: "Nombre del proveedor requerido",
@@ -134,7 +191,10 @@ export function LineaDialog(props: Props) {
       const put = (k: string, val?: string) => {
         if (val !== undefined && val !== "") fd.append(k, val)
       }
-      put("concepto", v.concepto)
+      put(
+        "concepto",
+        props.mode === "version" ? props.linea.concepto : concepto,
+      )
       put("detalle", v.detalle)
       if (v.unit_id && v.unit_id !== NONE) put("unit_id", v.unit_id)
       put("piso", v.piso)
@@ -155,9 +215,11 @@ export function LineaDialog(props: Props) {
       if (pdfFile) fd.append("pdf", pdfFile)
 
       let result: { error: string } | { ok: true }
-      if (mode === "new") {
+      if (props.mode === "new") {
         fd.append("partida_catalog_id", props.partidaCatalogId)
         result = await createLinea(projectId, fd)
+      } else if (props.mode === "version") {
+        result = await addBudgetVersion(props.linea.item_id, projectId, fd)
       } else {
         result = await updateLinea(
           props.linea.id,
@@ -174,29 +236,31 @@ export function LineaDialog(props: Props) {
     })
   })
 
-  const isNew = mode === "new"
-  const hasPdf = mode === "edit" ? !!props.linea.pdf_url : false
+  const copy = COPY[mode]
+  const hasPdf = props.mode === "new" ? false : !!props.linea.pdf_url
+  const conceptoName =
+    props.mode === "version" ? props.linea.concepto : undefined
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false} className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isNew ? "Agregar línea" : "Editar línea"}</DialogTitle>
-          <DialogDescription>
-            Una línea por concepto (formato verde de 22 columnas). El sistema
-            calcula importe, IVA y total MXN.
-          </DialogDescription>
+          <DialogTitle>{copy.title}</DialogTitle>
+          <DialogDescription>{copy.desc}</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} noValidate>
           <LineaFormFields
             control={form.control}
             errors={errors}
+            conceptos={catalogs.conceptos}
             suppliers={catalogs.suppliers}
             units={catalogs.units}
             uoms={catalogs.uoms}
             currencies={catalogs.currencies}
             pdfInputRef={pdfRef}
             hasPdf={hasPdf}
+            conceptoLocked={mode === "version"}
+            conceptoName={conceptoName}
           />
           {submitError ? (
             <p className="mt-3 text-sm text-destructive" role="alert">
@@ -212,11 +276,7 @@ export function LineaDialog(props: Props) {
               Cancelar
             </DialogClose>
             <Button type="submit" disabled={pending}>
-              {pending
-                ? "Guardando..."
-                : isNew
-                  ? "Guardar línea"
-                  : "Actualizar"}
+              {pending ? "Guardando..." : copy.cta}
             </Button>
           </DialogFooter>
         </form>
