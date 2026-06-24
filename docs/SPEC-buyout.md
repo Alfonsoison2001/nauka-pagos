@@ -147,6 +147,10 @@ capítulo → total. `$/m² = total ÷ area_int`. `USD = total ÷ TC`. Mes = fil
    Modos: **Vigente** / **Evolución** / **Contratado vs No** / **Qué falta**.
    - **Evolución** = columnas por mes + Dif, donde cada mes es un **cierre manual** ("toma la
      foto" del total vigente por partida). El admin puede **reabrir/corregir** un mes cerrado.
+     - **Conceptos/partidas nuevos:** si un concepto se agrega después, en los meses
+       **anteriores a su creación aparece en 0** (la rejilla alinea todas las filas en todos
+       los meses y rellena 0 donde aún no existía). Así la comparación mes a mes nunca se
+       descuadra ni deja huecos.
    - **Contratado vs No** = % avance **por dinero** (Σ contratado ÷ Σ total).
    - **Qué falta** = nota de **texto libre** por partida no contratada (sin categorías ni
      gates).

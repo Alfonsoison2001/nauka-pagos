@@ -47,6 +47,38 @@
 
 ---
 
+## Presupuesto base por partida (col `PRESUPUESTO IZ MXN BASE`, Lote 3, 15-jun)
+
+> Sembrar como base fija por partida (MXN). Los 0 son partidas sin base separada (incluidas en
+> otra o aún sin presupuestar) — sembrar 0, editable.
+
+| Partida | Base MXN |
+|---|---|
+| ARQUITECTURA | 343,360 |
+| TRAMITES LOCALES | 0 |
+| INGENIERIAS Y TOPOGRAFIA | 0 |
+| INDIRECTOS DE OBRA | 3,608,000 |
+| OBRA CIVIL | 38,299,999.97 |
+| ALBAÑILERIA Y BARDAS | 0 |
+| IMPERMEABILIZACION | 1,086,537.0838 |
+| INSTALACIONES ELECTRICAS | 10,480,775 |
+| INSTALACIONES HIDRAULICAS Y GAS | 6,874,023.7812 |
+| AUTOMATIZACION Y CONTROL ILUMINACION | 5,752,305.4284 |
+| AIRE ACONDICIONADO Y EXTRACCION | 5,389,000.3072 |
+| ILUMINACION | 2,630,880 |
+| ACABADOS | 1,486,674.21084 |
+| HERRERIA | 2,830,243.2028 |
+| SUMINISTRO Y COLOCACION DE MARMOL | 3,607,205.38123506 |
+| MADERA DE INGENIERIA | 3,803,911.19394432 |
+| VIDRIOS Y CANCELES | 9,688,739.92 |
+| COCINAS | 7,641,545 |
+| GRIFERIA Y ACCESORIOS DE BAÑO | 1,337,425.2 |
+| CARPINTERIAS | 17,648,030.7728 |
+| ALBERCAS | 5,125,627.04 |
+| JARDINERIA Y RIEGO | 1,162,900 |
+| PISO HIDRONICO | 0 |
+| CASITA | 0 |
+
 ### Notas de reconciliación (vs lo sembrado en Slice 1)
 - 8 capítulos: **coinciden**.
 - Partidas: reconciliar a estas 24 exactas. Diferencias vs el seed del glosario:
