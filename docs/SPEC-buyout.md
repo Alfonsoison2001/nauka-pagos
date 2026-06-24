@@ -106,31 +106,44 @@ renglón → cotización (Σ renglones) → item (cotización vigente, a MXN ví
 capítulo → total. `$/m² = total ÷ area_int`. `USD = total ÷ TC`. Mes = filtro por
 `quote_date`.
 
-## 5. Importador (una partida a la vez)
+## 5. Captura de datos (V1 = MANUAL, no import de Excel)
 
-- **Un tab/partida por import.** Subes el `.xlsx` y eliges UN tab de partida para cargar;
-  repites por partida. (No carga masiva del libro completo en V1.)
-- **Grano V1 = filas de la verde** (nivel subcategoría), tomando **valores ya calculados**.
-  El desglose fino de los PU = capa opcional posterior.
-- Flujo **parsea → PREVIEW (te muestra qué va a crear) → confirmas**. Nunca silencioso.
-- **Agrupa por proveedor (col H)**: cada proveedor del tab = una cotización; sus filas =
-  renglones; a cada cotización se le puede colgar su **PDF (opcional)**.
-- Filas `PARAMETRICO` (proveedor NA) → cotización `kind=parametrico`.
-- **Re-subir una partida ya cargada = versión nueva fechada** (conserva la anterior; la nueva
-  entra como vigente sujeta a confirmación). Cada import = un `import_batch` fechado → de ahí
-  salen histórico y evolución.
-- **Proveedores**: empata por nombre normalizado contra el catálogo global; si es nuevo lo
-  crea; admin puede fusionar duplicados después.
-- **Presupuesto base**: se importa una vez de la columna `PRESUPUESTO IZ MXN BASE` del
-  tablero, como referencia fija por partida (contra la que compara el DIF).
-- Validador estricto: rechaza/marca tabs con columnas faltantes o formato roto.
-- **Verificación "cuadra al centavo"**: el total reconstruido debe empatar con el `Total`
-  del tab (estándar del proyecto, como L44 en Pagos).
+> **Cambio de enfoque (23-jun):** V1 NO parsea el Excel. El Excel sigue siendo el master del
+> detalle fino; el sistema captura el **resumen** a mano. Esto quita el mayor riesgo (parsear
+> las 22 col, sobre todo las que jalan de tabs PU) y acelera V1. El parseo del Excel queda
+> como capa **opcional/futura**; la tabla `buyout_line` ya existe, solo no se llena en bloque.
+
+- **Grano = una línea por concepto** (subcategoría), capturada a mano. No se mete el detalle
+  itemizado (cada ventana/placa); para eso está el PDF.
+- **Formato de las 22 columnas (se mantienen).** Al agregar una línea, el usuario llena los
+  campos de entrada del formato verde: concepto (del glosario) · detalle · villa/casita · piso
+  · depto · proveedor · unidad · cantidad · moneda · $ unitario · sobrecosto% · iva% · notas ·
+  estado madurez (paramétrico/ppto) · estado contratación (contratado/no). El sistema
+  **calcula** importe, $IVA, importe total, TC y total MXN (igual que las fórmulas del Excel).
+- **PDF a nivel cotización (proveedor).** El PDF del ppto se adjunta a la cotización; varias
+  líneas del mismo proveedor comparten su PDF. PDF **opcional/progresivo**.
+- **Paramétrico:** si no hay proveedor/cotización real, la línea se marca `paramétrico`
+  (estimado tecleado). Cuando llega la cotización real, se agrega una versión `ppto` nueva
+  fechada y se marca vigente → el concepto pasa de paramétrico a ppto sin perder historial.
+- **Proveedores:** se eligen del catálogo global; si es nuevo, se crea al vuelo.
+- **Presupuesto base:** se captura/edita por partida como referencia fija (de la columna
+  `PRESUPUESTO IZ MXN BASE` del tablero) contra la que compara el DIF.
+- **Re-captura de un concepto = versión nueva fechada** (conserva la anterior; la nueva entra
+  como vigente sujeta a confirmación) → de ahí salen historial y evolución.
+
+> Import de Excel (parseo del tab con preview + "cuadra al centavo") = **diferido a una fase
+> futura** si la captura manual se vuelve pesada. No es V1.
 
 ## 6. Pantallas (3 espacios + agregar)
 
+> **Énfasis del módulo: es principalmente INFORMATIVO** (un tablero para *ver*, no tanto para
+> capturar). Las señales que deben saltar a la vista: **última actualización / fecha** de cada
+> ppto, **contratado vs no contratado**, **ppto vs paramétrico**, e **historial de pptos**.
+
 1. **Resumen** (formato BUY OUT): capítulos → partidas con Concepto · Proveedor · Ppto Base ·
-   Ppto [mes] · Dif · $/m² · Estado, subtotales, TOTAL, y $/m² + USD/m² al pie.
+   Ppto [mes] · Dif · $/m² · **Última actualización (fecha de la cotización vigente)** ·
+   **Estado** (muestra los 2 ejes: ppto/paramétrico + contratado/no), subtotales, TOTAL, y
+   $/m² + USD/m² al pie.
    Modos: **Vigente** / **Evolución** / **Contratado vs No** / **Qué falta**.
    - **Evolución** = columnas por mes + Dif, donde cada mes es un **cierre manual** ("toma la
      foto" del total vigente por partida). El admin puede **reabrir/corregir** un mes cerrado.
@@ -172,8 +185,9 @@ en Buy-Out; el 4º en Pagos; el **3º es el cruce**.
 
 1. **Esquema + seeds** (local): tablas `buyout_*`, RLS por rol (igual que Pagos), triggers
    audit, seed de catálogos. Verde local.
-2. **Importador con preview**: subir tab .xlsx → parsear → preview → confirmar → crea
-   cotizaciones+renglones+PDF por proveedor. Validar "cuadra al centavo" contra el tab.
+2. **Captura manual** (en la pantalla Partida): agregar cotización (proveedor + fecha + estado
+   + PDF) y línea(s) en el formato de 22 columnas, una por concepto; el sistema calcula las
+   columnas de fórmula. Escribe a `buyout_quote` + `buyout_line`. (Import de Excel = futuro.)
 3. **Resumen** (formato BUY OUT) con rollup, $/m², modos.
 4. **Estados** (madurez/contratado) + **"qué falta"**.
 5. **Subcategoría/historial** + comparativo + marcar contratado (+ botón manual a Pagos).
@@ -186,8 +200,11 @@ Regla de regresión de CLAUDE.md aplica. Cuando Alfonso apruebe → push + migra
 
 - **Aislamiento:** rama `feat/buyout` **sin push** + tablas en **base real pero invisibles**
   (opción B). Arrancar por **Lote 3**.
-- **Captura:** el **Excel sigue siendo el master**; la app importa para tener la referencia
-  de pptos/contratos y **registrar pagos**. No se muda la captura a la app en V1.
+- **Captura:** el **Excel sigue siendo el master** del detalle fino. V1 = **captura MANUAL**
+  de una línea-resumen por concepto (en formato de 22 col, fórmulas calculadas) + **PDF** del
+  ppto a nivel cotización. **NO se parsea el Excel en V1** (eso quita el mayor riesgo); el
+  import del tab queda diferido a futuro. La app guarda la referencia de pptos/contratos y
+  **registra pagos**.
 - **Proveedores globales** · **BF multi-depto en V1** (esquema unidad + UI condicional).
 - **Estado de 2 ejes** (madurez + contratación) · paramétrico = cotización `kind=parametrico`.
 - **Cruce a Pagos: MANUAL en V1** (botón "ligar/crear contrato" al marcar contratado; ahí se
