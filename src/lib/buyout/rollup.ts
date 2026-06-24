@@ -212,3 +212,29 @@ export async function loadVigenteLines(
     }
   })
 }
+
+/**
+ * Agregado VIGENTE por partida del proyecto: `partida_catalog_id → PartidaAgg`.
+ * Carga las líneas vigentes una sola vez y las agrupa/agrega por partida. Fuente
+ * ÚNICA del total MXN vigente por partida — la usan el Resumen (columna Ppto / mes
+ * en curso) y el cierre de mes (la "foto") para que NUNCA difieran. Solo incluye
+ * partidas que tienen al menos una línea vigente; el llamador rellena 0 para el
+ * resto (ver SPEC-buyout.md §6, conceptos nuevos en 0).
+ */
+export async function loadPartidaAggs(
+  sb: Sb,
+  projectId: string,
+  fxList: CurrencyOption[],
+  partidaNombreById: Map<string, string>,
+): Promise<Map<string, PartidaAgg>> {
+  const lines = await loadVigenteLines(sb, projectId, fxList, partidaNombreById)
+  const byPartida = new Map<string, VigenteLine[]>()
+  for (const l of lines) {
+    const list = byPartida.get(l.partida_catalog_id) ?? []
+    list.push(l)
+    byPartida.set(l.partida_catalog_id, list)
+  }
+  const aggs = new Map<string, PartidaAgg>()
+  for (const [pid, list] of byPartida) aggs.set(pid, aggregateLines(list))
+  return aggs
+}

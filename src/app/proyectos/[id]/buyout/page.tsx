@@ -3,10 +3,17 @@ import { notFound } from "next/navigation"
 import { Fragment } from "react"
 import { isAdmin } from "@/lib/auth/roles"
 import {
+  currentPeriodo,
+  loadClosedMonths,
+  loadSnapshots,
+  periodoLabel,
+  periodoShort,
+} from "@/lib/buyout/month-close"
+import {
   aggregateLines,
   type Contratacion,
   difPct,
-  loadVigenteLines,
+  loadPartidaAggs,
   type Maturity,
   type PartidaAgg,
 } from "@/lib/buyout/rollup"
@@ -14,6 +21,10 @@ import { formatDate } from "@/lib/format/fecha"
 import { createClient } from "@/lib/supabase/server"
 import { cn, formatMXN } from "@/lib/utils"
 import { BaseCell } from "./base-cell"
+import { CerrarMesButton } from "./cerrar-mes-button"
+import { DifText } from "./dif-text"
+import { type EvoChapter, EvolucionTable } from "./evolucion-table"
+import { type ResumenMode, ResumenModeToggle } from "./resumen-mode-toggle"
 
 export const metadata = { title: "Buy-Out · Resumen" }
 
@@ -54,10 +65,14 @@ type ChapterView = {
  */
 export default async function BuyoutResumenPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ modo?: string }>
 }) {
   const { id } = await params
+  const { modo: modoParam } = await searchParams
+  const modo: ResumenMode = modoParam === "evolucion" ? "evolucion" : "vigente"
   const sb = await createClient()
 
   const { data: project } = await sb
@@ -120,18 +135,14 @@ export default async function BuyoutResumenPage({
     ]),
   )
 
-  // Rollup: líneas vigentes → agregado por partida (misma fuente que Partida).
+  // Rollup: líneas vigentes → agregado por partida (misma fuente que Partida y
+  // que el cierre de mes → nunca difieren).
   const partidaNombreById = new Map(partidas.map((p) => [p.id, p.nombre]))
-  const lines = await loadVigenteLines(sb, id, fxList, partidaNombreById)
-  const linesByPartida = new Map<string, typeof lines>()
-  for (const l of lines) {
-    const list = linesByPartida.get(l.partida_catalog_id) ?? []
-    list.push(l)
-    linesByPartida.set(l.partida_catalog_id, list)
-  }
+  const aggs = await loadPartidaAggs(sb, id, fxList, partidaNombreById)
+  const emptyAgg = aggregateLines([])
 
   const partidaViews: PartidaView[] = partidas.map((p) => {
-    const agg = aggregateLines(linesByPartida.get(p.id) ?? [])
+    const agg = aggs.get(p.id) ?? emptyAgg
     const base = baseByPartida.get(p.id) ?? 0
     return {
       id: p.id,
@@ -164,95 +175,176 @@ export default async function BuyoutResumenPage({
     )
   }
 
+  // Cierre mensual / Evolución (SPEC §6): meses cerrados + fotos congeladas.
+  const periodoActual = currentPeriodo()
+  const closedMonths = await loadClosedMonths(sb, id)
+  const currentClosed = closedMonths.some((m) => m.periodo === periodoActual)
+  const evoMonths = closedMonths.map((m) => ({
+    id: m.id,
+    periodo: m.periodo,
+    label: periodoLabel(m.periodo),
+    short: periodoShort(m.periodo),
+  }))
+  const snapshotByMonth =
+    modo === "evolucion"
+      ? await loadSnapshots(
+          sb,
+          closedMonths.map((m) => m.id),
+        )
+      : new Map<string, Map<string, number>>()
+  const evoChapters: EvoChapter[] = chapterViews.map((ch) => ({
+    nombre: ch.nombre,
+    base: ch.base,
+    total: ch.total,
+    dif: ch.dif,
+    partidas: ch.partidas.map((p) => ({
+      id: p.id,
+      nombre: p.nombre,
+      base: p.base,
+      total: p.agg.total,
+      dif: p.dif,
+    })),
+  }))
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
-        <table className="w-full text-sm tabular-nums">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
-              <th className="px-3 py-2.5 text-left">Concepto</th>
-              <th className="px-3 py-2.5 text-left">Proveedor</th>
-              <th className="px-3 py-2.5 text-right">Ppto Base</th>
-              <th className="px-3 py-2.5 text-right">Ppto</th>
-              <th className="px-3 py-2.5 text-right">Dif</th>
-              <th className="px-3 py-2.5 text-right">$/m²</th>
-              <th className="px-3 py-2.5 text-left">Última actualización</th>
-              <th className="px-3 py-2.5 text-left">
-                Estado{" "}
-                <span className="font-normal normal-case tracking-normal text-white/40">
-                  (madurez · contratación)
-                </span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {chapterViews.map((ch) => (
-              <ChapterGroup
-                key={ch.nombre}
-                chapter={ch}
-                projectId={id}
-                areaInt={areaInt}
-                admin={admin}
-              />
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="bg-nauka-dark text-white">
-              <td className="px-3 py-2.5 font-semibold" colSpan={2}>
-                TOTAL
-              </td>
-              <td className="px-3 py-2.5 text-right font-semibold">
-                {formatMXN(totalBase)}
-              </td>
-              <td className="px-3 py-2.5 text-right font-semibold">
-                {formatMXN(total)}
-              </td>
-              <td className="px-3 py-2.5 text-right font-semibold">
-                <DifText dif={totalDif} onDark />
-              </td>
-              <td className="px-3 py-2.5 text-right font-semibold">
+      {/* Toolbar: toggle Vigente/Evolución + (admin) Cerrar mes en curso. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ResumenModeToggle modo={modo} />
+        {admin ? (
+          <CerrarMesButton
+            projectId={id}
+            periodoShort={periodoShort(periodoActual)}
+            yaCerrado={currentClosed}
+          />
+        ) : null}
+      </div>
+
+      {modo === "evolucion" ? (
+        <>
+          {evoMonths.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-nauka-card-border bg-white px-4 py-3 text-sm text-muted-foreground">
+              Aún no hay meses cerrados.{" "}
+              {admin
+                ? "Usa “Cerrar mes” para congelar la foto del mes en curso y empezar el comparativo."
+                : "El administrador puede cerrar el mes para empezar el comparativo."}
+            </p>
+          ) : null}
+          <EvolucionTable
+            projectId={id}
+            chapters={evoChapters}
+            months={evoMonths}
+            snapshotByMonth={snapshotByMonth}
+            enCursoLabel={periodoLabel(periodoActual, true)}
+            totalBase={totalBase}
+            total={total}
+            totalDif={totalDif}
+            admin={admin}
+          />
+          <p className="text-sm text-muted-foreground">
+            Cada columna de mes es la foto congelada del total vigente por
+            partida al cerrarlo;{" "}
+            <span className="font-medium text-nauka-dark">
+              {periodoLabel(periodoActual, true)}
+            </span>{" "}
+            es el total vivo de hoy. Dif compara el Ppto Base contra el mes más
+            reciente (el en curso). Donde un mes no tenía una partida, se
+            muestra $0 para alinear la rejilla.
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
+            <table className="w-full text-sm tabular-nums">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
+                  <th className="px-3 py-2.5 text-left">Concepto</th>
+                  <th className="px-3 py-2.5 text-left">Proveedor</th>
+                  <th className="px-3 py-2.5 text-right">Ppto Base</th>
+                  <th className="px-3 py-2.5 text-right">Ppto</th>
+                  <th className="px-3 py-2.5 text-right">Dif</th>
+                  <th className="px-3 py-2.5 text-right">$/m²</th>
+                  <th className="px-3 py-2.5 text-left">
+                    Última actualización
+                  </th>
+                  <th className="px-3 py-2.5 text-left">
+                    Estado{" "}
+                    <span className="font-normal normal-case tracking-normal text-white/40">
+                      (madurez · contratación)
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {chapterViews.map((ch) => (
+                  <ChapterGroup
+                    key={ch.nombre}
+                    chapter={ch}
+                    projectId={id}
+                    areaInt={areaInt}
+                    admin={admin}
+                  />
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-nauka-dark text-white">
+                  <td className="px-3 py-2.5 font-semibold" colSpan={2}>
+                    TOTAL
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-semibold">
+                    {formatMXN(totalBase)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-semibold">
+                    {formatMXN(total)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-semibold">
+                    <DifText dif={totalDif} onDark />
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-semibold">
+                    {costoM2 != null ? formatMXN(costoM2) : "—"}
+                  </td>
+                  <td className="px-3 py-2.5" />
+                  <td className="px-3 py-2.5" />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* Pie: $/m² interior + USD/m² (spec §6). */}
+          <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm text-muted-foreground">
+            <span>
+              $/m² interior:{" "}
+              <span className="font-medium tabular-nums text-nauka-dark">
                 {costoM2 != null ? formatMXN(costoM2) : "—"}
-              </td>
-              <td className="px-3 py-2.5" />
-              <td className="px-3 py-2.5" />
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+              </span>
+              {areaInt
+                ? ` · área interior ${areaFormatter.format(areaInt)} m²`
+                : " · área interior —"}
+            </span>
+            <span>
+              USD/m²:{" "}
+              <span className="font-medium tabular-nums text-nauka-dark">
+                {usdM2 != null ? usdFormatter.format(usdM2) : "—"}
+              </span>
+              {usdRate ? ` · TC ${usdRate}` : " · TC —"}
+            </span>
+          </div>
 
-      {/* Pie: $/m² interior + USD/m² (spec §6). */}
-      <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm text-muted-foreground">
-        <span>
-          $/m² interior:{" "}
-          <span className="font-medium tabular-nums text-nauka-dark">
-            {costoM2 != null ? formatMXN(costoM2) : "—"}
-          </span>
-          {areaInt
-            ? ` · área interior ${areaFormatter.format(areaInt)} m²`
-            : " · área interior —"}
-        </span>
-        <span>
-          USD/m²:{" "}
-          <span className="font-medium tabular-nums text-nauka-dark">
-            {usdM2 != null ? usdFormatter.format(usdM2) : "—"}
-          </span>
-          {usdRate ? ` · TC ${usdRate}` : " · TC —"}
-        </span>
-      </div>
-
-      {/* Leyenda: el Estado son 2 ejes (madurez arriba · contratación abajo). */}
-      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <EstadoCell madurez="parcial" contratacion="parcial" />
-        <span>
-          Estado · 2 ejes:{" "}
-          <span className="font-medium text-nauka-dark">arriba</span> madurez
-          (Paramétrico / Ppto / Parcial),{" "}
-          <span className="font-medium text-nauka-dark">abajo</span>{" "}
-          contratación (Contratado / No contratado / Parcial).{" "}
-          <span className="font-medium text-nauka-dark">Parcial</span> = la
-          partida mezcla estados entre sus conceptos.
-        </span>
-      </div>
+          {/* Leyenda: el Estado son 2 ejes (madurez arriba · contratación abajo). */}
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <EstadoCell madurez="parcial" contratacion="parcial" />
+            <span>
+              Estado · 2 ejes:{" "}
+              <span className="font-medium text-nauka-dark">arriba</span>{" "}
+              madurez (Paramétrico / Ppto / Parcial),{" "}
+              <span className="font-medium text-nauka-dark">abajo</span>{" "}
+              contratación (Contratado / No contratado / Parcial).{" "}
+              <span className="font-medium text-nauka-dark">Parcial</span> = la
+              partida mezcla estados entre sus conceptos.
+            </span>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -394,27 +486,6 @@ function proveedorLabel(provs: string[]): string {
   if (provs.length === 0) return "—"
   if (provs.length === 1) return provs[0]
   return "Varios"
-}
-
-/** DIF formateado como % con signo. base=0 / sin datos → "—". */
-function DifText({ dif, onDark }: { dif: number | null; onDark?: boolean }) {
-  if (dif === null) {
-    return (
-      <span className={onDark ? "text-white/50" : "text-muted-foreground"}>
-        —
-      </span>
-    )
-  }
-  const pct = dif * 100
-  const text = `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`
-  if (onDark) return <span>{text}</span>
-  const cls =
-    Math.abs(pct) < 0.05
-      ? "text-muted-foreground"
-      : pct > 0
-        ? "text-red-600"
-        : "text-emerald-600"
-  return <span className={cls}>{text}</span>
 }
 
 const ESTADO_SLOT_CLS =
