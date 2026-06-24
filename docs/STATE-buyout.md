@@ -8,7 +8,10 @@
 ✅ **Slice 1 (§9.1) COMPLETO** — esquema `buyout_*` + catálogos sembrados de Lote 3.
 ✅ **Slice 2a COMPLETO** — armazón navegable de la sección Buy-Out (ruta `/buyout` + 3
    pantallas vacías que LEEN de `buyout_*`, sin importador y sin escribir datos).
-⏸️ **PAUSA para que Alfonso revise el layout** antes de arrancar el Slice 2b (importador).
+✅ **Slice 2b COMPLETO** — **captura MANUAL** de líneas en la pantalla Partida (sin parseo de
+   Excel, §5). Escribe a `buyout_item → buyout_quote → buyout_line`, con cálculos tipo Excel,
+   PDF opcional por cotización y editar/borrar (soft-delete) admin-only.
+⏸️ **PAUSA para que Alfonso pruebe agregando líneas reales** antes de la Fase 3 (rollup al Resumen).
 
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
@@ -122,15 +125,59 @@ de Pagos siguen idénticas en el manifest). Smoke test en dev: las 3 rutas respo
 /login** igual que `/resumen` (ruteo + middleware OK, sin 500). **El render visual de las
 tablas vacías queda detrás de auth/RLS → es justo lo que Alfonso revisa en su sesión.**
 
+## Slice 2b — captura manual de líneas (hecho 2026-06-24)
+
+Captura MANUAL en la pantalla Partida (NO se parsea Excel; §5 del spec). Escribe a la base.
+
+### Archivos nuevos (todo bajo `buyout/partida/` + `lib/buyout/`; cero Pagos tocado)
+
+- `src/lib/buyout/calc.ts` — fórmulas puras del formato verde (M=J×L, O=M×N, Q=(M+O)×P,
+  R=M+O+Q, T=R×TC). Compartidas por la página (display) y la action (monto). **Verificadas**
+  con casos MXN y USD (`node --experimental-strip-types`).
+- `…/partida/actions.ts` — Server Actions `createLinea` / `updateLinea` / `deleteLinea` +
+  `getSignedBuyoutPdfUrl`. Zod cliente+servidor. `createLinea`: resuelve proveedor (global,
+  crea al vuelo), capítulo y unidad; **find-or-create `buyout_item`** por (proyecto, partida,
+  concepto); baja la cotización vigente anterior (índice único 1-vigente) e inserta
+  `buyout_quote` nueva **vigente** (madurez + contratado + fecha + monto_sin_iva + iva) →
+  `buyout_line` (22 col). PDF opcional al bucket `proyectos` prefijo **`buyout/`**
+  (`{proyecto}/buyout/{quoteId}.pdf`, admin-only por la RLS existente, sin migración).
+  `deleteLinea` = soft-delete de línea+cotización; promueve la versión previa o da de baja el
+  item. Escritura **admin-only** (RLS `is_admin()`).
+- `…/partida/linea-form.tsx` — campos RHF+Zod del formato verde + **preview en vivo** de los
+  cálculos (importe / $IVA / importe total / total MXN) según moneda y TC.
+- `…/partida/linea-dialog.tsx` — dialog new/edit (mapea sentinelas, arma el FormData).
+- `…/partida/nueva-linea-button.tsx` · `edit-linea-button.tsx` · `delete-linea-button.tsx` ·
+  `buyout-pdf-cell.tsx` · `partida-select.tsx` (selector por `?partida=` searchParam).
+- `…/partida/page.tsx` (reescrito desde el armazón) — selector de partida + (admin) "Agregar
+  línea" + tabla de **22 columnas** con las líneas vigentes, cálculos derivados, badges de los
+  2 ejes (madurez + contratación) y fila **Total** (Σ total MXN) + editar/borrar.
+
+### Decisiones / simplificaciones de 2b
+
+- **1 línea = 1 concepto (item) = 1 cotización vigente = 1 renglón.** La tabla muestra solo
+  las líneas de la **cotización vigente** (`is_selected`); re-capturar el mismo concepto crea
+  una **versión nueva fechada** (la anterior queda en la base para historial/Fase 5).
+- **Item por (proyecto, partida, concepto).** Mismo concepto re-capturado = versión, no item
+  nuevo. (El cruce con la dimensión Villa/Casita se afina si hace falta.)
+- **PDF por cotización** (un PDF por quote en V1; "varias líneas comparten PDF" = futuro).
+- **Presupuesto base por partida** (col `PRESUPUESTO IZ MXN BASE`) aún NO se captura aquí
+  (entra con el Resumen, Fase 3).
+
+### Gate local (verde)
+
+`pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (las 3 rutas buyout
+compilan; las 6 de Pagos idénticas en el manifest). Smoke test dev: `/buyout/partida` y
+`?partida=…` → **307 → /login** (routing + searchParams OK, sin 500). Cálculos verificados con
+el módulo real. **Agregar línea / subir PDF / RLS admin** quedan tras login → es lo que Alfonso
+prueba en su sesión.
+
 ## Qué sigue
 
-- **Slice 2b — Importador con preview (§5):** subir un tab `.xlsx` de una partida → parsear →
-  **preview** → confirmar → crear `buyout_quote` + `buyout_line` agrupados por proveedor (col
-  H), con PDF opcional. Validar "cuadra al centavo" contra el `Total` del tab. Re-subir =
-  versión nueva fechada (`buyout_import_batch`). Aquí se activa el botón "Importar" de la
-  pantalla Partida y empiezan a poblarse las tablas (los totales/$ del Resumen dejan de ser 0).
-- Luego: Slice 3 Resumen (rollup + $/m² + modos) · Slice 4 estados + qué falta · Slice 5
-  historial/comparativo + marcar contratado (botón manual a Pagos) · Slice 6 carga real de L3
-  + cuadre.
+- **Fase 3 — Resumen (rollup):** que los totales/$/m² del Resumen dejen de ser 0 sumando
+  (SUMIFS) las líneas vigentes por partida → capítulo → total; columnas por mes, $/m² + USD/m².
+  Capturar el **presupuesto base** por partida (referencia del DIF).
+- Luego: Fase 4 estados + "qué falta" · Fase 5 historial/comparativo + marcar contratado
+  (botón manual a Pagos) · Fase 6 carga real de L3 + cuadre.
+- **Import de Excel = diferido** (futuro opcional, §5); la captura es manual en V1.
 - **Pendiente de datos:** reconciliar las partidas canónicas (~26) y, si aplica, las áreas
   Villa/Casita, contra `NAUKA - BUY OUT L3 150626.xlsx`.
