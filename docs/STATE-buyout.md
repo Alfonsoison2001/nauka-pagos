@@ -17,8 +17,12 @@
 ✅ **Fase 3a COMPLETA** — **Resumen FUNCIONAL**: rollup real (partida→capítulo→TOTAL),
    presupuesto **base por partida** (tabla + seed 24 + editable admin), **DIF**, **$/m² + USD/m²**,
    **Estado agregado** (madurez · contratación, con "parcial") y **última actualización** reales.
-⏸️ **PAUSA para que Alfonso pruebe** antes de la Fase 3b (corte mensual/Evolución + modos
-   Contratado-vs-No / Qué falta).
+✅ **Fase 3b COMPLETA** — **corte mensual + modo Evolución**: acción admin "Cerrar mes" (foto del
+   total vigente por partida → `buyout_month_close` + `buyout_month_snapshot`), recerrar/reabrir,
+   y **modo Evolución** (Base + meses cerrados + mes en curso en vivo + Dif, rellena 0 donde no
+   había). Toggle Vigente/Evolución. **Sin migración nueva** (las tablas son del Slice 1).
+⏸️ **PAUSA para que Alfonso pruebe** antes del resto de modos (Contratado-vs-No / Qué falta) y
+   la Fase 5 (historial/comparativo + marcar contratado).
 
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
@@ -276,11 +280,58 @@ modos Contratado-vs-No / Qué falta (eso es 3b).
   sin trackear— marca errores) · `pnpm build` ✓ (las 3 rutas buyout dinámicas; las 6 de Pagos
   idénticas en el manifest). Editar base / rollup con datos reales quedan tras login → tu prueba.
 
+## Fase 3b — corte mensual + modo Evolución (hecho 2026-06-24)
+
+El comparativo mes a mes del Excel (columnas PPTO MARZO/ABRIL/MAYO/JUNIO…). **Sin migración
+nueva:** usa `buyout_month_close` + `buyout_month_snapshot` ya creadas en el Slice 1 (con su
+RLS `is_admin()`, audit y grants). Faltan aún **Contratado vs No** y **Qué falta** (siguiente).
+
+### Modelo del cierre (decisiones)
+
+- **"Cerrar mes" = foto del MES EN CURSO.** Congela el total MXN vigente por partida (misma
+  fuente única que el Resumen → nunca difieren) en `buyout_month_close (periodo yyyy-mm)` +
+  `buyout_month_snapshot` (una fila por partida **con conceptos vigentes**; las demás se
+  rellenan 0 en la vista). La acción **solo** cierra el mes actual (los totales vivos solo
+  representan "hoy"); no se puede cerrar un mes pasado con datos de hoy.
+- **Recerrar = sobrescribe la foto** (baja la anterior por soft-delete, escribe la nueva).
+  **Reabrir** = baja foto + cierre (soft-delete, recuperable) → su columna desaparece. Ninguna
+  de las dos toca el histórico de **otros** meses.
+- **Etiqueta legible** "Ppto Junio 2026"; el mes vivo es "Ppto Junio 2026 (en curso)". Si el
+  mes en curso ya está cerrado, aparecen ambas columnas (la foto congelada + el vivo): justo
+  permite ver si la foto sigue al día o si ya hay drift.
+- **Escritura admin-only:** las actions checan `getMyProfile().role==='admin'` y la RLS de las
+  tablas (`is_admin()`) lo refuerza. `closed_by` = auth user actual.
+
+### Código (todo bajo `buyout/` + `lib/buyout/`; cero Pagos tocado)
+
+- **`src/lib/buyout/month-close.ts` (nuevo)** — helpers: `currentPeriodo()`, `periodoShort()`,
+  `periodoLabel()`, `loadClosedMonths()`, `loadSnapshots()` (Map<close, Map<partida, total>>).
+- **`src/lib/buyout/rollup.ts`** — `loadPartidaAggs()`: fuente ÚNICA del agregado vigente por
+  partida que comparten el Resumen (columna Ppto / mes en curso) y el cierre (la foto).
+- **`buyout/actions.ts`** — `cerrarMesActual(projectId)` (find-or-create cierre del periodo +
+  sobrescribe snapshot) y `reabrirMes(projectId, periodo)` (soft-delete cierre + foto).
+- **`buyout/page.tsx`** — toggle por `?modo=evolucion` (Server Component); en Vigente, idéntico
+  a 3a; en Evolución, rinde la rejilla. `DifText` extraído a módulo compartido.
+- **`buyout/evolucion-table.tsx` (nuevo)** — rejilla: Base + cada mes cerrado + en curso + Dif,
+  subtotal por capítulo y TOTAL; rellena 0 donde un mes no tiene la partida (sin huecos).
+- **`buyout/resumen-mode-toggle.tsx`** (toggle) · **`cerrar-mes-button.tsx`** (admin, diálogo
+  de confirmación) · **`reabrir-mes-button.tsx`** (admin, en la cabecera de cada mes cerrado) ·
+  **`dif-text.tsx`** (DifText compartido).
+
+### Verificación
+
+- **Gate verde:** `tsc` ✓ · `biome` ✓ · `pnpm build` ✓ (11 rutas; las 6 de Pagos idénticas en
+  el manifest, las 3 buyout dinámicas).
+- **Cálculo (node, lógica real de las etiquetas + rejilla):** cerrar congela los totales;
+  un concepto **nuevo** aparece en **0** en el mes ya cerrado y con su valor en el mes en curso;
+  el **Dif cuadra** (ej. A 100/80 = +25%, base 0 → "—", TOTAL 150/80 = +87.5%). Etiquetas:
+  "Ppto Junio 2026" / "… (en curso)".
+- **Cerrar/reabrir/RLS y la rejilla con datos reales** quedan tras login → tu prueba.
+
 ## Qué sigue
 
-- **Fase 3b — Resumen (resto):** modos **Evolución** (corte mensual = "foto" del vigente por
-  partida; conceptos nuevos en 0 en meses previos), **Contratado vs No** (% por dinero) y **Qué
-  falta** (nota libre por partida no contratada).
+- **Resumen (resto):** modos **Contratado vs No** (% por dinero) y **Qué falta** (nota libre por
+  partida no contratada).
 - Luego: Fase 5 historial/comparativo + marcar contratado (botón manual a Pagos) · Fase 6 carga
   real de L3 + cuadre.
 - **Import de Excel = diferido** (futuro opcional, §5); la captura es manual en V1.
