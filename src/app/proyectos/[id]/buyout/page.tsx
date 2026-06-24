@@ -1,7 +1,19 @@
+import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Fragment } from "react"
+import { isAdmin } from "@/lib/auth/roles"
+import {
+  aggregateLines,
+  type Contratacion,
+  difPct,
+  loadVigenteLines,
+  type Maturity,
+  type PartidaAgg,
+} from "@/lib/buyout/rollup"
+import { formatDate } from "@/lib/format/fecha"
 import { createClient } from "@/lib/supabase/server"
-import { formatMXN } from "@/lib/utils"
+import { cn, formatMXN } from "@/lib/utils"
+import { BaseCell } from "./base-cell"
 
 export const metadata = { title: "Buy-Out · Resumen" }
 
@@ -15,15 +27,30 @@ const areaFormatter = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 2,
 })
 
-type Chapter = { id: string; nombre: string }
-type Partida = { id: string; nombre: string; chapter_default: string | null }
+type PartidaView = {
+  id: string
+  nombre: string
+  chapterDefault: string | null
+  base: number
+  agg: PartidaAgg
+  dif: number | null
+}
+type ChapterView = {
+  nombre: string
+  partidas: PartidaView[]
+  total: number
+  base: number
+  count: number
+  dif: number | null
+}
 
 /**
- * Resumen (tablero BUY OUT) — Slice 2a: ARMAZÓN. Renderiza la ESTRUCTURA real
- * del tablero (capítulos del proyecto + partidas del catálogo, agrupadas) con
- * las columnas del spec §6. Como aún NO hay cotizaciones cargadas (eso es el
- * importador del Slice 2b), todos los montos, $/m² y totales salen en cero y las
- * columnas no-monetarias (Proveedor, Dif, Estado) van vacías ("—").
+ * Resumen (tablero BUY OUT) — Fase 3a: FUNCIONAL. Suma de verdad. Por cada
+ * partida, total = Σ del total MXN de la cotización VIGENTE de cada concepto
+ * (rollup de `lib/buyout/rollup`), luego partida → capítulo → TOTAL. Muestra
+ * Ppto Base (editable), Ppto vigente, DIF (vigente ÷ base − 1), $/m², última
+ * actualización y el Estado agregado (madurez · contratación). $/m² + USD/m² al
+ * pie. Misma fuente de datos que las tarjetas de Partida → nunca difieren.
  */
 export default async function BuyoutResumenPage({
   params,
@@ -41,9 +68,9 @@ export default async function BuyoutResumenPage({
     .maybeSingle()
   if (!project) notFound()
 
-  // Lecturas de las tablas buyout_* (catálogos sembrados en el Slice 1). Las
-  // transaccionales (item/quote/line) están vacías → todo a cero.
-  const [chapterRes, partidaRes, metaRes, fxRes] = await Promise.all([
+  const admin = await isAdmin()
+
+  const [chapterRes, partidaRes, metaRes, fxRes, baseRes] = await Promise.all([
     sb
       .from("buyout_chapter")
       .select("id, nombre")
@@ -66,42 +93,63 @@ export default async function BuyoutResumenPage({
       .select("currency, rate")
       .eq("project_id", id)
       .is("deleted_at", null),
+    sb
+      .from("buyout_partida_base")
+      .select("partida_catalog_id, monto_base")
+      .eq("project_id", id)
+      .is("deleted_at", null),
   ])
 
-  const chapters: Chapter[] = (chapterRes.data ?? []).map((c) => ({
-    id: c.id as string,
-    nombre: c.nombre as string,
-  }))
-  const partidas: Partida[] = (partidaRes.data ?? []).map((p) => ({
+  const chapters = (chapterRes.data ?? []).map((c) => c.nombre as string)
+  const partidas = (partidaRes.data ?? []).map((p) => ({
     id: p.id as string,
     nombre: p.nombre as string,
     chapter_default: (p.chapter_default as string | null) ?? null,
   }))
   const areaInt =
     metaRes.data?.area_int != null ? Number(metaRes.data.area_int) : null
-  const usdRate =
-    Number((fxRes.data ?? []).find((f) => f.currency === "USD")?.rate ?? 0) ||
-    null
+  const fxList = (fxRes.data ?? []).map((c) => ({
+    currency: c.currency as string,
+    rate: Number(c.rate),
+  }))
+  const usdRate = fxList.find((f) => f.currency === "USD")?.rate || null
+  const baseByPartida = new Map<string, number>(
+    (baseRes.data ?? []).map((b) => [
+      b.partida_catalog_id as string,
+      Number(b.monto_base),
+    ]),
+  )
 
-  // Agrupa partidas del catálogo por su capítulo por defecto (texto → nombre del
-  // capítulo del proyecto). Las que no empaten caen en un bucket aparte.
-  const byChapter = new Map<string, Partida[]>()
-  const chapterNames = new Set(chapters.map((c) => c.nombre))
-  const sinCapitulo: Partida[] = []
-  for (const p of partidas) {
-    if (p.chapter_default && chapterNames.has(p.chapter_default)) {
-      const list = byChapter.get(p.chapter_default) ?? []
-      list.push(p)
-      byChapter.set(p.chapter_default, list)
-    } else {
-      sinCapitulo.push(p)
-    }
+  // Rollup: líneas vigentes → agregado por partida (misma fuente que Partida).
+  const partidaNombreById = new Map(partidas.map((p) => [p.id, p.nombre]))
+  const lines = await loadVigenteLines(sb, id, fxList, partidaNombreById)
+  const linesByPartida = new Map<string, typeof lines>()
+  for (const l of lines) {
+    const list = linesByPartida.get(l.partida_catalog_id) ?? []
+    list.push(l)
+    linesByPartida.set(l.partida_catalog_id, list)
   }
 
-  // Slice 2a: sin cotizaciones, todo es cero.
-  const total = 0
-  const costoM2 = areaInt ? total / areaInt : 0
-  const usdM2 = areaInt && usdRate ? total / usdRate / areaInt : 0
+  const partidaViews: PartidaView[] = partidas.map((p) => {
+    const agg = aggregateLines(linesByPartida.get(p.id) ?? [])
+    const base = baseByPartida.get(p.id) ?? 0
+    return {
+      id: p.id,
+      nombre: p.nombre,
+      chapterDefault: p.chapter_default,
+      base,
+      agg,
+      dif: agg.count === 0 ? null : difPct(agg.total, base),
+    }
+  })
+
+  const chapterViews = groupByChapter(chapters, partidaViews)
+  const total = chapterViews.reduce((a, c) => a + c.total, 0)
+  const totalBase = chapterViews.reduce((a, c) => a + c.base, 0)
+  const totalCount = chapterViews.reduce((a, c) => a + c.count, 0)
+  const totalDif = totalCount === 0 ? null : difPct(total, totalBase)
+  const costoM2 = areaInt ? total / areaInt : null
+  const usdM2 = areaInt && usdRate ? total / usdRate / areaInt : null
 
   if (chapters.length === 0) {
     return (
@@ -118,11 +166,6 @@ export default async function BuyoutResumenPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-md border border-nauka-card-border bg-white p-3 text-sm text-muted-foreground">
-        Estructura del tablero Buy-Out. Aún no hay cotizaciones cargadas — se
-        importan en el siguiente paso (Slice 2b). Totales y $/m² en cero.
-      </div>
-
       <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
         <table className="w-full text-sm tabular-nums">
           <thead className="sticky top-0 z-10">
@@ -143,16 +186,15 @@ export default async function BuyoutResumenPage({
             </tr>
           </thead>
           <tbody>
-            {chapters.map((ch) => (
+            {chapterViews.map((ch) => (
               <ChapterGroup
-                key={ch.id}
-                nombre={ch.nombre}
-                partidas={byChapter.get(ch.nombre) ?? []}
+                key={ch.nombre}
+                chapter={ch}
+                projectId={id}
+                areaInt={areaInt}
+                admin={admin}
               />
             ))}
-            {sinCapitulo.length > 0 ? (
-              <ChapterGroup nombre="Sin capítulo" partidas={sinCapitulo} />
-            ) : null}
           </tbody>
           <tfoot>
             <tr className="bg-nauka-dark text-white">
@@ -160,14 +202,16 @@ export default async function BuyoutResumenPage({
                 TOTAL
               </td>
               <td className="px-3 py-2.5 text-right font-semibold">
-                {formatMXN(total)}
+                {formatMXN(totalBase)}
               </td>
               <td className="px-3 py-2.5 text-right font-semibold">
                 {formatMXN(total)}
               </td>
-              <td className="px-3 py-2.5 text-right text-white/50">—</td>
               <td className="px-3 py-2.5 text-right font-semibold">
-                {formatMXN(costoM2)}
+                <DifText dif={totalDif} onDark />
+              </td>
+              <td className="px-3 py-2.5 text-right font-semibold">
+                {costoM2 != null ? formatMXN(costoM2) : "—"}
               </td>
               <td className="px-3 py-2.5" />
               <td className="px-3 py-2.5" />
@@ -181,7 +225,7 @@ export default async function BuyoutResumenPage({
         <span>
           $/m² interior:{" "}
           <span className="font-medium tabular-nums text-nauka-dark">
-            {formatMXN(costoM2)}
+            {costoM2 != null ? formatMXN(costoM2) : "—"}
           </span>
           {areaInt
             ? ` · área interior ${areaFormatter.format(areaInt)} m²`
@@ -190,35 +234,76 @@ export default async function BuyoutResumenPage({
         <span>
           USD/m²:{" "}
           <span className="font-medium tabular-nums text-nauka-dark">
-            {usdFormatter.format(usdM2)}
+            {usdM2 != null ? usdFormatter.format(usdM2) : "—"}
           </span>
           {usdRate ? ` · TC ${usdRate}` : " · TC —"}
         </span>
       </div>
 
-      {/* Leyenda: el Estado son 2 ejes (vacíos en el armazón; con datos = Slice 4). */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <EstadoSlots />
+      {/* Leyenda: el Estado son 2 ejes (madurez arriba · contratación abajo). */}
+      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <EstadoCell madurez="parcial" contratacion="parcial" />
         <span>
           Estado · 2 ejes:{" "}
           <span className="font-medium text-nauka-dark">arriba</span> madurez
-          (Paramétrico / Ppto),{" "}
+          (Paramétrico / Ppto / Parcial),{" "}
           <span className="font-medium text-nauka-dark">abajo</span>{" "}
-          contratación (Contratado / No contratado). Sin datos aún (Slice 4).
+          contratación (Contratado / No contratado / Parcial).{" "}
+          <span className="font-medium text-nauka-dark">Parcial</span> = la
+          partida mezcla estados entre sus conceptos.
         </span>
       </div>
     </div>
   )
 }
 
-/** Cabecera de capítulo + sus partidas (vacías) + fila de subtotal en cero. */
+/** Agrupa las partidas por capítulo (orden de capítulos) + rollup del capítulo.
+ *  Las que no empaten con un capítulo conocido caen en "Sin capítulo". */
+function groupByChapter(
+  chapters: string[],
+  partidaViews: PartidaView[],
+): ChapterView[] {
+  const known = new Set(chapters)
+  const build = (nombre: string, list: PartidaView[]): ChapterView => {
+    const total = list.reduce((a, p) => a + p.agg.total, 0)
+    const base = list.reduce((a, p) => a + p.base, 0)
+    const count = list.reduce((a, p) => a + p.agg.count, 0)
+    return {
+      nombre,
+      partidas: list,
+      total,
+      base,
+      count,
+      dif: count === 0 ? null : difPct(total, base),
+    }
+  }
+  const groups = chapters.map((ch) =>
+    build(
+      ch,
+      partidaViews.filter((p) => p.chapterDefault === ch),
+    ),
+  )
+  const sinCap = partidaViews.filter(
+    (p) => !p.chapterDefault || !known.has(p.chapterDefault),
+  )
+  if (sinCap.length > 0) groups.push(build("Sin capítulo", sinCap))
+  return groups
+}
+
+// --- fila de capítulo + sus partidas + subtotal -----------------------------
+
 function ChapterGroup({
-  nombre,
-  partidas,
+  chapter,
+  projectId,
+  areaInt,
+  admin,
 }: {
-  nombre: string
-  partidas: Partida[]
+  chapter: ChapterView
+  projectId: string
+  areaInt: number | null
+  admin: boolean
 }) {
+  const perM2 = (v: number) => (areaInt ? formatMXN(v / areaInt) : "—")
   return (
     <Fragment>
       <tr className="bg-nauka-subtle">
@@ -226,45 +311,76 @@ function ChapterGroup({
           colSpan={8}
           className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
         >
-          {nombre}
+          {chapter.nombre}
         </td>
       </tr>
-      {partidas.length === 0 ? (
+      {chapter.partidas.length === 0 ? (
         <tr className="border-b border-nauka-subtle">
           <td colSpan={8} className="px-3 py-2 italic text-muted-foreground">
             Sin partidas en este capítulo
           </td>
         </tr>
       ) : (
-        partidas.map((p) => (
+        chapter.partidas.map((p) => (
           <tr
             key={p.id}
             className="border-b border-nauka-subtle hover:bg-nauka-bg"
           >
-            <td className="px-3 py-2">{p.nombre}</td>
-            <td className="px-3 py-2 text-muted-foreground">—</td>
-            <td className="px-3 py-2 text-right">{formatMXN(0)}</td>
-            <td className="px-3 py-2 text-right">{formatMXN(0)}</td>
-            <td className="px-3 py-2 text-right text-muted-foreground">—</td>
-            <td className="px-3 py-2 text-right">{formatMXN(0)}</td>
-            <td className="px-3 py-2 text-muted-foreground">—</td>
             <td className="px-3 py-2">
-              <EstadoSlots />
+              <Link
+                href={`/proyectos/${projectId}/buyout/partida?partida=${p.id}`}
+                className="transition-colors hover:text-nauka-accent"
+              >
+                {p.nombre}
+              </Link>
+            </td>
+            <td className="px-3 py-2 text-muted-foreground">
+              {proveedorLabel(p.agg.proveedores)}
+            </td>
+            <td className="px-3 py-2 text-right">
+              <BaseCell
+                projectId={projectId}
+                partidaCatalogId={p.id}
+                monto={p.base}
+                admin={admin}
+              />
+            </td>
+            <td className="px-3 py-2 text-right">{formatMXN(p.agg.total)}</td>
+            <td className="px-3 py-2 text-right">
+              <DifText dif={p.dif} />
+            </td>
+            <td className="px-3 py-2 text-right">{perM2(p.agg.total)}</td>
+            <td className="px-3 py-2 text-muted-foreground">
+              {p.agg.lastUpdate ? formatDate(p.agg.lastUpdate) : "—"}
+            </td>
+            <td className="px-3 py-2">
+              <EstadoCell
+                madurez={p.agg.madurez}
+                contratacion={p.agg.contratacion}
+              />
             </td>
           </tr>
         ))
       )}
-      <tr className="border-b border-nauka-subtle">
-        <td
-          colSpan={2}
-          className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground"
-        >
-          Subtotal {nombre}
+      {/* Subtotal del capítulo: etiqueta a la IZQUIERDA en Concepto, números
+          alineados bajo sus columnas (corrige el "Subtotal" mal puesto). */}
+      <tr className="border-b border-nauka-subtle bg-nauka-bg/60">
+        <td className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Subtotal {chapter.nombre}
         </td>
-        <td className="px-3 py-2 text-right font-medium">{formatMXN(0)}</td>
-        <td className="px-3 py-2 text-right font-medium">{formatMXN(0)}</td>
         <td className="px-3 py-2" />
-        <td className="px-3 py-2 text-right font-medium">{formatMXN(0)}</td>
+        <td className="px-3 py-2 text-right font-medium">
+          {formatMXN(chapter.base)}
+        </td>
+        <td className="px-3 py-2 text-right font-semibold text-nauka-dark">
+          {formatMXN(chapter.total)}
+        </td>
+        <td className="px-3 py-2 text-right font-medium">
+          <DifText dif={chapter.dif} />
+        </td>
+        <td className="px-3 py-2 text-right font-medium">
+          {perM2(chapter.total)}
+        </td>
         <td className="px-3 py-2" />
         <td className="px-3 py-2" />
       </tr>
@@ -272,20 +388,97 @@ function ChapterGroup({
   )
 }
 
-const ESTADO_SLOT_CLS =
-  "inline-flex h-5 w-fit shrink-0 items-center rounded-full border border-dashed border-nauka-neutral/50 px-2 text-[11px] font-medium leading-none text-nauka-neutral"
+// --- helpers de presentación ------------------------------------------------
 
-/**
- * Estado como 2 ejes independientes (spec §6): madurez (arriba: Paramétrico /
- * Ppto) + contratación (abajo: Contratado / No contratado). En el Slice 2a van
- * VACÍOS (placeholder neutro dashed); con datos (Slice 4) cada slot toma su
- * badge/etiqueta con color (mismo patrón que estatus-badge.tsx).
- */
-function EstadoSlots() {
+function proveedorLabel(provs: string[]): string {
+  if (provs.length === 0) return "—"
+  if (provs.length === 1) return provs[0]
+  return "Varios"
+}
+
+/** DIF formateado como % con signo. base=0 / sin datos → "—". */
+function DifText({ dif, onDark }: { dif: number | null; onDark?: boolean }) {
+  if (dif === null) {
+    return (
+      <span className={onDark ? "text-white/50" : "text-muted-foreground"}>
+        —
+      </span>
+    )
+  }
+  const pct = dif * 100
+  const text = `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`
+  if (onDark) return <span>{text}</span>
+  const cls =
+    Math.abs(pct) < 0.05
+      ? "text-muted-foreground"
+      : pct > 0
+        ? "text-red-600"
+        : "text-emerald-600"
+  return <span className={cls}>{text}</span>
+}
+
+const ESTADO_SLOT_CLS =
+  "inline-flex h-5 w-fit shrink-0 items-center rounded-full px-2 text-[11px] font-medium leading-none"
+
+function MaturityBadge({ value }: { value: Maturity | null }) {
+  if (value === null) {
+    return (
+      <span
+        className={cn(
+          ESTADO_SLOT_CLS,
+          "border border-dashed border-nauka-neutral/50 text-nauka-neutral",
+        )}
+      >
+        —
+      </span>
+    )
+  }
+  const map: Record<Maturity, { label: string; cls: string }> = {
+    ppto: { label: "Ppto", cls: "bg-green-100 text-green-700" },
+    parametrico: { label: "Paramétrico", cls: "bg-amber-100 text-amber-700" },
+    parcial: { label: "Parcial", cls: "bg-blue-100 text-blue-700" },
+  }
+  const { label, cls } = map[value]
+  return <span className={cn(ESTADO_SLOT_CLS, cls)}>{label}</span>
+}
+
+function ContratacionBadge({ value }: { value: Contratacion | null }) {
+  if (value === null) {
+    return (
+      <span
+        className={cn(
+          ESTADO_SLOT_CLS,
+          "border border-dashed border-nauka-neutral/50 text-nauka-neutral",
+        )}
+      >
+        —
+      </span>
+    )
+  }
+  const map: Record<Contratacion, { label: string; cls: string }> = {
+    contratado: { label: "Contratado", cls: "bg-green-100 text-green-700" },
+    no_contratado: {
+      label: "No contratado",
+      cls: "bg-slate-100 text-slate-600",
+    },
+    parcial: { label: "Parcial", cls: "bg-blue-100 text-blue-700" },
+  }
+  const { label, cls } = map[value]
+  return <span className={cn(ESTADO_SLOT_CLS, cls)}>{label}</span>
+}
+
+/** Estado de 2 ejes (spec §6): madurez arriba · contratación abajo. */
+function EstadoCell({
+  madurez,
+  contratacion,
+}: {
+  madurez: Maturity | null
+  contratacion: Contratacion | null
+}) {
   return (
     <div className="flex flex-col gap-1">
-      <span className={ESTADO_SLOT_CLS}>—</span>
-      <span className={ESTADO_SLOT_CLS}>—</span>
+      <MaturityBadge value={madurez} />
+      <ContratacionBadge value={contratacion} />
     </div>
   )
 }

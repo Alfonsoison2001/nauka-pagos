@@ -3,9 +3,10 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { isAdmin } from "@/lib/auth/roles"
 import { calcLinea } from "@/lib/buyout/calc"
+import { loadVigenteLines, type VigenteLine } from "@/lib/buyout/rollup"
 import { createClient } from "@/lib/supabase/server"
 import { cn, formatMXN } from "@/lib/utils"
-import type { ConceptoOption, CurrencyOption, LineaRow } from "./actions"
+import type { ConceptoOption, CurrencyOption } from "./actions"
 import { BuyoutPdfCell } from "./buyout-pdf-cell"
 import { DeleteLineaButton } from "./delete-linea-button"
 import { EditLineaButton } from "./edit-linea-button"
@@ -51,11 +52,6 @@ const pctLabel = (fraction: number) => `${+(fraction * 100).toFixed(2)}%`
 
 type Sb = Awaited<ReturnType<typeof createClient>>
 type PartidaCat = { id: string; nombre: string; chapter_default: string | null }
-type LineaConCalc = LineaRow & {
-  tc: number
-  partidaNombre: string
-  partida_catalog_id: string
-}
 
 export default async function BuyoutPartidaPage({
   params,
@@ -111,7 +107,7 @@ export default async function BuyoutPartidaPage({
 
   // Todas las líneas vigentes del proyecto (una sola pasada) → totales por
   // partida (para las tarjetas) y líneas de la partida elegida (para la tabla).
-  const allLineas = await loadAllVigenteLines(sb, id, fxList, partidaNombreById)
+  const allLineas = await loadVigenteLines(sb, id, fxList, partidaNombreById)
   const totalsByPartida = new Map<string, { total: number; count: number }>()
   for (const l of allLineas) {
     const c = calcLinea({
@@ -293,83 +289,6 @@ async function loadCatalogs(
   }
 }
 
-// --- carga de líneas vigentes del proyecto (item → cotización vigente → renglón)
-
-async function loadAllVigenteLines(
-  sb: Sb,
-  projectId: string,
-  fxList: CurrencyOption[],
-  partidaNombreById: Map<string, string>,
-): Promise<LineaConCalc[]> {
-  const { data: itemRows } = await sb
-    .from("buyout_item")
-    .select("id, partida_catalog_id")
-    .eq("project_id", projectId)
-    .is("deleted_at", null)
-  const items = itemRows ?? []
-  const itemPartida = new Map(
-    items.map((i) => [i.id as string, i.partida_catalog_id as string]),
-  )
-  const itemIds = items.map((i) => i.id as string)
-  if (itemIds.length === 0) return []
-
-  const { data: quoteRows } = await sb
-    .from("buyout_quote")
-    .select("id, item_id, supplier_id, quote_date, kind, contratado, pdf_url")
-    .in("item_id", itemIds)
-    .eq("is_selected", true)
-    .is("deleted_at", null)
-  const quotes = quoteRows ?? []
-  const quoteById = new Map(quotes.map((q) => [q.id as string, q]))
-  const quoteIds = quotes.map((q) => q.id as string)
-  if (quoteIds.length === 0) return []
-
-  const { data: lineRows } = await sb
-    .from("buyout_line")
-    .select(
-      "id, quote_id, concepto, detalle, villa_casita, piso, depto, proveedor, unidad, cantidad, moneda, unitario, sobrecosto_pct, iva_pct, notas",
-    )
-    .in("quote_id", quoteIds)
-    .is("deleted_at", null)
-    .order("created_at")
-
-  const rateOf = (cur: string) =>
-    fxList.find((c) => c.currency === cur)?.rate ?? 1
-
-  return (lineRows ?? []).map((l) => {
-    const q = quoteById.get(l.quote_id as string)
-    const itemId = (q?.item_id as string) ?? ""
-    const partidaId = itemPartida.get(itemId) ?? ""
-    const moneda = (l.moneda as string) ?? "MXN"
-    return {
-      id: l.id as string,
-      quote_id: l.quote_id as string,
-      item_id: itemId,
-      concepto: (l.concepto as string) ?? "",
-      detalle: (l.detalle as string | null) ?? null,
-      villa_casita: (l.villa_casita as string | null) ?? null,
-      piso: (l.piso as string | null) ?? null,
-      depto: (l.depto as string | null) ?? null,
-      proveedor: (l.proveedor as string | null) ?? null,
-      unidad: (l.unidad as string | null) ?? null,
-      cantidad: Number(l.cantidad ?? 0),
-      moneda,
-      unitario: Number(l.unitario ?? 0),
-      sobrecosto_pct: Number(l.sobrecosto_pct ?? 0),
-      iva_pct: Number(l.iva_pct ?? 0),
-      notas: (l.notas as string | null) ?? null,
-      kind: (q?.kind as "parametrico" | "ppto") ?? "ppto",
-      contratado: Boolean(q?.contratado),
-      quote_date: (q?.quote_date as string) ?? "",
-      pdf_url: (q?.pdf_url as string | null) ?? null,
-      supplier_id: (q?.supplier_id as string | null) ?? null,
-      tc: rateOf(moneda),
-      partidaNombre: partidaNombreById.get(partidaId) ?? "",
-      partida_catalog_id: partidaId,
-    }
-  })
-}
-
 // --- tabla de 22 columnas + acciones ----------------------------------------
 
 function LineasTable({
@@ -379,7 +298,7 @@ function LineasTable({
   admin,
 }: {
   projectId: string
-  lineas: LineaConCalc[]
+  lineas: VigenteLine[]
   catalogs: Catalogs
   admin: boolean
 }) {
@@ -458,7 +377,7 @@ function LineaRowCells({
   admin,
 }: {
   projectId: string
-  linea: LineaConCalc
+  linea: VigenteLine
   catalogs: Catalogs
   admin: boolean
 }) {

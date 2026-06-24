@@ -1,6 +1,6 @@
 # STATE — Módulo Buy-Out
 
-> Bitácora de avance del módulo. Última actualización: **2026-06-23**.
+> Bitácora de avance del módulo. Última actualización: **2026-06-24**.
 > Spec: [`docs/SPEC-buyout.md`](SPEC-buyout.md) · Análisis del Excel: [`docs/future-modules/buyout-L3-estructura.md`](future-modules/buyout-L3-estructura.md).
 
 ## Estado actual
@@ -14,7 +14,11 @@
 ✅ **Slice 2c COMPLETO** — taxonomía oficial L3 sembrada (24 partidas + 92 conceptos) ·
    concepto = dropdown · "Actualizar presupuesto" (nueva versión sin duplicar fila) ·
    Villa+Casita y Piso "NA" · pantalla Partida = **tarjetas por capítulo** con totales.
-⏸️ **PAUSA para que Alfonso revise** antes de la Fase 3 (rollup al Resumen).
+✅ **Fase 3a COMPLETA** — **Resumen FUNCIONAL**: rollup real (partida→capítulo→TOTAL),
+   presupuesto **base por partida** (tabla + seed 24 + editable admin), **DIF**, **$/m² + USD/m²**,
+   **Estado agregado** (madurez · contratación, con "parcial") y **última actualización** reales.
+⏸️ **PAUSA para que Alfonso pruebe** antes de la Fase 3b (corte mensual/Evolución + modos
+   Contratado-vs-No / Qué falta).
 
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
@@ -219,14 +223,66 @@ Fuente de verdad: `docs/future-modules/buyout-catalogo-L3.md`.
 - **Gate verde:** `tsc` ✓ · `biome` ✓ · `pnpm build` ✓. Pagos intacto (manifest idéntico).
   Agregar/actualizar/PDF/RLS quedan tras login → tu prueba.
 
+## Fase 3a — Resumen funcional (hecho 2026-06-24)
+
+El tablero Resumen dejó de mostrar 0: **suma de verdad**. Sin corte mensual/Evolución ni los
+modos Contratado-vs-No / Qué falta (eso es 3b).
+
+### Migración (aditiva, aplicada a prod con `supabase db push` — opción B)
+
+- `supabase/migrations/20260624150000_buyout_partida_base_and_cleanup.sql`:
+  - **Tabla nueva `buyout_partida_base`** (`project_id`, `partida_catalog_id`, `monto_base
+    numeric(14,2)`) con índice único parcial `(project_id, partida_catalog_id) WHERE deleted_at
+    IS NULL`, RLS (SELECT auth · escritura `is_admin()`), audit `fn_audit_change()` y grants —
+    idéntica al resto de `buyout_*`.
+  - **Seed de las 24 bases** del doc oficial (Lote 3, col `PRESUPUESTO IZ MXN BASE`). Empata por
+    nombre EXACTO contra las 24 partidas activas. Idempotente. **Verificado: 24 filas** en
+    `buyout_partida_base` (table-stats).
+  - **Limpieza de la línea de prueba del 2b:** soft-delete de `buyout_item`/`buyout_quote`/
+    `buyout_line` **solo** cuando el `partida_catalog_id` del item apunta a una partida
+    **soft-deleted** (taxonomía vieja). No toca nada capturado sobre la taxonomía nueva (24
+    activas) → cualquier captura de tu revisión 2c queda intacta. Idempotente.
+- `supabase migration list` → local y remoto en sync (última: `20260624150000`). Pagos intacto.
+
+### Código (todo bajo `buyout/` + `lib/buyout/`; cero Pagos tocado)
+
+- **`src/lib/buyout/rollup.ts` (nuevo)** — fuente ÚNICA del rollup que comparten las tarjetas de
+  Partida y el Resumen (no pueden divergir): `loadVigenteLines()` (carga item→cotización
+  vigente→renglón; movido tal cual desde la página Partida) + funciones **puras** `aggregateLines`
+  (total Σ MXN, madurez/contratación agregadas con "parcial", última fecha, proveedores) y
+  `difPct`. Las puras se **verificaron con node** (3 conceptos, 2 partidas, 2 capítulos: cuadra
+  línea→partida→capítulo→TOTAL, $/m², USD/m² y DIF, incl. base=0 → "—").
+- **`buyout/page.tsx` (Resumen, reescrito desde el armazón)** — rollup partida→capítulo→TOTAL;
+  columnas **Ppto Base** (editable) · **Ppto** (Σ vigente) · **Dif** ((vigente÷base)−1, "—" si
+  base=0 o sin datos) · **$/m²** por partida · **Última actualización** (fecha de la cotización
+  vigente más reciente) · **Estado** (2 ejes agregados). Subtotal por capítulo, TOTAL, y `$/m² +
+  USD/m²` al pie (área interior 992.61, TC USD). **Subtotal** ahora alineado a la IZQUIERDA en la
+  columna Concepto con los números bajo sus columnas (corrige lo que reportaste).
+- **`buyout/actions.ts` (nuevo)** — `setPartidaBase` (upsert admin-only de la base, Zod, RLS).
+- **`buyout/base-cell.tsx` (nuevo)** — celda "Ppto Base" editable en sitio (admin) / solo lectura.
+- **`buyout/partida/page.tsx`** — quirúrgico: usa `loadVigenteLines`/`VigenteLine` del módulo
+  compartido (antes tenía su copia local); la tabla de 22 col y las tarjetas quedan idénticas.
+
+### Notas / decisiones para Alfonso
+
+- **DIF por partida y capítulo** = `(Σ vigente ÷ base) − 1`. Si la base es 0 (TRAMITES,
+  INGENIERIAS, ALBAÑILERIA, PISO HIDRONICO, CASITA) o aún no hay conceptos vigentes → **"—"**
+  (no rompe). Color sutil: sobre base = rojo, bajo base = verde.
+- **Estado agregado de la partida:** madurez = todas ppto→Ppto / todas paramétrico→Paramétrico /
+  mezcla→**Parcial**; contratación = todas sí→Contratado / todas no→No contratado /
+  mezcla→**Parcial**. Proveedor = único nombre, "Varios" si hay >1, "—" si ninguno.
+- **Base editable:** lápiz en la celda Ppto Base (solo admin); guarda con `setPartidaBase`.
+- **Gate verde:** `tsc` ✓ · `biome` ✓ (solo `scripts/backup-storage.mjs` —fuera de alcance,
+  sin trackear— marca errores) · `pnpm build` ✓ (las 3 rutas buyout dinámicas; las 6 de Pagos
+  idénticas en el manifest). Editar base / rollup con datos reales quedan tras login → tu prueba.
+
 ## Qué sigue
 
-- **Fase 3 — Resumen (rollup):** que los totales/$/m² del Resumen dejen de ser 0 sumando
-  (SUMIFS) las líneas vigentes por partida → capítulo → total; columnas por mes, $/m² + USD/m².
-  Capturar el **presupuesto base** por partida (referencia del DIF). (El cálculo por-partida ya
-  existe en las tarjetas; falta el rollup a capítulo/total en el Resumen.)
-- Luego: Fase 4 estados + "qué falta" · Fase 5 historial/comparativo + marcar contratado
-  (botón manual a Pagos) · Fase 6 carga real de L3 + cuadre.
+- **Fase 3b — Resumen (resto):** modos **Evolución** (corte mensual = "foto" del vigente por
+  partida; conceptos nuevos en 0 en meses previos), **Contratado vs No** (% por dinero) y **Qué
+  falta** (nota libre por partida no contratada).
+- Luego: Fase 5 historial/comparativo + marcar contratado (botón manual a Pagos) · Fase 6 carga
+  real de L3 + cuadre.
 - **Import de Excel = diferido** (futuro opcional, §5); la captura es manual en V1.
 - **Taxonomía ya reconciliada** a las 24 partidas + 92 conceptos del doc oficial (Slice 2c).
   Pendiente: áreas Villa/Casita finas si se necesitan para $/m² por unidad.
