@@ -33,6 +33,9 @@
    **columnas de meses expandibles** en el Resumen **Vigente** (botón "▸ Meses", colapsado por
    default, que intercala los meses cerrados entre Ppto Base y PPTO Vigente, reusando los snapshots
    de Evolución). Detalle abajo.
+✅ **Fase 5 (ajuste · 2026-06-25 · sesión 3)** — el grupo **"▸ Meses"** del Vigente ahora incluye una
+   columna por **cada** mes cerrado, **incluido el mes actual si ya está cerrado** (antes lo excluía).
+   **Evolución intacta**, **sin migración**. Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** + botón manual a Pagos.
    Pendiente Resumen: modos **Contratado-vs-No** / **Qué falta**.
 
@@ -415,16 +418,48 @@ tablas y libs ya existentes); **Pagos intacto**; las 6 rutas de Pagos idénticas
   evolución sin salir del Vigente" que pidió Alfonso. Ambos **comparten** las libs de cierre/rollup
   (cero lógica duplicada).
 - **El "mes en curso" NO es una columna nueva: es la columna `PPTO Vigente`** (total vivo de hoy). El
-  grupo expandible añade solo los meses cerrados **anteriores** → se evita duplicar la columna del mes
-  en curso (que en una rejilla Base|meses|en-curso|Ppto saldría dos veces con el mismo número). Una
-  leyenda bajo la tabla lo aclara. Es coherente con el "Arreglo A" de la sesión 1 (el mes en curso ya
-  cerrado se colapsa en una sola columna en Evolución).
+  grupo expandible añade los meses cerrados → **`PPTO Vigente`** sigue siendo el vivo, sin duplicar.
+  Una leyenda bajo la tabla lo aclara. **⚠️ Ajustado en sesión 3 (ver abajo):** originalmente el grupo
+  excluía el mes actual; ahora **SÍ** incluye el mes actual **como columna congelada cuando ya está
+  cerrado** (p. ej. "Ppto Junio 2026" tras cerrar Junio), junto a `PPTO Vigente` (vivo).
 
 ### Gate verde
 `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (las 3 rutas buyout
 dinámicas; **las 6 de Pagos idénticas** en el manifest). El render tras login/RLS → prueba de Alfonso:
 en un concepto con varias versiones, ver el panel "Comparativo vs vigente" con sus Δ; en el Resumen
 Vigente, "▸ Meses" expande/colapsa las columnas y cuadran con el modo Evolución.
+
+## Fase 5 (ajuste) — incluir el mes actual cerrado en el grupo "▸ Meses" del Vigente (hecho 2026-06-25, sesión 3)
+
+Alfonso quiere **conservar AMBAS vistas** (Vigente + Evolución). El cierre de mes se hace en
+**Evolución (queda igual)**. El único ajuste fue en **Vigente**: el grupo colapsable **"▸ Meses"**
+ahora muestra **una columna por CADA mes cerrado, INCLUYENDO el mes actual si ya está cerrado**
+(antes lo excluía). **Sin migración**, **Evolución intacta**, **Pagos intacto**.
+
+### Cambio (todo en `buyout/page.tsx`)
+- Nueva variable **`vigenteMonths`** = `closedMonths.map(...)` → **todos** los meses cerrados (incl. el
+  mes actual si cerró). Es la fuente de las columnas del grupo del Vigente (`mesesCols`).
+- **Evolución NO se toca:** `frozenMonths` (meses cerrados *anteriores*) + `enCurso` (columna viva,
+  colapsa la foto del mes en curso) siguen exactamente igual; `EvolucionTable` recibe `months={evoMonths}`
+  como antes. La rama `modo === "evolucion"` quedó idéntica.
+- **Botón "▸ Meses"** ahora aparece/cuenta con `closedMonths.length` (antes `frozenMonths.length`), y
+  **`needSnapshots`** se dispara con `closedMonths.length > 0` → así, si **solo** el mes actual está
+  cerrado, igual se cargan los snapshots y se ve su columna.
+- Colapsado (default) la vista Vigente queda **byte-idéntica** a antes (con `mesesCols=[]` no se rinde
+  ninguna celda extra y los `colSpan` siguen en 8). Leyenda actualizada.
+
+### Por qué cuadra (misma fuente, sin duplicar)
+- Las columnas usan `buyout_month_snapshot` vía `loadSnapshots` (la **foto** congelada al cerrar) y el
+  total vivo viene del **mismo** `loadPartidaAggs` del rollup → idénticos a Evolución. La columna del
+  mes actual cerrado muestra su **foto**; `PPTO Vigente` muestra el **vivo de hoy**: si se editó algo
+  tras cerrar, difieren (drift visible) — igual que el "desactualizado" de Evolución.
+- Conceptos/partidas nuevos que no existían en un mes → **$0** en esa columna (`snapshot ?? 0`).
+
+### Gate verde
+`pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (las 3 rutas buyout dinámicas;
+**las 6 de Pagos idénticas** en el manifest). Render tras login/RLS → prueba de Alfonso: con **Junio
+cerrado**, en **Vigente** el **"▸ Meses"** abre y muestra la columna **"Ppto Junio 2026"**; colapsado
+todo queda igual que antes; **Evolución intacta**; **Pagos intacto**.
 
 ## Qué sigue
 

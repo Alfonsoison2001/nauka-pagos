@@ -190,9 +190,19 @@ export default async function BuyoutResumenPage({
   const closedMonths = await loadClosedMonths(sb, id)
   const currentClose = closedMonths.find((m) => m.periodo === periodoActual)
   const currentClosed = currentClose != null
-  // Columnas congeladas = meses cerrados ANTERIORES (el en curso se colapsa abajo).
+  // EVOLUCIÓN (no se toca): columnas congeladas = meses cerrados ANTERIORES; el mes
+  // en curso va aparte como su columna "en curso" (live), colapsando su foto.
   const frozenMonths = closedMonths.filter((m) => m.periodo !== periodoActual)
   const evoMonths = frozenMonths.map((m) => ({
+    id: m.id,
+    periodo: m.periodo,
+    label: periodoLabel(m.periodo),
+    short: periodoShort(m.periodo),
+  }))
+  // VIGENTE → grupo "▸ Meses": TODOS los meses cerrados, INCLUYENDO el mes actual si
+  // ya está cerrado (p. ej. tras cerrar Junio, aparece la columna "Ppto Junio 2026").
+  // El mes en curso aún NO cerrado no genera columna aquí: es la columna PPTO Vigente.
+  const vigenteMonths: EvoMonth[] = closedMonths.map((m) => ({
     id: m.id,
     periodo: m.periodo,
     label: periodoLabel(m.periodo),
@@ -201,17 +211,16 @@ export default async function BuyoutResumenPage({
   // Fotos congeladas (buyout_month_snapshot): las usan Evolución y —misma fuente—
   // el grupo de meses expandible del Vigente (NO se duplica el cálculo).
   const needSnapshots =
-    modo === "evolucion" || (mesesOpen && frozenMonths.length > 0)
+    modo === "evolucion" || (mesesOpen && closedMonths.length > 0)
   const snapshotByMonth = needSnapshots
     ? await loadSnapshots(
         sb,
         closedMonths.map((m) => m.id),
       )
     : new Map<string, Map<string, number>>()
-  // Columnas de meses a intercalar en el Vigente (solo si está expandido). El mes
-  // EN CURSO no va aquí: es la columna PPTO Vigente (no se duplica). Son los meses
-  // cerrados ANTERIORES (foto congelada), idénticos a los de Evolución.
-  const mesesCols: EvoMonth[] = mesesOpen ? evoMonths : []
+  // Columnas de meses a intercalar en el Vigente (solo si está expandido): todos los
+  // meses cerrados (incl. el actual si ya cerró). PPTO Vigente sigue siendo el vivo.
+  const mesesCols: EvoMonth[] = mesesOpen ? vigenteMonths : []
   const evoChapters: EvoChapter[] = chapterViews.map((ch) => ({
     nombre: ch.nombre,
     base: ch.base,
@@ -295,11 +304,11 @@ export default async function BuyoutResumenPage({
         </>
       ) : (
         <>
-          {/* Grupo de columnas de meses (colapsable): solo si hay meses cerrados
-              anteriores que revelar (el en curso ya es la columna PPTO Vigente). */}
-          {frozenMonths.length > 0 ? (
+          {/* Grupo de columnas de meses (colapsable): aparece si hay ≥1 mes cerrado
+              que revelar (incluye el mes actual si ya está cerrado). */}
+          {closedMonths.length > 0 ? (
             <div className="flex justify-end">
-              <MesesToggle open={mesesOpen} count={frozenMonths.length} />
+              <MesesToggle open={mesesOpen} count={closedMonths.length} />
             </div>
           ) : null}
 
@@ -386,11 +395,12 @@ export default async function BuyoutResumenPage({
           {mesesOpen ? (
             <p className="text-sm text-muted-foreground">
               Cada columna de mes es la foto congelada del total vigente por
-              partida al cerrar ese mes;{" "}
+              partida al cerrar ese mes (incluye el mes actual si ya está
+              cerrado);{" "}
               <span className="font-medium text-nauka-dark">PPTO Vigente</span>{" "}
-              es el mes en curso (total vivo de hoy). Conceptos nuevos aparecen
-              en $0 en los meses previos a su captura. Cuadra con el corte
-              mensual (modo Evolución).
+              es el total vivo de hoy. Conceptos nuevos aparecen en $0 en los
+              meses previos a su captura. Cuadra con el corte mensual (modo
+              Evolución).
             </p>
           ) : null}
 
