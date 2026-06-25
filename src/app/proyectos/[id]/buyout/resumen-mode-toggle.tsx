@@ -4,11 +4,12 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 
-export type ResumenMode = "vigente" | "evolucion"
+export type ResumenMode = "vigente" | "evolucion" | "contratacion"
 
 /**
- * Toggle Vigente / Evolución del Resumen (SPEC-buyout.md §6). El modo vive en el
- * searchParam `?modo=evolucion` (lo lee el Server Component); aquí solo navegamos.
+ * Toggle Vigente / Evolución / Contratación del Resumen (SPEC-buyout.md §6). El modo
+ * vive en el searchParam `?modo=…` (lo lee el Server Component); aquí solo navegamos.
+ * Vigente y Evolución quedan idénticos; Contratación desglosa el total por estado.
  */
 export function ResumenModeToggle({ modo }: { modo: ResumenMode }) {
   const pathname = usePathname()
@@ -18,6 +19,11 @@ export function ResumenModeToggle({ modo }: { modo: ResumenMode }) {
       key: "evolucion",
       label: "Evolución",
       href: `${pathname}?modo=evolucion`,
+    },
+    {
+      key: "contratacion",
+      label: "Contratación",
+      href: `${pathname}?modo=contratacion`,
     },
   ]
   return (

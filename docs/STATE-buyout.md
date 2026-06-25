@@ -36,8 +36,12 @@
 ✅ **Fase 5 (ajuste · 2026-06-25 · sesión 3)** — el grupo **"▸ Meses"** del Vigente ahora incluye una
    columna por **cada** mes cerrado, **incluido el mes actual si ya está cerrado** (antes lo excluía).
    **Evolución intacta**, **sin migración**. Detalle abajo.
+✅ **Modo Contratación (desglose por estado · 2026-06-25 · sesión 4)** — tercer modo del Resumen
+   (toggle **Vigente · Evolución · Contratación**, mismo patrón `?modo=`). Desglosa el total vigente
+   por partida en los **2 ejes independientes** (madurez · contratación). **Sin migración**,
+   **Vigente/Evolución idénticos**, **Pagos intacto**. Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** + botón manual a Pagos.
-   Pendiente Resumen: modos **Contratado-vs-No** / **Qué falta**.
+   Pendiente Resumen: modo **Qué falta** (nota libre por partida no contratada).
 
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
@@ -461,10 +465,52 @@ ahora muestra **una columna por CADA mes cerrado, INCLUYENDO el mes actual si ya
 cerrado**, en **Vigente** el **"▸ Meses"** abre y muestra la columna **"Ppto Junio 2026"**; colapsado
 todo queda igual que antes; **Evolución intacta**; **Pagos intacto**.
 
+## Modo Contratación — desglose por estado (hecho 2026-06-25, sesión 4)
+
+Tercer modo del Resumen (SPEC-buyout.md §6, "Contratado vs No"). Es un modo **APARTE**: no toca
+las columnas ni la lógica de Vigente/Evolución. **Sin migración** (reusa el rollup vigente).
+
+### Qué muestra
+- Toggle del Resumen ahora con **3 pestañas**: **Vigente · Evolución · Contratación** (mismo patrón
+  `?modo=contratacion`). Vigente y Evolución quedan **idénticos**.
+- Por cada partida (agrupadas por capítulo), el **total MXN de la cotización VIGENTE** de sus
+  conceptos, partido por estado en **2 ejes INDEPENDIENTES** (las cols V/W del Excel):
+  - **Madurez:** `Paramétrico` (Σ conceptos `kind=parametrico`) · `Ppto` (Σ `kind=ppto`).
+  - **Contratación:** `No Contratado` (Σ `contratado=false`) · `Contratado` (Σ `contratado=true`).
+  - **Total** y **% Contratado** (= Contratado ÷ Total, avance por dinero).
+- Los dos ejes son **dos cortes del mismo total** → `Paramétrico+Ppto = Total` y
+  `NoContratado+Contratado = Total`. Encabezados **agrupados** ("Madurez | Contratación") + un
+  **divisor vertical** entre los 2 pares para que se lea claro. **% Contratado con barrita** de
+  avance (verde) + texto.
+- **Subtotal por capítulo** + **TOTAL general** + **% Contratado global**.
+
+### Cómo cuadra (sin duplicar lógica)
+- **`src/lib/buyout/rollup.ts`** — extendí `PartidaAgg` con 4 cubetas (`parametrico`, `ppto`,
+  `noContratado`, `contratado`) y `aggregateLines` las acumula **en la MISMA pasada** que `total`,
+  reusando el mismo `t = lineTotalMxn(l)`. Por construcción cada par suma exactamente el total y el
+  TOTAL del desglose **iguala** el total Vigente (misma fuente, mismas `aggs` del rollup) → **cero
+  queries extra**, **cero lógica nueva de carga**. Vigente/Evolución siguen leyendo `agg.total` igual.
+- **`buyout/page.tsx`** — parseo de `?modo=contratacion`, arma `contraChapters` (solo en este modo)
+  desde `chapterViews` ya calculados, y rinde `<ContratacionTable>`. Vigente/Evolución sin cambios.
+- **`buyout/contratacion-table.tsx` (nuevo)** — la tabla del modo (Server Component, patrón de
+  `EvolucionTable`): encabezado agrupado de 2 filas, separador entre ejes, filas por partida con
+  links a Partida, subtotal por capítulo y TOTAL + % global con barrita.
+- **`buyout/resumen-mode-toggle.tsx`** — `ResumenMode` += `"contratacion"` + 3ª pestaña.
+
+### Verificación
+- **Cálculo (node, partida mixta mármol):** suministro+pulido contratados, colocación+cenefa(USD) no;
+  suministro+colocación ppto, cenefa+pulido paramétrico → Paramétrico $102,660 + Ppto $256,940 =
+  **Total $359,600**; No Contratado $118,900 + Contratado $240,700 = **$359,600**; **% = 66.9%**.
+  Subtotales y TOTAL general cuadran; `grand.total` = Σ total MXN vigente de todas las líneas ✓.
+- **Gate verde:** `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (las 3
+  rutas buyout dinámicas; **las 6 de Pagos idénticas** en el manifest). Render tras login/RLS → prueba
+  de Alfonso: en una partida con conceptos mezclados, ver las 4 columnas y que cada par sume el Total;
+  subtotales y TOTAL cuadran con el modo Vigente.
+
 ## Qué sigue
 
-- **Resumen (resto):** modos **Contratado vs No** (% por dinero) y **Qué falta** (nota libre por
-  partida no contratada).
+- **Resumen (resto):** modo **Qué falta** (nota libre por partida no contratada). (El modo
+  **Contratado vs No** ya está → "Contratación".)
 - Luego: **Fase 5 (resto):** marcar contratado + botón manual a Pagos (el historial/comparativo ya
   está) · Fase 6 carga real de L3 + cuadre.
 - **Import de Excel = diferido** (futuro opcional, §5); la captura es manual en V1.

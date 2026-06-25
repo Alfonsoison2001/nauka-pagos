@@ -22,6 +22,7 @@ import { createClient } from "@/lib/supabase/server"
 import { cn, formatMXN } from "@/lib/utils"
 import { BaseCell } from "./base-cell"
 import { CerrarMesButton } from "./cerrar-mes-button"
+import { type ContraChapter, ContratacionTable } from "./contratacion-table"
 import { DifText } from "./dif-text"
 import {
   type EvoChapter,
@@ -77,7 +78,12 @@ export default async function BuyoutResumenPage({
 }) {
   const { id } = await params
   const { modo: modoParam, meses: mesesParam } = await searchParams
-  const modo: ResumenMode = modoParam === "evolucion" ? "evolucion" : "vigente"
+  const modo: ResumenMode =
+    modoParam === "evolucion"
+      ? "evolucion"
+      : modoParam === "contratacion"
+        ? "contratacion"
+        : "vigente"
   // Grupo de columnas de meses (solo en Vigente): colapsado por default.
   const mesesOpen = modo === "vigente" && mesesParam === "open"
   const sb = await createClient()
@@ -234,6 +240,30 @@ export default async function BuyoutResumenPage({
       dif: p.dif,
     })),
   }))
+  // CONTRATACIÓN (modo aparte): el mismo total vigente por partida, partido por
+  // estado en 2 ejes (madurez · contratación). Sale de los buckets del rollup
+  // (mismas `aggs`) → Total/subtotales/TOTAL cuadran con Vigente por construcción.
+  // Solo se arma en este modo (no toca Vigente/Evolución).
+  const contraChapters: ContraChapter[] =
+    modo === "contratacion"
+      ? chapterViews.map((ch) => ({
+          nombre: ch.nombre,
+          partidas: ch.partidas.map((p) => ({
+            id: p.id,
+            nombre: p.nombre,
+            parametrico: p.agg.parametrico,
+            ppto: p.agg.ppto,
+            noContratado: p.agg.noContratado,
+            contratado: p.agg.contratado,
+            total: p.agg.total,
+          })),
+          parametrico: ch.partidas.reduce((a, p) => a + p.agg.parametrico, 0),
+          ppto: ch.partidas.reduce((a, p) => a + p.agg.ppto, 0),
+          noContratado: ch.partidas.reduce((a, p) => a + p.agg.noContratado, 0),
+          contratado: ch.partidas.reduce((a, p) => a + p.agg.contratado, 0),
+          total: ch.total,
+        }))
+      : []
   // ¿La foto del mes en curso quedó desfasada vs el total vivo de hoy? (drift por
   // partida: alguna difiere → la columna en curso se marca "desactualizado".)
   const currentSnap = currentClose
@@ -300,6 +330,22 @@ export default async function BuyoutResumenPage({
             . Dif compara el Ppto Base contra el mes más reciente (el en curso).
             Donde un mes no tenía una partida, se muestra $0 para alinear la
             rejilla.
+          </p>
+        </>
+      ) : modo === "contratacion" ? (
+        <>
+          <ContratacionTable projectId={id} chapters={contraChapters} />
+          <p className="text-sm text-muted-foreground">
+            Dos cortes del{" "}
+            <span className="font-medium text-nauka-dark">mismo</span> total
+            vigente, por dos ejes independientes:{" "}
+            <span className="font-medium text-nauka-dark">Madurez</span>{" "}
+            (Paramétrico + Ppto = Total) y{" "}
+            <span className="font-medium text-nauka-dark">Contratación</span>{" "}
+            (No Contratado + Contratado = Total). El{" "}
+            <span className="font-medium text-nauka-dark">% Contratado</span> es
+            el avance por dinero (Contratado ÷ Total). El Total cuadra con el
+            modo Vigente.
           </p>
         </>
       ) : (

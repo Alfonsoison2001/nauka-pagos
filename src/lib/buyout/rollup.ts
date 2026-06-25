@@ -32,6 +32,18 @@ export type Contratacion = "contratado" | "no_contratado" | "parcial"
 export type PartidaAgg = {
   /** Σ del total MXN de los conceptos vigentes. */
   total: number
+  // Dos ejes INDEPENDIENTES que parten el mismo `total` en dos cubetas cada uno
+  // (como las cols V/W del Excel). Por construcción:
+  //   parametrico + ppto         === total   (eje madurez)
+  //   noContratado + contratado  === total   (eje contratación)
+  /** Eje madurez — Σ MXN de conceptos con madurez=paramétrico. */
+  parametrico: number
+  /** Eje madurez — Σ MXN de conceptos con madurez=ppto. */
+  ppto: number
+  /** Eje contratación — Σ MXN de conceptos NO contratados. */
+  noContratado: number
+  /** Eje contratación — Σ MXN de conceptos contratados. */
+  contratado: number
   /** Cuántos conceptos vigentes tiene. */
   count: number
   /** Madurez agregada: una sola si todas coinciden, "parcial" si mezclan. */
@@ -78,6 +90,10 @@ export function aggregateLines(lines: AggInput[]): PartidaAgg {
   if (lines.length === 0) {
     return {
       total: 0,
+      parametrico: 0,
+      ppto: 0,
+      noContratado: 0,
+      contratado: 0,
       count: 0,
       madurez: null,
       contratacion: null,
@@ -86,6 +102,12 @@ export function aggregateLines(lines: AggInput[]): PartidaAgg {
     }
   }
   let total = 0
+  // Cubetas por estado (los 2 ejes). Se acumulan en la MISMA pasada que `total`,
+  // reusando el mismo `t = lineTotalMxn(l)` → cada par suma exactamente el total.
+  let paramSum = 0
+  let pptoSum = 0
+  let noContratadoSum = 0
+  let contratadoSum = 0
   let allPpto = true
   let allParam = true
   let allContratado = true
@@ -93,11 +115,22 @@ export function aggregateLines(lines: AggInput[]): PartidaAgg {
   let lastUpdate: string | null = null
   const proveedores = new Set<string>()
   for (const l of lines) {
-    total += lineTotalMxn(l)
-    if (l.kind === "ppto") allParam = false
-    else allPpto = false
-    if (l.contratado) allNoContratado = false
-    else allContratado = false
+    const t = lineTotalMxn(l)
+    total += t
+    if (l.kind === "ppto") {
+      pptoSum += t
+      allParam = false
+    } else {
+      paramSum += t
+      allPpto = false
+    }
+    if (l.contratado) {
+      contratadoSum += t
+      allNoContratado = false
+    } else {
+      noContratadoSum += t
+      allContratado = false
+    }
     if (l.quote_date && (!lastUpdate || l.quote_date > lastUpdate)) {
       lastUpdate = l.quote_date
     }
@@ -116,6 +149,10 @@ export function aggregateLines(lines: AggInput[]): PartidaAgg {
       : "parcial"
   return {
     total,
+    parametrico: paramSum,
+    ppto: pptoSum,
+    noContratado: noContratadoSum,
+    contratado: contratadoSum,
     count: lines.length,
     madurez,
     contratacion,
