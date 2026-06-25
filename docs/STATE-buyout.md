@@ -40,6 +40,11 @@
    (toggle **Vigente · Evolución · Contratación**, mismo patrón `?modo=`). Desglosa el total vigente
    por partida en los **2 ejes independientes** (madurez · contratación). **Sin migración**,
    **Vigente/Evolución idénticos**, **Pagos intacto**. Detalle abajo.
+✅ **Contratación · % por cubeta (2026-06-25 · sesión 5)** — cada cubeta (Paramétrico · Ppto · No
+   Contratado · Contratado) muestra ahora su **monto Y su % del total de la partida** (ej.
+   "$240,700 (67%)", % atenuado). Cada par suma **100%** (complemento derivado → sin descuadre por
+   redondeo); base 0 → "—". También en subtotales de capítulo y TOTAL general. **Solo presentación**
+   (cero queries; reusa las cubetas del rollup). Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** + botón manual a Pagos.
    Pendiente Resumen: modo **Qué falta** (nota libre por partida no contratada).
 
@@ -506,6 +511,40 @@ las columnas ni la lógica de Vigente/Evolución. **Sin migración** (reusa el r
   rutas buyout dinámicas; **las 6 de Pagos idénticas** en el manifest). Render tras login/RLS → prueba
   de Alfonso: en una partida con conceptos mezclados, ver las 4 columnas y que cada par sume el Total;
   subtotales y TOTAL cuadran con el modo Vigente.
+
+## Modo Contratación · % por cubeta (hecho 2026-06-25, sesión 5)
+
+Mejora **solo de presentación** sobre el modo Contratación. **Un solo archivo tocado**
+(`buyout/contratacion-table.tsx`); **sin migración**, **sin queries nuevas**, **rollup intacto**,
+**Vigente/Evolución sin tocar**, **Pagos intacto**.
+
+### Qué cambió
+- Cada una de las **4 cubetas** (Paramétrico · Ppto · No Contratado · Contratado) muestra ahora su
+  **monto Y su % del total de esa fila**, en línea y con el % **atenuado** (`text-muted-foreground`
+  / `text-white/55` en la fila oscura): ej. **"$ 240,700.00 (67%)"**. El monto hereda el color de
+  la celda (No Contratado atenuado, Contratado en verde); el % va en tono secundario → se lee limpio.
+- Aplica igual a las **filas de Subtotal por capítulo** y al **TOTAL general** (cada % sobre su propio
+  total de fila).
+- La columna headline **% Contratado** (barrita de avance, una decimal) **se conserva** tal cual.
+
+### Cómo cuadra (cada par = 100%, sin descuadre por redondeo)
+- Helper puro **`estadoPcts(row)`**: para que `%Paramétrico + %Ppto = 100%` y
+  `%NoContratado + %Contratado = 100%` **exactos** pese al redondeo a entero, **ancla** `ppto` y
+  `contratado` (los redondea) y **deriva el complemento** (`parametrico = 100 − %ppto`,
+  `noContratado = 100 − %contratado`). Así nunca aparece 99% ni 101% en un par.
+- **Total = 0** (partida vacía) → cada % es `null` → la celda muestra **"—"** (no divide entre 0).
+- Componente **`MontoPct`** (monto + % atenuado en línea) reemplaza el `formatMXN` suelto en las 12
+  celdas de cubeta (4 partida + 4 subtotal + 4 TOTAL). Reusa las cubetas que ya trae cada
+  `ContraPartida`/`ContraChapter` desde el rollup → **cero cálculo de carga nuevo**.
+
+### Verificación
+- **Cálculo (node, `estadoPcts`):** mármol mixta → Madurez 29% + 71% = 100%, Contratación 33% + 67%
+  = 100%; casos de redondeo límite (12.5/87.5 → 12%+88%; 0.5/99.5 → 0%+100% y 99%+1%) **siempre
+  100%**; base 0 → "—". El Contratado del mármol da **67%** (= el ejemplo pedido).
+- **Gate verde:** `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (las 3
+  rutas buyout dinámicas; **las 6 de Pagos idénticas** en el manifest). Render tras login/RLS → prueba
+  de Alfonso: en una partida mixta, cada cubeta muestra su % y cada par suma 100%; subtotales y TOTAL
+  igual; el Total sigue cuadrando con Vigente.
 
 ## Qué sigue
 

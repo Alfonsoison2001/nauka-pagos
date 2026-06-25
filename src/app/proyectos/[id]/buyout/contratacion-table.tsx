@@ -8,10 +8,11 @@ import { cn, formatMXN } from "@/lib/utils"
  * estado en DOS ejes INDEPENDIENTES (cols V/W del Excel):
  *   • Madurez:      Paramétrico + Ppto         = Total
  *   • Contratación: No Contratado + Contratado = Total
- * Son dos cortes del MISMO total → cada par suma el Total. El % Contratado es el
- * avance por dinero (Contratado ÷ Total). Misma fuente que el rollup vigente
- * (lib/buyout/rollup) → el Total cuadra con el modo Vigente. Subtotal por capítulo,
- * TOTAL general y % Contratado global al pie.
+ * Son dos cortes del MISMO total → cada par suma el Total. Cada cubeta muestra su
+ * monto Y su % del total de la fila (ej. "$240,700 (67%)"), con cada par sumando
+ * 100%. El % Contratado al pie es el avance por dinero (Contratado ÷ Total). Misma
+ * fuente que el rollup vigente (lib/buyout/rollup) → el Total cuadra con el modo
+ * Vigente. Subtotal por capítulo, TOTAL general y % Contratado global al pie.
  */
 
 /** Una partida con su total vigente partido por estado. */
@@ -40,6 +41,56 @@ export type ContraChapter = {
 // que son dos pares independientes.
 const AXIS_DIV = "border-l border-nauka-card-border"
 const AXIS_DIV_DARK = "border-l border-white/25"
+
+/** Los 4 % por estado de una fila (cubeta ÷ total de la fila). Para que cada PAR
+ *  sume EXACTO 100% pese al redondeo a entero, se redondean `ppto` y `contratado`
+ *  y su complemento (`parametrico` / `noContratado`) se deriva como 100 − ese %.
+ *  Cada uno es null si el total ≤ 0 → la celda muestra "—" (sin dividir entre 0). */
+function estadoPcts(row: { ppto: number; contratado: number; total: number }): {
+  parametrico: number | null
+  ppto: number | null
+  noContratado: number | null
+  contratado: number | null
+} {
+  if (!(row.total > 0)) {
+    return {
+      parametrico: null,
+      ppto: null,
+      noContratado: null,
+      contratado: null,
+    }
+  }
+  const ppto = Math.round((row.ppto / row.total) * 100)
+  const contratado = Math.round((row.contratado / row.total) * 100)
+  return {
+    parametrico: 100 - ppto,
+    ppto,
+    noContratado: 100 - contratado,
+    contratado,
+  }
+}
+
+/** Monto MXN + su % del total de la fila, en línea y atenuado: "$240,700 (67%)".
+ *  pct null (total ≤ 0) → "(—)". El monto hereda el color de la celda; el % va
+ *  atenuado (secundario) para que se lea limpio. */
+function MontoPct({
+  amount,
+  pct,
+  onDark,
+}: {
+  amount: number
+  pct: number | null
+  onDark?: boolean
+}) {
+  return (
+    <span className="whitespace-nowrap">
+      {formatMXN(amount)}{" "}
+      <span className={onDark ? "text-white/55" : "text-muted-foreground"}>
+        ({pct === null ? "—" : `${pct}%`})
+      </span>
+    </span>
+  )
+}
 
 /** % contratado (Contratado ÷ Total) como barrita de avance + texto. */
 function PctBar({ value, onDark }: { value: number | null; onDark?: boolean }) {
@@ -99,6 +150,7 @@ export function ContratacionTable({
     contratado: chapters.reduce((a, c) => a + c.contratado, 0),
     total: chapters.reduce((a, c) => a + c.total, 0),
   }
+  const gp = estadoPcts(g)
   return (
     <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
       <table className="w-full text-sm tabular-nums">
@@ -130,7 +182,7 @@ export function ContratacionTable({
               % Contratado
             </th>
           </tr>
-          {/* Fila 2: las 4 columnas de estado (2 por eje). */}
+          {/* Fila 2: las 4 columnas de estado (2 por eje), con monto y % del total. */}
           <tr className="bg-nauka-dark text-[11px] uppercase tracking-wider text-white/55">
             <th className="px-3 pb-2 text-right font-medium">Paramétrico</th>
             <th className="px-3 pb-2 text-right font-medium">Ppto</th>
@@ -143,102 +195,116 @@ export function ContratacionTable({
           </tr>
         </thead>
         <tbody>
-          {chapters.map((ch) => (
-            <Fragment key={ch.nombre}>
-              <tr className="bg-nauka-subtle">
-                <td
-                  colSpan={7}
-                  className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
-                >
-                  {ch.nombre}
-                </td>
-              </tr>
-              {ch.partidas.length === 0 ? (
-                <tr className="border-b border-nauka-subtle">
+          {chapters.map((ch) => {
+            const sp = estadoPcts(ch)
+            return (
+              <Fragment key={ch.nombre}>
+                <tr className="bg-nauka-subtle">
                   <td
                     colSpan={7}
-                    className="px-3 py-2 italic text-muted-foreground"
+                    className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
                   >
-                    Sin partidas en este capítulo
+                    {ch.nombre}
                   </td>
                 </tr>
-              ) : (
-                ch.partidas.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="border-b border-nauka-subtle hover:bg-nauka-bg"
-                  >
-                    <td className="px-3 py-2">
-                      <Link
-                        href={`/proyectos/${projectId}/buyout/partida?partida=${p.id}`}
-                        className="transition-colors hover:text-nauka-accent"
-                      >
-                        {p.nombre}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2 text-right text-muted-foreground">
-                      {formatMXN(p.parametrico)}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {formatMXN(p.ppto)}
-                    </td>
+                {ch.partidas.length === 0 ? (
+                  <tr className="border-b border-nauka-subtle">
                     <td
-                      className={cn(
-                        "px-3 py-2 text-right text-muted-foreground",
-                        AXIS_DIV,
-                      )}
+                      colSpan={7}
+                      className="px-3 py-2 italic text-muted-foreground"
                     >
-                      {formatMXN(p.noContratado)}
-                    </td>
-                    <td className="px-3 py-2 text-right text-emerald-700">
-                      {formatMXN(p.contratado)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-medium text-nauka-dark">
-                      {formatMXN(p.total)}
-                    </td>
-                    <td className="px-3 py-2">
-                      <PctBar value={pctContratado(p.contratado, p.total)} />
+                      Sin partidas en este capítulo
                     </td>
                   </tr>
-                ))
-              )}
-              {/* Subtotal del capítulo. */}
-              <tr className="border-b border-nauka-subtle bg-nauka-bg/60">
-                <td className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Subtotal {ch.nombre}
-                </td>
-                <td className="px-3 py-2 text-right font-medium">
-                  {formatMXN(ch.parametrico)}
-                </td>
-                <td className="px-3 py-2 text-right font-medium">
-                  {formatMXN(ch.ppto)}
-                </td>
-                <td
-                  className={cn("px-3 py-2 text-right font-medium", AXIS_DIV)}
-                >
-                  {formatMXN(ch.noContratado)}
-                </td>
-                <td className="px-3 py-2 text-right font-medium">
-                  {formatMXN(ch.contratado)}
-                </td>
-                <td className="px-3 py-2 text-right font-semibold text-nauka-dark">
-                  {formatMXN(ch.total)}
-                </td>
-                <td className="px-3 py-2">
-                  <PctBar value={pctContratado(ch.contratado, ch.total)} />
-                </td>
-              </tr>
-            </Fragment>
-          ))}
+                ) : (
+                  ch.partidas.map((p) => {
+                    const pp = estadoPcts(p)
+                    return (
+                      <tr
+                        key={p.id}
+                        className="border-b border-nauka-subtle hover:bg-nauka-bg"
+                      >
+                        <td className="px-3 py-2">
+                          <Link
+                            href={`/proyectos/${projectId}/buyout/partida?partida=${p.id}`}
+                            className="transition-colors hover:text-nauka-accent"
+                          >
+                            {p.nombre}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">
+                          <MontoPct
+                            amount={p.parametrico}
+                            pct={pp.parametrico}
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <MontoPct amount={p.ppto} pct={pp.ppto} />
+                        </td>
+                        <td
+                          className={cn(
+                            "px-3 py-2 text-right text-muted-foreground",
+                            AXIS_DIV,
+                          )}
+                        >
+                          <MontoPct
+                            amount={p.noContratado}
+                            pct={pp.noContratado}
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right text-emerald-700">
+                          <MontoPct amount={p.contratado} pct={pp.contratado} />
+                        </td>
+                        <td className="px-3 py-2 text-right font-medium text-nauka-dark">
+                          {formatMXN(p.total)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <PctBar
+                            value={pctContratado(p.contratado, p.total)}
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+                {/* Subtotal del capítulo. */}
+                <tr className="border-b border-nauka-subtle bg-nauka-bg/60">
+                  <td className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Subtotal {ch.nombre}
+                  </td>
+                  <td className="px-3 py-2 text-right font-medium">
+                    <MontoPct amount={ch.parametrico} pct={sp.parametrico} />
+                  </td>
+                  <td className="px-3 py-2 text-right font-medium">
+                    <MontoPct amount={ch.ppto} pct={sp.ppto} />
+                  </td>
+                  <td
+                    className={cn("px-3 py-2 text-right font-medium", AXIS_DIV)}
+                  >
+                    <MontoPct amount={ch.noContratado} pct={sp.noContratado} />
+                  </td>
+                  <td className="px-3 py-2 text-right font-medium">
+                    <MontoPct amount={ch.contratado} pct={sp.contratado} />
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold text-nauka-dark">
+                    {formatMXN(ch.total)}
+                  </td>
+                  <td className="px-3 py-2">
+                    <PctBar value={pctContratado(ch.contratado, ch.total)} />
+                  </td>
+                </tr>
+              </Fragment>
+            )
+          })}
         </tbody>
         <tfoot>
           <tr className="bg-nauka-dark text-white">
             <td className="px-3 py-2.5 font-semibold">TOTAL</td>
             <td className="px-3 py-2.5 text-right font-semibold">
-              {formatMXN(g.parametrico)}
+              <MontoPct amount={g.parametrico} pct={gp.parametrico} onDark />
             </td>
             <td className="px-3 py-2.5 text-right font-semibold">
-              {formatMXN(g.ppto)}
+              <MontoPct amount={g.ppto} pct={gp.ppto} onDark />
             </td>
             <td
               className={cn(
@@ -246,10 +312,10 @@ export function ContratacionTable({
                 AXIS_DIV_DARK,
               )}
             >
-              {formatMXN(g.noContratado)}
+              <MontoPct amount={g.noContratado} pct={gp.noContratado} onDark />
             </td>
             <td className="px-3 py-2.5 text-right font-semibold">
-              {formatMXN(g.contratado)}
+              <MontoPct amount={g.contratado} pct={gp.contratado} onDark />
             </td>
             <td className="px-3 py-2.5 text-right font-semibold">
               {formatMXN(g.total)}
