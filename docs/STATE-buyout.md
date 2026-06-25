@@ -27,6 +27,12 @@
    revalidate), **índice de conceptos** y **"Ver historial"** por fila en Partida. + 2 arreglos
    (Evolución: el mes en curso ya cerrado **colapsa en UNA columna** con "cerrado ✓" /
    "desactualizado"; `pnpm dev` abre el navegador). **Sin migración nueva.**
+✅ **Fase 5 (mejoras de visualización · 2026-06-25 · sesión 2)** — dos mejoras pedidas por Alfonso,
+   ambas **sin migración**: (1) **Comparativo vigente vs anteriores** en el historial (panel con la
+   versión vigente como referencia + Δ Total MXN y Δ% de cada versión previa, verde/rojo) y (2)
+   **columnas de meses expandibles** en el Resumen **Vigente** (botón "▸ Meses", colapsado por
+   default, que intercala los meses cerrados entre Ppto Base y PPTO Vigente, reusando los snapshots
+   de Evolución). Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** + botón manual a Pagos.
    Pendiente Resumen: modos **Contratado-vs-No** / **Qué falta**.
 
@@ -371,6 +377,54 @@ nueva** (usa `buyout_item`/`buyout_quote`/`buyout_line` del Slice 1).
 manifest). Render tras login/RLS → prueba de Alfonso: actualizar un concepto varias veces y ver
 todas las versiones con la nueva como vigente; marcar otra como vigente y verla reflejada al
 instante en Resumen y Partida.
+
+## Fase 5 (mejoras de visualización) — comparativo de versiones + meses expandibles (hecho 2026-06-25, sesión 2)
+
+Dos mejoras de **visualización** pedidas por Alfonso. **Sin migración nueva** (todo es UI sobre las
+tablas y libs ya existentes); **Pagos intacto**; las 6 rutas de Pagos idénticas en el manifest.
+
+### Mejora 1 — Historial: comparativo vigente vs anteriores (pantalla Subcategoría)
+- **`buyout/subcategoria/page.tsx`** — nuevo panel **`ComparativoVigente`** (+ `ComparativoRow`)
+  **encima** de la tabla de versiones: la versión **vigente** destacada como referencia (banda
+  emerald con proveedor · fecha · Total MXN) y, frente a **cada versión anterior**, su
+  **Δ = vigente − versión** en MXN y **Δ%** (verde = el vigente quedó más barato · rojo = más caro,
+  misma convención que el resto del módulo). Reusa `DeltaCell` (Δ MXN, ya existía) y **`DifText`**
+  (Δ%, importado de `../dif-text`) → **no se duplicó** lógica de formato/color.
+- Es **solo informativo**: NO toca la tabla de versiones ni **"Marcar vigente"** (intactos). Aparece
+  solo cuando hay **≥2 versiones** y existe una vigente (con 1 sola versión devuelve `null`).
+- Complementa la columna **"Δ vs anterior"** (paso entre cotizaciones consecutivas) que ya tenía la
+  tabla: el panel responde la otra pregunta — **cuánto difiere cada versión histórica de la que hoy
+  usamos** (útil sobre todo cuando la vigente NO es la más reciente).
+
+### Mejora 2 — Resumen Vigente: columnas de meses expandibles
+- **`buyout/meses-toggle.tsx` (nuevo, client)** — botón **"▸ Meses"** (chevron que rota). El estado
+  vive en el searchParam **`?meses=open`** (mismo patrón que el toggle Vigente/Evolución) → la tabla
+  siempre se rinde **bien formada en el servidor** (sin columnas ocultas ni `colSpan` a medias) y la
+  vista por default (colapsada) queda **idéntica** a antes. Colapsado por default; `scroll={false}`.
+- **`buyout/page.tsx`** — en modo Vigente, cuando `?meses=open`, intercala **entre Ppto Base y Ppto**
+  una columna por cada **mes cerrado anterior** (foto congelada `buyout_month_snapshot`), con sus
+  celdas en filas de partida, subtotal de capítulo y TOTAL; los `colSpan` de las cabeceras de
+  capítulo crecen `8 → 8+N`. El botón solo aparece si hay **≥1 mes cerrado anterior** que revelar.
+- **Misma fuente que el corte mensual / Evolución** (`lib/buyout/month-close.ts` `loadSnapshots` +
+  `lib/buyout/rollup.ts` `loadPartidaAggs`): los números **cuadran** con Evolución por construcción.
+  Conceptos nuevos salen en **$0** en meses previos (la celda usa `snapshot ?? 0`).
+
+### Decisión documentada (fusión Evolución sí/no)
+- **Evolución se queda como está** (vista dedicada siempre-expandida, foco en Dif vs base). NO se
+  fusionó: tocarla arriesgaba una vista ya probada, y el Vigente expandible cubre el "ver la
+  evolución sin salir del Vigente" que pidió Alfonso. Ambos **comparten** las libs de cierre/rollup
+  (cero lógica duplicada).
+- **El "mes en curso" NO es una columna nueva: es la columna `PPTO Vigente`** (total vivo de hoy). El
+  grupo expandible añade solo los meses cerrados **anteriores** → se evita duplicar la columna del mes
+  en curso (que en una rejilla Base|meses|en-curso|Ppto saldría dos veces con el mismo número). Una
+  leyenda bajo la tabla lo aclara. Es coherente con el "Arreglo A" de la sesión 1 (el mes en curso ya
+  cerrado se colapsa en una sola columna en Evolución).
+
+### Gate verde
+`pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (las 3 rutas buyout
+dinámicas; **las 6 de Pagos idénticas** en el manifest). El render tras login/RLS → prueba de Alfonso:
+en un concepto con varias versiones, ver el panel "Comparativo vs vigente" con sus Δ; en el Resumen
+Vigente, "▸ Meses" expande/colapsa las columnas y cuadran con el modo Evolución.
 
 ## Qué sigue
 

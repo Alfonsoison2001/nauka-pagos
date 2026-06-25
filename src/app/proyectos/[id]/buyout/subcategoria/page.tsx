@@ -12,6 +12,7 @@ import {
 import { formatDate } from "@/lib/format/fecha"
 import { createClient } from "@/lib/supabase/server"
 import { cn, formatMXN } from "@/lib/utils"
+import { DifText } from "../dif-text"
 import type { CurrencyOption } from "../partida/actions"
 import { BuyoutPdfCell } from "../partida/buyout-pdf-cell"
 import { MarcarVigenteButton } from "./marcar-vigente-button"
@@ -126,6 +127,7 @@ function HistoryView({
         />
       ) : (
         <>
+          <ComparativoVigente versions={versions} />
           <VersionsTable
             projectId={projectId}
             itemId={history.itemId}
@@ -251,6 +253,88 @@ function VersionRow({
         )}
       </td>
     </tr>
+  )
+}
+
+// --- Comparativo vigente vs versiones anteriores ----------------------------
+
+/**
+ * Vista de COMPARACIÓN del historial: la versión VIGENTE destacada como referencia
+ * y, frente a cada versión anterior, su diferencia de Total MXN (Δ) y Δ% — para ver
+ * de un vistazo cuánto cambió el ppto respecto a las previas. Δ = vigente − versión:
+ * verde si el vigente quedó más barato, rojo si más caro (misma convención que el
+ * resto del módulo). Es solo informativo; NO toca "Marcar vigente". Devuelve null si
+ * no hay vigente o no hay versiones anteriores (una sola versión → nada que comparar).
+ */
+function ComparativoVigente({ versions }: { versions: QuoteVersion[] }) {
+  const vigente = versions.find((v) => v.isSelected)
+  const previas = versions.filter((v) => !v.isSelected)
+  if (!vigente || previas.length === 0) return null
+  return (
+    <section className="overflow-hidden rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-nauka-subtle px-4 py-3">
+        <h3 className="text-sm font-semibold text-nauka-dark">
+          Comparativo vs vigente
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Δ = cuánto cambia el ppto vigente frente a cada versión anterior
+          (verde = el vigente quedó más barato · rojo = más caro).
+        </p>
+      </header>
+      {/* Vigente = referencia destacada. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-emerald-50/70 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <VigenteBadge />
+          <span className="truncate text-sm font-medium text-nauka-dark">
+            {vigente.proveedor || "Sin proveedor"}
+          </span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {formatDate(vigente.quoteDate)}
+          </span>
+        </div>
+        <span className="shrink-0 text-base font-semibold tabular-nums text-nauka-dark">
+          {formatMXN(vigente.totalMxn)}
+        </span>
+      </div>
+      {/* Cada versión anterior, con su Δ frente al vigente. */}
+      <ul className="divide-y divide-nauka-subtle">
+        {previas.map((v) => (
+          <ComparativoRow key={v.quoteId} vigente={vigente} version={v} />
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function ComparativoRow({
+  vigente,
+  version: v,
+}: {
+  vigente: QuoteVersion
+  version: QuoteVersion
+}) {
+  const deltaMxn = vigente.totalMxn - v.totalMxn
+  const deltaPct = v.totalMxn > 0 ? vigente.totalMxn / v.totalMxn - 1 : null
+  return (
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-0.5 px-4 py-2.5">
+      <div className="flex min-w-0 flex-1 items-baseline gap-2">
+        <span className="truncate text-sm text-nauka-dark">
+          {v.proveedor || "Sin proveedor"}
+        </span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {formatDate(v.quoteDate)}
+        </span>
+      </div>
+      <span className="w-36 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+        {formatMXN(v.totalMxn)}
+      </span>
+      <span className="w-32 shrink-0 text-right text-sm tabular-nums">
+        <DeltaCell delta={deltaMxn} />
+      </span>
+      <span className="w-16 shrink-0 text-right text-sm tabular-nums">
+        <DifText dif={deltaPct} />
+      </span>
+    </li>
   )
 }
 

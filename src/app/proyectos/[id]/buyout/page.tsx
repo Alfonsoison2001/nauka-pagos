@@ -23,7 +23,12 @@ import { cn, formatMXN } from "@/lib/utils"
 import { BaseCell } from "./base-cell"
 import { CerrarMesButton } from "./cerrar-mes-button"
 import { DifText } from "./dif-text"
-import { type EvoChapter, EvolucionTable } from "./evolucion-table"
+import {
+  type EvoChapter,
+  EvolucionTable,
+  type EvoMonth,
+} from "./evolucion-table"
+import { MesesToggle } from "./meses-toggle"
 import { type ResumenMode, ResumenModeToggle } from "./resumen-mode-toggle"
 
 export const metadata = { title: "Buy-Out · Resumen" }
@@ -68,11 +73,13 @@ export default async function BuyoutResumenPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ modo?: string }>
+  searchParams: Promise<{ modo?: string; meses?: string }>
 }) {
   const { id } = await params
-  const { modo: modoParam } = await searchParams
+  const { modo: modoParam, meses: mesesParam } = await searchParams
   const modo: ResumenMode = modoParam === "evolucion" ? "evolucion" : "vigente"
+  // Grupo de columnas de meses (solo en Vigente): colapsado por default.
+  const mesesOpen = modo === "vigente" && mesesParam === "open"
   const sb = await createClient()
 
   const { data: project } = await sb
@@ -191,13 +198,20 @@ export default async function BuyoutResumenPage({
     label: periodoLabel(m.periodo),
     short: periodoShort(m.periodo),
   }))
-  const snapshotByMonth =
-    modo === "evolucion"
-      ? await loadSnapshots(
-          sb,
-          closedMonths.map((m) => m.id),
-        )
-      : new Map<string, Map<string, number>>()
+  // Fotos congeladas (buyout_month_snapshot): las usan Evolución y —misma fuente—
+  // el grupo de meses expandible del Vigente (NO se duplica el cálculo).
+  const needSnapshots =
+    modo === "evolucion" || (mesesOpen && frozenMonths.length > 0)
+  const snapshotByMonth = needSnapshots
+    ? await loadSnapshots(
+        sb,
+        closedMonths.map((m) => m.id),
+      )
+    : new Map<string, Map<string, number>>()
+  // Columnas de meses a intercalar en el Vigente (solo si está expandido). El mes
+  // EN CURSO no va aquí: es la columna PPTO Vigente (no se duplica). Son los meses
+  // cerrados ANTERIORES (foto congelada), idénticos a los de Evolución.
+  const mesesCols: EvoMonth[] = mesesOpen ? evoMonths : []
   const evoChapters: EvoChapter[] = chapterViews.map((ch) => ({
     nombre: ch.nombre,
     base: ch.base,
@@ -281,6 +295,14 @@ export default async function BuyoutResumenPage({
         </>
       ) : (
         <>
+          {/* Grupo de columnas de meses (colapsable): solo si hay meses cerrados
+              anteriores que revelar (el en curso ya es la columna PPTO Vigente). */}
+          {frozenMonths.length > 0 ? (
+            <div className="flex justify-end">
+              <MesesToggle open={mesesOpen} count={frozenMonths.length} />
+            </div>
+          ) : null}
+
           <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
             <table className="w-full text-sm tabular-nums">
               <thead className="sticky top-0 z-10">
@@ -288,6 +310,14 @@ export default async function BuyoutResumenPage({
                   <th className="px-3 py-2.5 text-left">Concepto</th>
                   <th className="px-3 py-2.5 text-left">Proveedor</th>
                   <th className="px-3 py-2.5 text-right">Ppto Base</th>
+                  {mesesCols.map((m) => (
+                    <th
+                      key={m.id}
+                      className="px-3 py-2.5 text-right whitespace-nowrap"
+                    >
+                      {m.label}
+                    </th>
+                  ))}
                   <th className="px-3 py-2.5 text-right">Ppto</th>
                   <th className="px-3 py-2.5 text-right">Dif</th>
                   <th className="px-3 py-2.5 text-right">$/m²</th>
@@ -310,6 +340,8 @@ export default async function BuyoutResumenPage({
                     projectId={id}
                     areaInt={areaInt}
                     admin={admin}
+                    months={mesesCols}
+                    snapshotByMonth={snapshotByMonth}
                   />
                 ))}
               </tbody>
@@ -321,6 +353,20 @@ export default async function BuyoutResumenPage({
                   <td className="px-3 py-2.5 text-right font-semibold">
                     {formatMXN(totalBase)}
                   </td>
+                  {mesesCols.map((m) => (
+                    <td
+                      key={m.id}
+                      className="px-3 py-2.5 text-right font-semibold"
+                    >
+                      {formatMXN(
+                        partidaViews.reduce(
+                          (a, p) =>
+                            a + (snapshotByMonth.get(m.id)?.get(p.id) ?? 0),
+                          0,
+                        ),
+                      )}
+                    </td>
+                  ))}
                   <td className="px-3 py-2.5 text-right font-semibold">
                     {formatMXN(total)}
                   </td>
@@ -336,6 +382,17 @@ export default async function BuyoutResumenPage({
               </tfoot>
             </table>
           </div>
+
+          {mesesOpen ? (
+            <p className="text-sm text-muted-foreground">
+              Cada columna de mes es la foto congelada del total vigente por
+              partida al cerrar ese mes;{" "}
+              <span className="font-medium text-nauka-dark">PPTO Vigente</span>{" "}
+              es el mes en curso (total vivo de hoy). Conceptos nuevos aparecen
+              en $0 en los meses previos a su captura. Cuadra con el corte
+              mensual (modo Evolución).
+            </p>
+          ) : null}
 
           {/* Pie: $/m² interior + USD/m² (spec §6). */}
           <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm text-muted-foreground">
@@ -416,18 +473,24 @@ function ChapterGroup({
   projectId,
   areaInt,
   admin,
+  months,
+  snapshotByMonth,
 }: {
   chapter: ChapterView
   projectId: string
   areaInt: number | null
   admin: boolean
+  months: EvoMonth[]
+  snapshotByMonth: Map<string, Map<string, number>>
 }) {
   const perM2 = (v: number) => (areaInt ? formatMXN(v / areaInt) : "—")
+  const snap = (monthId: string, partidaId: string) =>
+    snapshotByMonth.get(monthId)?.get(partidaId) ?? 0
   return (
     <Fragment>
       <tr className="bg-nauka-subtle">
         <td
-          colSpan={8}
+          colSpan={8 + months.length}
           className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
         >
           {chapter.nombre}
@@ -435,7 +498,10 @@ function ChapterGroup({
       </tr>
       {chapter.partidas.length === 0 ? (
         <tr className="border-b border-nauka-subtle">
-          <td colSpan={8} className="px-3 py-2 italic text-muted-foreground">
+          <td
+            colSpan={8 + months.length}
+            className="px-3 py-2 italic text-muted-foreground"
+          >
             Sin partidas en este capítulo
           </td>
         </tr>
@@ -464,6 +530,14 @@ function ChapterGroup({
                 admin={admin}
               />
             </td>
+            {months.map((m) => (
+              <td
+                key={m.id}
+                className="px-3 py-2 text-right text-muted-foreground"
+              >
+                {formatMXN(snap(m.id, p.id))}
+              </td>
+            ))}
             <td className="px-3 py-2 text-right">{formatMXN(p.agg.total)}</td>
             <td className="px-3 py-2 text-right">
               <DifText dif={p.dif} />
@@ -491,6 +565,16 @@ function ChapterGroup({
         <td className="px-3 py-2 text-right font-medium">
           {formatMXN(chapter.base)}
         </td>
+        {months.map((m) => (
+          <td
+            key={m.id}
+            className="px-3 py-2 text-right font-medium text-muted-foreground"
+          >
+            {formatMXN(
+              chapter.partidas.reduce((a, p) => a + snap(m.id, p.id), 0),
+            )}
+          </td>
+        ))}
         <td className="px-3 py-2 text-right font-semibold text-nauka-dark">
           {formatMXN(chapter.total)}
         </td>
