@@ -176,10 +176,16 @@ export default async function BuyoutResumenPage({
   }
 
   // Cierre mensual / Evolución (SPEC §6): meses cerrados + fotos congeladas.
+  // El mes EN CURSO se muestra siempre en UNA sola columna (su total vivo). Si ya
+  // está cerrado, esa columna lleva "cerrado ✓" en vez de duplicarse con su foto; y
+  // si el vivo difiere de la foto (se editó tras cerrar), se marca "desactualizado".
   const periodoActual = currentPeriodo()
   const closedMonths = await loadClosedMonths(sb, id)
-  const currentClosed = closedMonths.some((m) => m.periodo === periodoActual)
-  const evoMonths = closedMonths.map((m) => ({
+  const currentClose = closedMonths.find((m) => m.periodo === periodoActual)
+  const currentClosed = currentClose != null
+  // Columnas congeladas = meses cerrados ANTERIORES (el en curso se colapsa abajo).
+  const frozenMonths = closedMonths.filter((m) => m.periodo !== periodoActual)
+  const evoMonths = frozenMonths.map((m) => ({
     id: m.id,
     periodo: m.periodo,
     label: periodoLabel(m.periodo),
@@ -205,6 +211,25 @@ export default async function BuyoutResumenPage({
       dif: p.dif,
     })),
   }))
+  // ¿La foto del mes en curso quedó desfasada vs el total vivo de hoy? (drift por
+  // partida: alguna difiere → la columna en curso se marca "desactualizado".)
+  const currentSnap = currentClose
+    ? snapshotByMonth.get(currentClose.id)
+    : undefined
+  const enCursoDrift = currentClosed
+    ? evoChapters.some((ch) =>
+        ch.partidas.some(
+          (p) => Math.abs(p.total - (currentSnap?.get(p.id) ?? 0)) > 0.005,
+        ),
+      )
+    : false
+  const enCurso = {
+    label: periodoLabel(periodoActual, !currentClosed),
+    closed: currentClosed,
+    drift: enCursoDrift,
+    periodo: periodoActual,
+    short: periodoShort(periodoActual),
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -222,7 +247,7 @@ export default async function BuyoutResumenPage({
 
       {modo === "evolucion" ? (
         <>
-          {evoMonths.length === 0 ? (
+          {closedMonths.length === 0 ? (
             <p className="rounded-xl border border-dashed border-nauka-card-border bg-white px-4 py-3 text-sm text-muted-foreground">
               Aún no hay meses cerrados.{" "}
               {admin
@@ -235,7 +260,7 @@ export default async function BuyoutResumenPage({
             chapters={evoChapters}
             months={evoMonths}
             snapshotByMonth={snapshotByMonth}
-            enCursoLabel={periodoLabel(periodoActual, true)}
+            enCurso={enCurso}
             totalBase={totalBase}
             total={total}
             totalDif={totalDif}
@@ -244,12 +269,14 @@ export default async function BuyoutResumenPage({
           <p className="text-sm text-muted-foreground">
             Cada columna de mes es la foto congelada del total vigente por
             partida al cerrarlo;{" "}
-            <span className="font-medium text-nauka-dark">
-              {periodoLabel(periodoActual, true)}
-            </span>{" "}
-            es el total vivo de hoy. Dif compara el Ppto Base contra el mes más
-            reciente (el en curso). Donde un mes no tenía una partida, se
-            muestra $0 para alinear la rejilla.
+            <span className="font-medium text-nauka-dark">{enCurso.label}</span>{" "}
+            es el total vivo de hoy
+            {enCurso.closed
+              ? " (ya cerrado: la foto y el vivo van en una sola columna; si difieren, se marca “desactualizado” y puedes Actualizar foto)"
+              : ""}
+            . Dif compara el Ppto Base contra el mes más reciente (el en curso).
+            Donde un mes no tenía una partida, se muestra $0 para alinear la
+            rejilla.
           </p>
         </>
       ) : (

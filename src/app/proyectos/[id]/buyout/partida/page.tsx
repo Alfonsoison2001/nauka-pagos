@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, History } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { isAdmin } from "@/lib/auth/roles"
@@ -434,6 +434,14 @@ function LineaRowCells({
       </td>
       <td className="px-3 py-2">
         <div className="flex items-center justify-end gap-1">
+          <Link
+            href={`/proyectos/${projectId}/buyout/subcategoria?item=${linea.item_id}`}
+            title="Ver historial de versiones"
+            aria-label={`Ver historial de ${linea.concepto}`}
+            className="inline-flex size-7 items-center justify-center rounded-full text-nauka-dark transition-colors hover:bg-muted"
+          >
+            <History className="size-4" />
+          </Link>
           <BuyoutPdfCell pdfPath={linea.pdf_url} />
           {admin ? (
             <>

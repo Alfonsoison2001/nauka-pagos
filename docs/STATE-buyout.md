@@ -1,6 +1,6 @@
 # STATE — Módulo Buy-Out
 
-> Bitácora de avance del módulo. Última actualización: **2026-06-24**.
+> Bitácora de avance del módulo. Última actualización: **2026-06-25**.
 > Spec: [`docs/SPEC-buyout.md`](SPEC-buyout.md) · Análisis del Excel: [`docs/future-modules/buyout-L3-estructura.md`](future-modules/buyout-L3-estructura.md).
 
 ## Estado actual
@@ -21,8 +21,14 @@
    total vigente por partida → `buyout_month_close` + `buyout_month_snapshot`), recerrar/reabrir,
    y **modo Evolución** (Base + meses cerrados + mes en curso en vivo + Dif, rellena 0 donde no
    había). Toggle Vigente/Evolución. **Sin migración nueva** (las tablas son del Slice 1).
-⏸️ **PAUSA para que Alfonso pruebe** antes del resto de modos (Contratado-vs-No / Qué falta) y
-   la Fase 5 (historial/comparativo + marcar contratado).
+✅ **Fase 5 (parcial) — Historial de pptos** (pantalla Subcategoría, §6.3): versiones por concepto
+   (todas las `buyout_quote` por fecha desc, **vigente** resaltada, **Δ vs anterior**, PDF, estado de
+   2 ejes), acción admin **"Marcar vigente"** (refleja al instante en Resumen y Partida vía
+   revalidate), **índice de conceptos** y **"Ver historial"** por fila en Partida. + 2 arreglos
+   (Evolución: el mes en curso ya cerrado **colapsa en UNA columna** con "cerrado ✓" /
+   "desactualizado"; `pnpm dev` abre el navegador). **Sin migración nueva.**
+⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** + botón manual a Pagos.
+   Pendiente Resumen: modos **Contratado-vs-No** / **Qué falta**.
 
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
@@ -328,12 +334,50 @@ RLS `is_admin()`, audit y grants). Faltan aún **Contratado vs No** y **Qué fal
   "Ppto Junio 2026" / "… (en curso)".
 - **Cerrar/reabrir/RLS y la rejilla con datos reales** quedan tras login → tu prueba.
 
+## Fase 5 (parcial) — Historial de pptos + 2 arreglos (hecho 2026-06-25)
+
+Pantalla **Subcategoría = historial de pptos** (SPEC §6.3) + dos arreglos pedidos. **Sin migración
+nueva** (usa `buyout_item`/`buyout_quote`/`buyout_line` del Slice 1).
+
+### Historial (Subcategoría)
+- **`src/lib/buyout/history.ts` (nuevo)** — `loadItemHistory()` (item validado vs proyecto + TODAS
+  sus cotizaciones no borradas por fecha desc, con el renglón de cada una → monto sin IVA y total
+  MXN vía `calcLinea`+TC, **misma fórmula que el rollup** → cuadra con Partida/Resumen) y
+  `loadConceptoIndex()` (índice de conceptos reusando `loadVigenteLines`, con Nº de versiones).
+- **`buyout/subcategoria/page.tsx` (reescrito)** — con `?item=` rinde la tabla de versiones
+  (Fecha · Proveedor · Moneda · Monto sin IVA · Total MXN · **Δ vs anterior** · Estado 2 ejes · PDF
+  · **VIGENTE**), la vigente resaltada; estado vacío si 0/1 versión. Sin `?item=`, el índice de
+  conceptos agrupado por partida. El PDF reusa `BuyoutPdfCell`.
+- **`buyout/subcategoria/actions.ts` (nuevo)** — `marcarVigente(projectId, itemId, quoteId)`:
+  admin-only (`getMyProfile`), valida item∈proyecto y quote∈item, baja la vigente anterior y sube la
+  elegida (1-vigente por item), actualiza `selected_quote_id`, **revalida Resumen + Partida +
+  Subcategoría** → cambio instantáneo. RLS `is_admin()` lo refuerza.
+- **`buyout/subcategoria/marcar-vigente-button.tsx` (nuevo)** — botón admin con diálogo de confirmación.
+- **`buyout/partida/page.tsx`** — quirúrgico: **"Ver historial"** (icono, todos los roles) por fila
+  → `subcategoria?item=<item>`.
+
+### Arreglos
+- **A — Evolución colapsa el mes en curso ya cerrado:** las columnas congeladas son solo los meses
+  cerrados **anteriores** (`frozenMonths`); el mes en curso es **una sola** columna (total vivo) con
+  badge **"cerrado ✓"** si ya tiene foto y **"desactualizado"** si el vivo difiere de la foto (drift
+  **por partida**); conserva **Reabrir** en su cabecera. Tocados: `buyout/page.tsx`,
+  `buyout/evolucion-table.tsx` (prop `enCursoLabel` → objeto `enCurso`).
+- **B — `pnpm dev` abre el navegador:** el script `dev` de `package.json` espera el puerto 3000
+  (`nc -z`, ≤30s) y hace `open http://localhost:3000` una vez, en segundo plano. `build`/`start` sin
+  tocar.
+
+### Gate verde
+`tsc` ✓ · `biome` ✓ · `pnpm build` ✓ (las 3 rutas buyout dinámicas; las 6 de Pagos idénticas en el
+manifest). Render tras login/RLS → prueba de Alfonso: actualizar un concepto varias veces y ver
+todas las versiones con la nueva como vigente; marcar otra como vigente y verla reflejada al
+instante en Resumen y Partida.
+
 ## Qué sigue
 
 - **Resumen (resto):** modos **Contratado vs No** (% por dinero) y **Qué falta** (nota libre por
   partida no contratada).
-- Luego: Fase 5 historial/comparativo + marcar contratado (botón manual a Pagos) · Fase 6 carga
-  real de L3 + cuadre.
+- Luego: **Fase 5 (resto):** marcar contratado + botón manual a Pagos (el historial/comparativo ya
+  está) · Fase 6 carga real de L3 + cuadre.
 - **Import de Excel = diferido** (futuro opcional, §5); la captura es manual en V1.
 - **Taxonomía ya reconciliada** a las 24 partidas + 92 conceptos del doc oficial (Slice 2c).
   Pendiente: áreas Villa/Casita finas si se necesitan para $/m² por unidad.

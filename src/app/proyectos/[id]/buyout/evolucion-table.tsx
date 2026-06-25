@@ -1,3 +1,4 @@
+import { Check, TriangleAlert } from "lucide-react"
 import { Fragment } from "react"
 import { formatMXN } from "@/lib/utils"
 import { DifText } from "./dif-text"
@@ -29,14 +30,30 @@ export type EvoMonth = {
   short: string
 }
 
+/**
+ * Columna del MES EN CURSO (siempre una sola, total vivo). Si `closed`, el mes en
+ * curso ya tiene su foto: no se duplica la columna, se marca "cerrado ✓" (y puede
+ * reabrirse). Si además `drift`, el vivo difiere de la foto → "desactualizado".
+ */
+export type EnCurso = {
+  /** "Ppto Junio 2026" (cerrado) o "Ppto Junio 2026 (en curso)" (abierto). */
+  label: string
+  closed: boolean
+  drift: boolean
+  /** "2026-06" (para reabrir el mes en curso ya cerrado). */
+  periodo: string
+  /** "Junio 2026" (para el botón Reabrir). */
+  short: string
+}
+
 type Props = {
   projectId: string
   chapters: EvoChapter[]
   months: EvoMonth[]
   /** Map<month_close_id, Map<partida_catalog_id, total_mxn>>. */
   snapshotByMonth: Map<string, Map<string, number>>
-  /** "Ppto Junio 2026 (en curso)". */
-  enCursoLabel: string
+  /** Columna del mes en curso (colapsa la foto si ya está cerrado). */
+  enCurso: EnCurso
   totalBase: number
   total: number
   totalDif: number | null
@@ -45,17 +62,19 @@ type Props = {
 
 /**
  * Modo Evolución del Resumen (SPEC-buyout.md §6): columnas = Ppto Base + cada mes
- * cerrado (foto congelada) + el mes en curso en vivo + Dif (Base vs el mes más
- * reciente = el en curso). Por partida, con subtotal por capítulo y TOTAL. La
- * rejilla alinea todas las partidas en todos los meses; donde un mes no tiene la
- * partida (no existía / sin datos al cerrar) se rellena 0 — sin huecos.
+ * cerrado ANTERIOR (foto congelada) + el mes en curso en vivo (UNA columna) + Dif
+ * (Base vs el mes más reciente = el en curso). Si el mes en curso ya está cerrado,
+ * su columna lleva "cerrado ✓" en lugar de duplicarse con su foto. Por partida,
+ * con subtotal por capítulo y TOTAL. La rejilla alinea todas las partidas en todos
+ * los meses; donde un mes no tiene la partida (no existía / sin datos al cerrar) se
+ * rellena 0 — sin huecos.
  */
 export function EvolucionTable({
   projectId,
   chapters,
   months,
   snapshotByMonth,
-  enCursoLabel,
+  enCurso,
   totalBase,
   total,
   totalDif,
@@ -95,7 +114,34 @@ export function EvolucionTable({
               </th>
             ))}
             <th className="px-3 py-2.5 text-right whitespace-nowrap text-white">
-              {enCursoLabel}
+              <span className="inline-flex items-center gap-1.5">
+                {enCurso.label}
+                {enCurso.closed ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-emerald-200"
+                    title="El mes en curso ya está cerrado: esta columna reemplaza a su foto congelada (no se duplica)."
+                  >
+                    <Check className="size-3" />
+                    cerrado
+                  </span>
+                ) : null}
+                {enCurso.closed && enCurso.drift ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-amber-200"
+                    title="El total vivo difiere de la foto guardada (se editó tras cerrar). Usa “Actualizar foto” para re-tomarla."
+                  >
+                    <TriangleAlert className="size-3" />
+                    desactualizado
+                  </span>
+                ) : null}
+                {enCurso.closed && admin ? (
+                  <ReabrirMesButton
+                    projectId={projectId}
+                    periodo={enCurso.periodo}
+                    periodoShort={enCurso.short}
+                  />
+                ) : null}
+              </span>
             </th>
             <th className="px-3 py-2.5 text-right">Dif</th>
           </tr>

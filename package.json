@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "(for _ in $(seq 60); do nc -z localhost 3000 2>/dev/null && { open http://localhost:3000; break; }; sleep 0.5; done) & next dev",
     "build": "next build",
     "start": "next start"
   },
