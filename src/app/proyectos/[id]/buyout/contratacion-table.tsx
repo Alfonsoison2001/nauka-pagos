@@ -1,6 +1,19 @@
+import {
+  CircleCheck,
+  CircleDashed,
+  Coins,
+  FileCheck,
+  FileSignature,
+  Layers,
+  PencilRuler,
+  Percent,
+  Tag,
+} from "lucide-react"
 import Link from "next/link"
 import { Fragment } from "react"
-import { cn, formatMXN } from "@/lib/utils"
+import { formatMXN0 } from "@/lib/buyout/format"
+import { cn } from "@/lib/utils"
+import { HEAD_ROW } from "./table-ui"
 
 /**
  * Modo Contratación del Resumen (SPEC-buyout.md §6, "Contratado vs No"): por cada
@@ -84,7 +97,7 @@ function MontoPct({
 }) {
   return (
     <span className="whitespace-nowrap">
-      {formatMXN(amount)}{" "}
+      {formatMXN0(amount)}{" "}
       <span className={onDark ? "text-white/55" : "text-muted-foreground"}>
         ({pct === null ? "—" : `${pct}%`})
       </span>
@@ -156,42 +169,75 @@ export function ContratacionTable({
       <table className="w-full text-sm tabular-nums">
         <thead className="sticky top-0 z-10">
           {/* Fila 1: encabezados AGRUPADOS — deja claro que son 2 pares. */}
-          <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
-            <th className="px-3 py-2 text-left align-bottom" rowSpan={2}>
-              Concepto
+          <tr className={cn(HEAD_ROW, "text-xs")}>
+            <th className="px-4 pt-3 pb-1 text-left align-bottom" rowSpan={2}>
+              <span className="inline-flex items-center gap-1.5">
+                <Tag className="size-3.5 shrink-0 text-nauka-neutral" />
+                Concepto
+              </span>
             </th>
             <th
-              className="px-3 pt-2 pb-1 text-center font-semibold text-white/90"
+              className="px-4 pt-3 pb-1 text-center font-semibold text-nauka-dark"
               colSpan={2}
             >
-              Madurez
+              <span className="inline-flex items-center gap-1.5">
+                <Layers className="size-3.5 shrink-0 text-nauka-neutral" />
+                Madurez
+              </span>
             </th>
             <th
               className={cn(
-                "px-3 pt-2 pb-1 text-center font-semibold text-white/90",
-                AXIS_DIV_DARK,
+                "px-4 pt-3 pb-1 text-center font-semibold text-nauka-dark",
+                AXIS_DIV,
               )}
               colSpan={2}
             >
-              Contratación
+              <span className="inline-flex items-center gap-1.5">
+                <FileSignature className="size-3.5 shrink-0 text-nauka-neutral" />
+                Contratación
+              </span>
             </th>
-            <th className="px-3 py-2 text-right align-bottom" rowSpan={2}>
-              Total
+            <th className="px-4 pt-3 pb-1 text-right align-bottom" rowSpan={2}>
+              <span className="inline-flex items-center gap-1.5">
+                <Coins className="size-3.5 shrink-0 text-nauka-neutral" />
+                Total
+              </span>
             </th>
-            <th className="px-3 py-2 text-right align-bottom" rowSpan={2}>
-              % Contratado
+            <th className="px-4 pt-3 pb-1 text-right align-bottom" rowSpan={2}>
+              <span className="inline-flex items-center gap-1.5">
+                <Percent className="size-3.5 shrink-0 text-nauka-neutral" />%
+                Contratado
+              </span>
             </th>
           </tr>
           {/* Fila 2: las 4 columnas de estado (2 por eje), con monto y % del total. */}
-          <tr className="bg-nauka-dark text-[11px] uppercase tracking-wider text-white/55">
-            <th className="px-3 pb-2 text-right font-medium">Paramétrico</th>
-            <th className="px-3 pb-2 text-right font-medium">Ppto</th>
-            <th
-              className={cn("px-3 pb-2 text-right font-medium", AXIS_DIV_DARK)}
-            >
-              No Contratado
+          <tr
+            className={cn(HEAD_ROW, "border-b border-nauka-subtle text-[11px]")}
+          >
+            <th className="px-4 pb-2 text-right font-medium">
+              <span className="inline-flex items-center gap-1.5">
+                <PencilRuler className="size-3 shrink-0 text-nauka-neutral" />
+                Paramétrico
+              </span>
             </th>
-            <th className="px-3 pb-2 text-right font-medium">Contratado</th>
+            <th className="px-4 pb-2 text-right font-medium">
+              <span className="inline-flex items-center gap-1.5">
+                <FileCheck className="size-3 shrink-0 text-nauka-neutral" />
+                Ppto
+              </span>
+            </th>
+            <th className={cn("px-4 pb-2 text-right font-medium", AXIS_DIV)}>
+              <span className="inline-flex items-center gap-1.5">
+                <CircleDashed className="size-3 shrink-0 text-nauka-neutral" />
+                No Contratado
+              </span>
+            </th>
+            <th className="px-4 pb-2 text-right font-medium">
+              <span className="inline-flex items-center gap-1.5">
+                <CircleCheck className="size-3 shrink-0 text-nauka-neutral" />
+                Contratado
+              </span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -202,7 +248,7 @@ export function ContratacionTable({
                 <tr className="bg-nauka-subtle">
                   <td
                     colSpan={7}
-                    className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
+                    className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
                   >
                     {ch.nombre}
                   </td>
@@ -211,7 +257,7 @@ export function ContratacionTable({
                   <tr className="border-b border-nauka-subtle">
                     <td
                       colSpan={7}
-                      className="px-3 py-2 italic text-muted-foreground"
+                      className="px-4 py-3 italic text-muted-foreground"
                     >
                       Sin partidas en este capítulo
                     </td>
@@ -222,9 +268,9 @@ export function ContratacionTable({
                     return (
                       <tr
                         key={p.id}
-                        className="border-b border-nauka-subtle hover:bg-nauka-bg"
+                        className="h-12 border-b border-nauka-subtle transition-colors hover:bg-nauka-bg"
                       >
-                        <td className="px-3 py-2">
+                        <td className="px-4 py-3">
                           <Link
                             href={`/proyectos/${projectId}/buyout/partida?partida=${p.id}`}
                             className="transition-colors hover:text-nauka-accent"
@@ -232,18 +278,18 @@ export function ContratacionTable({
                             {p.nombre}
                           </Link>
                         </td>
-                        <td className="px-3 py-2 text-right text-muted-foreground">
+                        <td className="px-4 py-3 text-right text-muted-foreground">
                           <MontoPct
                             amount={p.parametrico}
                             pct={pp.parametrico}
                           />
                         </td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-4 py-3 text-right">
                           <MontoPct amount={p.ppto} pct={pp.ppto} />
                         </td>
                         <td
                           className={cn(
-                            "px-3 py-2 text-right text-muted-foreground",
+                            "px-4 py-3 text-right text-muted-foreground",
                             AXIS_DIV,
                           )}
                         >
@@ -252,13 +298,13 @@ export function ContratacionTable({
                             pct={pp.noContratado}
                           />
                         </td>
-                        <td className="px-3 py-2 text-right text-emerald-700">
+                        <td className="px-4 py-3 text-right text-emerald-700">
                           <MontoPct amount={p.contratado} pct={pp.contratado} />
                         </td>
-                        <td className="px-3 py-2 text-right font-medium text-nauka-dark">
-                          {formatMXN(p.total)}
+                        <td className="px-4 py-3 text-right font-medium text-nauka-dark">
+                          {formatMXN0(p.total)}
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-4 py-3">
                           <PctBar
                             value={pctContratado(p.contratado, p.total)}
                           />
@@ -269,27 +315,30 @@ export function ContratacionTable({
                 )}
                 {/* Subtotal del capítulo. */}
                 <tr className="border-b border-nauka-subtle bg-nauka-bg/60">
-                  <td className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <td className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Subtotal {ch.nombre}
                   </td>
-                  <td className="px-3 py-2 text-right font-medium">
+                  <td className="px-4 py-2.5 text-right font-medium">
                     <MontoPct amount={ch.parametrico} pct={sp.parametrico} />
                   </td>
-                  <td className="px-3 py-2 text-right font-medium">
+                  <td className="px-4 py-2.5 text-right font-medium">
                     <MontoPct amount={ch.ppto} pct={sp.ppto} />
                   </td>
                   <td
-                    className={cn("px-3 py-2 text-right font-medium", AXIS_DIV)}
+                    className={cn(
+                      "px-4 py-2.5 text-right font-medium",
+                      AXIS_DIV,
+                    )}
                   >
                     <MontoPct amount={ch.noContratado} pct={sp.noContratado} />
                   </td>
-                  <td className="px-3 py-2 text-right font-medium">
+                  <td className="px-4 py-2.5 text-right font-medium">
                     <MontoPct amount={ch.contratado} pct={sp.contratado} />
                   </td>
-                  <td className="px-3 py-2 text-right font-semibold text-nauka-dark">
-                    {formatMXN(ch.total)}
+                  <td className="px-4 py-2.5 text-right font-semibold text-nauka-dark">
+                    {formatMXN0(ch.total)}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-4 py-2.5">
                     <PctBar value={pctContratado(ch.contratado, ch.total)} />
                   </td>
                 </tr>
@@ -299,28 +348,28 @@ export function ContratacionTable({
         </tbody>
         <tfoot>
           <tr className="bg-nauka-dark text-white">
-            <td className="px-3 py-2.5 font-semibold">TOTAL</td>
-            <td className="px-3 py-2.5 text-right font-semibold">
+            <td className="px-4 py-3 font-semibold">TOTAL</td>
+            <td className="px-4 py-3 text-right font-semibold">
               <MontoPct amount={g.parametrico} pct={gp.parametrico} onDark />
             </td>
-            <td className="px-3 py-2.5 text-right font-semibold">
+            <td className="px-4 py-3 text-right font-semibold">
               <MontoPct amount={g.ppto} pct={gp.ppto} onDark />
             </td>
             <td
               className={cn(
-                "px-3 py-2.5 text-right font-semibold",
+                "px-4 py-3 text-right font-semibold",
                 AXIS_DIV_DARK,
               )}
             >
               <MontoPct amount={g.noContratado} pct={gp.noContratado} onDark />
             </td>
-            <td className="px-3 py-2.5 text-right font-semibold">
+            <td className="px-4 py-3 text-right font-semibold">
               <MontoPct amount={g.contratado} pct={gp.contratado} onDark />
             </td>
-            <td className="px-3 py-2.5 text-right font-semibold">
-              {formatMXN(g.total)}
+            <td className="px-4 py-3 text-right font-semibold">
+              {formatMXN0(g.total)}
             </td>
-            <td className="px-3 py-2.5">
+            <td className="px-4 py-3">
               <PctBar value={pctContratado(g.contratado, g.total)} onDark />
             </td>
           </tr>

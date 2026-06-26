@@ -1,9 +1,12 @@
+import { Calendar, Coins, Tag, Target, TrendingUp } from "lucide-react"
 import { Fragment } from "react"
-import { formatMXN } from "@/lib/utils"
+import { formatMXN0 } from "@/lib/buyout/format"
+import { cn } from "@/lib/utils"
 import { BaseCell } from "./base-cell"
-import { DifText } from "./dif-text"
+import { DifBadge } from "./dif-text"
 import { MonthCell } from "./month-cell"
 import { ReabrirMesButton } from "./reabrir-mes-button"
+import { HEAD_ROW, Th } from "./table-ui"
 
 /** Partida en la rejilla de Evolución (total = vigente del mes en curso, vivo). */
 export type EvoPartida = {
@@ -81,30 +84,34 @@ export function EvolucionTable({
     <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
       <table className="w-full text-sm tabular-nums">
         <thead className="sticky top-0 z-10">
-          <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
-            <th className="px-3 py-2.5 text-left">Concepto</th>
-            <th className="px-3 py-2.5 text-right">Ppto Base</th>
+          <tr className={cn(HEAD_ROW, "border-b border-nauka-subtle")}>
+            <Th icon={Tag}>Concepto</Th>
+            <Th icon={Target} align="right">
+              Ppto Base
+            </Th>
             {months.map((m) => (
-              <th
+              <Th
                 key={m.id}
-                className="px-3 py-2.5 text-right whitespace-nowrap"
+                icon={Calendar}
+                align="right"
+                className="whitespace-nowrap"
               >
-                <span className="inline-flex items-center gap-1">
-                  {m.label}
-                  {admin ? (
-                    <ReabrirMesButton
-                      projectId={projectId}
-                      periodo={m.periodo}
-                      periodoShort={m.short}
-                    />
-                  ) : null}
-                </span>
-              </th>
+                {m.label}
+                {admin ? (
+                  <ReabrirMesButton
+                    projectId={projectId}
+                    periodo={m.periodo}
+                    periodoShort={m.short}
+                  />
+                ) : null}
+              </Th>
             ))}
-            <th className="px-3 py-2.5 text-right whitespace-nowrap text-white">
+            <Th icon={Coins} align="right" className="whitespace-nowrap">
               {enCursoLabel}
-            </th>
-            <th className="px-3 py-2.5 text-right">Dif</th>
+            </Th>
+            <Th icon={TrendingUp} align="right">
+              Dif
+            </Th>
           </tr>
         </thead>
         <tbody>
@@ -113,7 +120,7 @@ export function EvolucionTable({
               <tr className="bg-nauka-subtle">
                 <td
                   colSpan={colCount}
-                  className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
+                  className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
                 >
                   {ch.nombre}
                 </td>
@@ -122,7 +129,7 @@ export function EvolucionTable({
                 <tr className="border-b border-nauka-subtle">
                   <td
                     colSpan={colCount}
-                    className="px-3 py-2 italic text-muted-foreground"
+                    className="px-4 py-3 italic text-muted-foreground"
                   >
                     Sin partidas en este capítulo
                   </td>
@@ -131,10 +138,10 @@ export function EvolucionTable({
                 ch.partidas.map((p) => (
                   <tr
                     key={p.id}
-                    className="border-b border-nauka-subtle hover:bg-nauka-bg"
+                    className="h-12 border-b border-nauka-subtle transition-colors hover:bg-nauka-bg"
                   >
-                    <td className="px-3 py-2">{p.nombre}</td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-4 py-3">{p.nombre}</td>
+                    <td className="px-4 py-3 text-right">
                       <BaseCell
                         projectId={projectId}
                         partidaCatalogId={p.id}
@@ -143,7 +150,7 @@ export function EvolucionTable({
                       />
                     </td>
                     {months.map((m) => (
-                      <td key={m.id} className="px-3 py-2 text-right">
+                      <td key={m.id} className="px-4 py-3 text-right">
                         <MonthCell
                           projectId={projectId}
                           monthCloseId={m.id}
@@ -154,34 +161,34 @@ export function EvolucionTable({
                         />
                       </td>
                     ))}
-                    <td className="px-3 py-2 text-right font-medium text-nauka-dark">
-                      {formatMXN(p.total)}
+                    <td className="px-4 py-3 text-right font-medium text-nauka-dark">
+                      {formatMXN0(p.total)}
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      <DifText dif={p.dif} />
+                    <td className="px-4 py-3 text-right">
+                      <DifBadge dif={p.dif} />
                     </td>
                   </tr>
                 ))
               )}
               <tr className="border-b border-nauka-subtle bg-nauka-bg/60">
-                <td className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <td className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Subtotal {ch.nombre}
                 </td>
-                <td className="px-3 py-2 text-right font-medium">
-                  {formatMXN(ch.base)}
+                <td className="px-4 py-2.5 text-right font-medium">
+                  {formatMXN0(ch.base)}
                 </td>
                 {months.map((m) => (
-                  <td key={m.id} className="px-3 py-2 text-right font-medium">
-                    {formatMXN(
+                  <td key={m.id} className="px-4 py-2.5 text-right font-medium">
+                    {formatMXN0(
                       ch.partidas.reduce((a, p) => a + snap(m.id, p.id), 0),
                     )}
                   </td>
                 ))}
-                <td className="px-3 py-2 text-right font-semibold text-nauka-dark">
-                  {formatMXN(ch.total)}
+                <td className="px-4 py-2.5 text-right font-semibold text-nauka-dark">
+                  {formatMXN0(ch.total)}
                 </td>
-                <td className="px-3 py-2 text-right font-medium">
-                  <DifText dif={ch.dif} />
+                <td className="px-4 py-2.5 text-right font-medium">
+                  <DifBadge dif={ch.dif} />
                 </td>
               </tr>
             </Fragment>
@@ -189,20 +196,20 @@ export function EvolucionTable({
         </tbody>
         <tfoot>
           <tr className="bg-nauka-dark text-white">
-            <td className="px-3 py-2.5 font-semibold">TOTAL</td>
-            <td className="px-3 py-2.5 text-right font-semibold">
-              {formatMXN(totalBase)}
+            <td className="px-4 py-3 font-semibold">TOTAL</td>
+            <td className="px-4 py-3 text-right font-semibold">
+              {formatMXN0(totalBase)}
             </td>
             {months.map((m) => (
-              <td key={m.id} className="px-3 py-2.5 text-right font-semibold">
-                {formatMXN(monthTotal(m))}
+              <td key={m.id} className="px-4 py-3 text-right font-semibold">
+                {formatMXN0(monthTotal(m))}
               </td>
             ))}
-            <td className="px-3 py-2.5 text-right font-semibold">
-              {formatMXN(total)}
+            <td className="px-4 py-3 text-right font-semibold">
+              {formatMXN0(total)}
             </td>
-            <td className="px-3 py-2.5 text-right font-semibold">
-              <DifText dif={totalDif} onDark />
+            <td className="px-4 py-3 text-right font-semibold">
+              <DifBadge dif={totalDif} onDark />
             </td>
           </tr>
         </tfoot>

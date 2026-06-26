@@ -4,7 +4,7 @@ import { Check, Pencil, X } from "lucide-react"
 import { useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { formatMXN } from "@/lib/utils"
+import { formatMXN0 } from "@/lib/buyout/format"
 import { setPartidaBase } from "./actions"
 
 type Props = {
@@ -27,7 +27,7 @@ export function BaseCell({ projectId, partidaCatalogId, monto, admin }: Props) {
   const [pending, startTransition] = useTransition()
 
   if (!admin) {
-    return <span className="tabular-nums">{formatMXN(value)}</span>
+    return <span className="tabular-nums">{formatMXN0(value)}</span>
   }
 
   if (!editing) {
@@ -42,7 +42,7 @@ export function BaseCell({ projectId, partidaCatalogId, monto, admin }: Props) {
         title="Editar presupuesto base"
         className="group inline-flex items-center gap-1.5 tabular-nums transition-colors hover:text-nauka-accent"
       >
-        {formatMXN(value)}
+        {formatMXN0(value)}
         <Pencil className="size-3 opacity-0 transition-opacity group-hover:opacity-60" />
       </button>
     )

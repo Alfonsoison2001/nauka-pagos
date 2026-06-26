@@ -1,7 +1,19 @@
+import {
+  Activity,
+  Building2,
+  Calendar,
+  Clock,
+  Coins,
+  Ruler,
+  Tag,
+  Target,
+  TrendingUp,
+} from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Fragment } from "react"
 import { isAdmin } from "@/lib/auth/roles"
+import { formatMXN0, formatUSD0 } from "@/lib/buyout/format"
 import {
   currentPeriodo,
   loadClosedMonths,
@@ -19,10 +31,10 @@ import {
 } from "@/lib/buyout/rollup"
 import { formatDate } from "@/lib/format/fecha"
 import { createClient } from "@/lib/supabase/server"
-import { cn, formatMXN } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { CerrarMesButton } from "./cerrar-mes-button"
 import { type ContraChapter, ContratacionTable } from "./contratacion-table"
-import { DifText } from "./dif-text"
+import { DifBadge } from "./dif-text"
 import {
   type EvoChapter,
   EvolucionTable,
@@ -30,14 +42,10 @@ import {
 } from "./evolucion-table"
 import { MesesToggle } from "./meses-toggle"
 import { type ResumenMode, ResumenModeToggle } from "./resumen-mode-toggle"
+import { HEAD_ROW, Th } from "./table-ui"
 
 export const metadata = { title: "Buy-Out · Resumen" }
 
-const usdFormatter = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-})
 const areaFormatter = new Intl.NumberFormat("es-MX", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -328,30 +336,38 @@ export default async function BuyoutResumenPage({
           <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
             <table className="w-full text-sm tabular-nums">
               <thead className="sticky top-0 z-10">
-                <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
-                  <th className="px-3 py-2.5 text-left">Concepto</th>
-                  <th className="px-3 py-2.5 text-left">Proveedor</th>
-                  <th className="px-3 py-2.5 text-right">Ppto Base</th>
+                <tr className={cn(HEAD_ROW, "border-b border-nauka-subtle")}>
+                  <Th icon={Tag}>Concepto</Th>
+                  <Th icon={Building2}>Proveedor</Th>
+                  <Th icon={Target} align="right">
+                    Ppto Base
+                  </Th>
                   {mesesCols.map((m) => (
-                    <th
+                    <Th
                       key={m.id}
-                      className="px-3 py-2.5 text-right whitespace-nowrap"
+                      icon={Calendar}
+                      align="right"
+                      className="whitespace-nowrap"
                     >
                       {m.label}
-                    </th>
+                    </Th>
                   ))}
-                  <th className="px-3 py-2.5 text-right">Ppto</th>
-                  <th className="px-3 py-2.5 text-right">Dif</th>
-                  <th className="px-3 py-2.5 text-right">$/m²</th>
-                  <th className="px-3 py-2.5 text-left">
-                    Última actualización
-                  </th>
-                  <th className="px-3 py-2.5 text-left">
+                  <Th icon={Coins} align="right">
+                    Ppto
+                  </Th>
+                  <Th icon={TrendingUp} align="right">
+                    Dif
+                  </Th>
+                  <Th icon={Ruler} align="right">
+                    $/m²
+                  </Th>
+                  <Th icon={Clock}>Última actualización</Th>
+                  <Th icon={Activity}>
                     Estado{" "}
-                    <span className="font-normal normal-case tracking-normal text-white/40">
+                    <span className="font-normal normal-case tracking-normal text-nauka-neutral">
                       (madurez · contratación)
                     </span>
-                  </th>
+                  </Th>
                 </tr>
               </thead>
               <tbody>
@@ -368,18 +384,18 @@ export default async function BuyoutResumenPage({
               </tbody>
               <tfoot>
                 <tr className="bg-nauka-dark text-white">
-                  <td className="px-3 py-2.5 font-semibold" colSpan={2}>
+                  <td className="px-4 py-3 font-semibold" colSpan={2}>
                     TOTAL
                   </td>
-                  <td className="px-3 py-2.5 text-right font-semibold">
-                    {formatMXN(totalBase)}
+                  <td className="px-4 py-3 text-right font-semibold">
+                    {formatMXN0(totalBase)}
                   </td>
                   {mesesCols.map((m) => (
                     <td
                       key={m.id}
-                      className="px-3 py-2.5 text-right font-semibold"
+                      className="px-4 py-3 text-right font-semibold"
                     >
-                      {formatMXN(
+                      {formatMXN0(
                         partidaViews.reduce(
                           (a, p) =>
                             a + (snapshotByMonth.get(m.id)?.get(p.id) ?? 0),
@@ -388,17 +404,17 @@ export default async function BuyoutResumenPage({
                       )}
                     </td>
                   ))}
-                  <td className="px-3 py-2.5 text-right font-semibold">
-                    {formatMXN(total)}
+                  <td className="px-4 py-3 text-right font-semibold">
+                    {formatMXN0(total)}
                   </td>
-                  <td className="px-3 py-2.5 text-right font-semibold">
-                    <DifText dif={totalDif} onDark />
+                  <td className="px-4 py-3 text-right font-semibold">
+                    <DifBadge dif={totalDif} onDark />
                   </td>
-                  <td className="px-3 py-2.5 text-right font-semibold">
-                    {costoM2 != null ? formatMXN(costoM2) : "—"}
+                  <td className="px-4 py-3 text-right font-semibold">
+                    {costoM2 != null ? formatMXN0(costoM2) : "—"}
                   </td>
-                  <td className="px-3 py-2.5" />
-                  <td className="px-3 py-2.5" />
+                  <td className="px-4 py-3" />
+                  <td className="px-4 py-3" />
                 </tr>
               </tfoot>
             </table>
@@ -421,7 +437,7 @@ export default async function BuyoutResumenPage({
             <span>
               $/m² interior:{" "}
               <span className="font-medium tabular-nums text-nauka-dark">
-                {costoM2 != null ? formatMXN(costoM2) : "—"}
+                {costoM2 != null ? formatMXN0(costoM2) : "—"}
               </span>
               {areaInt
                 ? ` · área interior ${areaFormatter.format(areaInt)} m²`
@@ -430,7 +446,7 @@ export default async function BuyoutResumenPage({
             <span>
               USD/m²:{" "}
               <span className="font-medium tabular-nums text-nauka-dark">
-                {usdM2 != null ? usdFormatter.format(usdM2) : "—"}
+                {usdM2 != null ? formatUSD0(usdM2) : "—"}
               </span>
               {usdRate ? ` · TC ${usdRate}` : " · TC —"}
             </span>
@@ -503,7 +519,7 @@ function ChapterGroup({
   months: EvoMonth[]
   snapshotByMonth: Map<string, Map<string, number>>
 }) {
-  const perM2 = (v: number) => (areaInt ? formatMXN(v / areaInt) : "—")
+  const perM2 = (v: number) => (areaInt ? formatMXN0(v / areaInt) : "—")
   const snap = (monthId: string, partidaId: string) =>
     snapshotByMonth.get(monthId)?.get(partidaId) ?? 0
   return (
@@ -511,7 +527,7 @@ function ChapterGroup({
       <tr className="bg-nauka-subtle">
         <td
           colSpan={8 + months.length}
-          className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
+          className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
         >
           {chapter.nombre}
         </td>
@@ -520,7 +536,7 @@ function ChapterGroup({
         <tr className="border-b border-nauka-subtle">
           <td
             colSpan={8 + months.length}
-            className="px-3 py-2 italic text-muted-foreground"
+            className="px-4 py-3 italic text-muted-foreground"
           >
             Sin partidas en este capítulo
           </td>
@@ -529,9 +545,9 @@ function ChapterGroup({
         chapter.partidas.map((p) => (
           <tr
             key={p.id}
-            className="border-b border-nauka-subtle hover:bg-nauka-bg"
+            className="h-12 border-b border-nauka-subtle transition-colors hover:bg-nauka-bg"
           >
-            <td className="px-3 py-2">
+            <td className="px-4 py-3">
               <Link
                 href={`/proyectos/${projectId}/buyout/partida?partida=${p.id}`}
                 className="transition-colors hover:text-nauka-accent"
@@ -539,28 +555,32 @@ function ChapterGroup({
                 {p.nombre}
               </Link>
             </td>
-            <td className="px-3 py-2 text-muted-foreground">
+            <td className="px-4 py-3 text-muted-foreground">
               {proveedorLabel(p.agg.proveedores)}
             </td>
             {/* Ppto Base = solo-lectura aquí; la edición vive en Evolución. */}
-            <td className="px-3 py-2 text-right">{formatMXN(p.base)}</td>
+            <td className="px-4 py-3 text-right">{formatMXN0(p.base)}</td>
             {months.map((m) => (
               <td
                 key={m.id}
-                className="px-3 py-2 text-right text-muted-foreground"
+                className="px-4 py-3 text-right text-muted-foreground"
               >
-                {formatMXN(snap(m.id, p.id))}
+                {formatMXN0(snap(m.id, p.id))}
               </td>
             ))}
-            <td className="px-3 py-2 text-right">{formatMXN(p.agg.total)}</td>
-            <td className="px-3 py-2 text-right">
-              <DifText dif={p.dif} />
+            <td className="px-4 py-3 text-right font-medium text-nauka-dark">
+              {formatMXN0(p.agg.total)}
             </td>
-            <td className="px-3 py-2 text-right">{perM2(p.agg.total)}</td>
-            <td className="px-3 py-2 text-muted-foreground">
+            <td className="px-4 py-3 text-right">
+              <DifBadge dif={p.dif} />
+            </td>
+            <td className="px-4 py-3 text-right text-muted-foreground">
+              {perM2(p.agg.total)}
+            </td>
+            <td className="px-4 py-3 text-muted-foreground">
               {p.agg.lastUpdate ? formatDate(p.agg.lastUpdate) : "—"}
             </td>
-            <td className="px-3 py-2">
+            <td className="px-4 py-3">
               <EstadoCell
                 madurez={p.agg.madurez}
                 contratacion={p.agg.contratacion}
@@ -572,34 +592,34 @@ function ChapterGroup({
       {/* Subtotal del capítulo: etiqueta a la IZQUIERDA en Concepto, números
           alineados bajo sus columnas (corrige el "Subtotal" mal puesto). */}
       <tr className="border-b border-nauka-subtle bg-nauka-bg/60">
-        <td className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <td className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Subtotal {chapter.nombre}
         </td>
-        <td className="px-3 py-2" />
-        <td className="px-3 py-2 text-right font-medium">
-          {formatMXN(chapter.base)}
+        <td className="px-4 py-2.5" />
+        <td className="px-4 py-2.5 text-right font-medium">
+          {formatMXN0(chapter.base)}
         </td>
         {months.map((m) => (
           <td
             key={m.id}
-            className="px-3 py-2 text-right font-medium text-muted-foreground"
+            className="px-4 py-2.5 text-right font-medium text-muted-foreground"
           >
-            {formatMXN(
+            {formatMXN0(
               chapter.partidas.reduce((a, p) => a + snap(m.id, p.id), 0),
             )}
           </td>
         ))}
-        <td className="px-3 py-2 text-right font-semibold text-nauka-dark">
-          {formatMXN(chapter.total)}
+        <td className="px-4 py-2.5 text-right font-semibold text-nauka-dark">
+          {formatMXN0(chapter.total)}
         </td>
-        <td className="px-3 py-2 text-right font-medium">
-          <DifText dif={chapter.dif} />
+        <td className="px-4 py-2.5 text-right font-medium">
+          <DifBadge dif={chapter.dif} />
         </td>
-        <td className="px-3 py-2 text-right font-medium">
+        <td className="px-4 py-2.5 text-right font-medium">
           {perM2(chapter.total)}
         </td>
-        <td className="px-3 py-2" />
-        <td className="px-3 py-2" />
+        <td className="px-4 py-2.5" />
+        <td className="px-4 py-2.5" />
       </tr>
     </Fragment>
   )
@@ -613,54 +633,58 @@ function proveedorLabel(provs: string[]): string {
   return "Varios"
 }
 
-const ESTADO_SLOT_CLS =
-  "inline-flex h-5 w-fit shrink-0 items-center rounded-full px-2 text-[11px] font-medium leading-none"
+// Estado en PUNTO de color + texto (no pill). Colores semánticos NAUKA.
+const ESTADO_ROW_CLS = "inline-flex items-center gap-1.5 text-xs leading-none"
+const ESTADO_DOT_CLS = "size-2 shrink-0 rounded-full"
 
 function MaturityBadge({ value }: { value: Maturity | null }) {
   if (value === null) {
     return (
-      <span
-        className={cn(
-          ESTADO_SLOT_CLS,
-          "border border-dashed border-nauka-neutral/50 text-nauka-neutral",
-        )}
-      >
+      <span className={cn(ESTADO_ROW_CLS, "text-nauka-neutral")}>
+        <span
+          className={cn(ESTADO_DOT_CLS, "border border-nauka-neutral/50")}
+        />
         —
       </span>
     )
   }
-  const map: Record<Maturity, { label: string; cls: string }> = {
-    ppto: { label: "Ppto", cls: "bg-green-100 text-green-700" },
-    parametrico: { label: "Paramétrico", cls: "bg-amber-100 text-amber-700" },
-    parcial: { label: "Parcial", cls: "bg-blue-100 text-blue-700" },
+  const map: Record<Maturity, { label: string; dot: string }> = {
+    ppto: { label: "Ppto", dot: "bg-nauka-success" },
+    parametrico: { label: "Paramétrico", dot: "bg-nauka-warning" },
+    parcial: { label: "Parcial", dot: "bg-nauka-accent" },
   }
-  const { label, cls } = map[value]
-  return <span className={cn(ESTADO_SLOT_CLS, cls)}>{label}</span>
+  const { label, dot } = map[value]
+  return (
+    <span className={cn(ESTADO_ROW_CLS, "text-foreground")}>
+      <span className={cn(ESTADO_DOT_CLS, dot)} />
+      {label}
+    </span>
+  )
 }
 
 function ContratacionBadge({ value }: { value: Contratacion | null }) {
   if (value === null) {
     return (
-      <span
-        className={cn(
-          ESTADO_SLOT_CLS,
-          "border border-dashed border-nauka-neutral/50 text-nauka-neutral",
-        )}
-      >
+      <span className={cn(ESTADO_ROW_CLS, "text-nauka-neutral")}>
+        <span
+          className={cn(ESTADO_DOT_CLS, "border border-nauka-neutral/50")}
+        />
         —
       </span>
     )
   }
-  const map: Record<Contratacion, { label: string; cls: string }> = {
-    contratado: { label: "Contratado", cls: "bg-green-100 text-green-700" },
-    no_contratado: {
-      label: "No contratado",
-      cls: "bg-slate-100 text-slate-600",
-    },
-    parcial: { label: "Parcial", cls: "bg-blue-100 text-blue-700" },
+  const map: Record<Contratacion, { label: string; dot: string }> = {
+    contratado: { label: "Contratado", dot: "bg-nauka-success" },
+    no_contratado: { label: "No contratado", dot: "bg-nauka-neutral" },
+    parcial: { label: "Parcial", dot: "bg-nauka-accent" },
   }
-  const { label, cls } = map[value]
-  return <span className={cn(ESTADO_SLOT_CLS, cls)}>{label}</span>
+  const { label, dot } = map[value]
+  return (
+    <span className={cn(ESTADO_ROW_CLS, "text-foreground")}>
+      <span className={cn(ESTADO_DOT_CLS, dot)} />
+      {label}
+    </span>
+  )
 }
 
 /** Estado de 2 ejes (spec §6): madurez arriba · contratación abajo. */
@@ -672,7 +696,7 @@ function EstadoCell({
   contratacion: Contratacion | null
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       <MaturityBadge value={madurez} />
       <ContratacionBadge value={contratacion} />
     </div>

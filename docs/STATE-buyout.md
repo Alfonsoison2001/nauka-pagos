@@ -76,6 +76,14 @@
    la partida de Pagos (`partidas.fecha_firma`, la col "Fecha presupuesto" que ya rinde Presupuesto). En el
    panel **"Ligado a Pagos"** se muestra esa fecha. **Sin migración** (`fecha_firma` ya existe); **Pagos
    intacto** (cero archivos de Pagos tocados). Detalle abajo.
+✅ **Rediseño visual de las 3 tablas del Resumen (2026-06-25 · sesión 11)** — pasada **solo de estilo/formato**
+   sobre Vigente · Evolución · Contratación: contenedor limpio (ya tenía esquinas redondeadas/borde sutil),
+   **header gris muy claro** con texto chico + **un icono por columna** (antes header oscuro), filas con más
+   aire (~48px), **montos SIN decimales** (formato es-MX; BD sigue `numeric(14,2)`), **DIF como pill con
+   flecha** (sobre-ppto=rojo↑ · bajo=verde↓ · sin dato=gris), **Estado en puntos de color + texto** (2 ejes
+   apilados, antes pills). Contratación conserva su header agrupado "Madurez ‖ Contratación" + barra de %
+   Contratado. **Cero cambios de datos/cálculos/lógica** (rollup, edición inline, cierre de mes, modos, %,
+   marcar vigente, puente a Pagos intactos); **Pagos intacto**; **sin migración**. Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se
    marca al editar la línea en la Partida). Pendiente Resumen: modo **Qué falta** (nota libre por partida
    no contratada).
@@ -816,6 +824,64 @@ Pequeño complemento del puente: la partida que se crea/liga en Pagos **no traí
 `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (**las 6 de Pagos idénticas** en el
 manifest). Cambio revisado con un workflow multi-agente (correctness · regresión Pagos · requisitos/edge),
 cada hallazgo verificado adversarialmente. Render/escritura tras login/RLS → prueba de Alfonso.
+
+## Rediseño visual de las 3 tablas del Resumen (hecho 2026-06-25, sesión 11)
+
+Pasada **100% de presentación** sobre las 3 vistas del Resumen (Vigente · Evolución · Contratación) para que
+se lean más limpias. **No cambia datos, cálculos ni lógica.** Usa los **tokens NAUKA existentes**
+(`nauka-*` de `globals.css` + colores semánticos), **sin hardcodear hexes ni inventar paleta**. **Sin
+migración**; **Pagos intacto** (cero archivos de Pagos tocados); las 6 rutas de Pagos idénticas en el
+manifest. 8 archivos (2 nuevos).
+
+### Lenguaje visual aplicado a las 3 vistas (consistencia)
+- **Contenedor:** ya tenía `rounded-2xl` + borde sutil (`border-nauka-card-border`) + `shadow-nauka-card` +
+  separadores de fila muy tenues (`border-nauka-subtle`). Se conservan; se sube el aire de las filas a
+  **~48px** (`px-4 py-3` + `h-12` en filas de datos; secciones/subtotales `px-4 py-2.5`).
+- **Header gris muy claro** (antes oscuro `bg-nauka-dark`): `HEAD_ROW` = `bg-nauka-bg` + texto chico
+  uppercase atenuado (`text-muted-foreground`) + `border-b border-nauka-subtle`, y **un icono por columna**
+  (lucide, `text-nauka-neutral`). El **pie TOTAL se mantiene oscuro** (`bg-nauka-dark`) como ancla focal.
+- **Montos SIN decimales:** nuevo `formatMXN0`/`formatUSD0` (es-MX, `maximumFractionDigits: 0`) **propio del
+  módulo** — NO toca el `formatMXN` global (Pagos sigue con 2 decimales). Solo cambia el **despliegue**; el
+  dato en BD sigue `numeric(14,2)` (en las celdas editables `BaseCell`/`MonthCell` se muestra redondeado pero
+  el input edita el valor real). Aplica a montos, $/m² y USD/m². Los **%** (DIF, % Contratado) conservan su
+  decimal (no son montos); el área en m² conserva sus 2 decimales (no es monto).
+- **DIF como pill con flecha** (`DifBadge`, nuevo en `dif-text.tsx`): sobre-presupuesto (positivo) = **rojo**
+  con flecha **ascendente** (`ArrowUpRight`); debajo (negativo) = **verde** con flecha **descendente**
+  (`ArrowDownRight`); ~0% o sin dato = **gris** (`Minus`/"—"). Mantiene la semántica (over budget = rojo) y
+  los colores semánticos NAUKA. Variante `onDark` para el TOTAL. El `DifText` (texto, sin pill) **se conserva**
+  para el comparativo de versiones de la pantalla Subcategoría (fuera de alcance).
+- **Estado en puntos de color + texto** (Vigente): los dos ejes apilados (madurez arriba: Paramétrico/Ppto/
+  Parcial; contratación abajo: Contratado/No contratado/Parcial) pasan de **pill** a **punto** (`size-2`
+  redondo) + etiqueta. Colores NAUKA: Ppto/Contratado = `nauka-success`, Paramétrico = `nauka-warning`,
+  No contratado = `nauka-neutral`, Parcial = `nauka-accent`, sin dato = punto con borde neutro + "—".
+
+### Modo Contratación (req. 5)
+- Header **AGRUPADO** "Madurez ‖ Contratación" (2 filas) ya existía; se pasó a gris claro con iconos y el
+  **divisor vertical** entre pares (`AXIS_DIV`) ahora usa el borde claro `border-nauka-card-border` (en el
+  TOTAL oscuro sigue `AXIS_DIV_DARK`). Cada cubeta muestra **monto + %** (sin decimales en el monto, vía
+  `MontoPct` → `formatMXN0`); la columna **% Contratado** conserva su **barra de avance + número**.
+  Subtotales por capítulo y TOTAL con el mismo estilo. (NO se agregó checkbox ni sparkline — fuera de
+  alcance, req. 6.)
+
+### Archivos
+- **`src/lib/buyout/format.ts` (nuevo)** — `formatMXN0` / `formatUSD0` (montos sin decimales del módulo).
+- **`buyout/table-ui.tsx` (nuevo)** — `HEAD_ROW` (clase del header claro) + `Th` (celda de header con icono),
+  compartidos por las 3 tablas para garantizar el mismo lenguaje visual.
+- **`buyout/dif-text.tsx`** — `+ DifBadge` (pill con flecha); `DifText` intacto.
+- **`buyout/page.tsx`** (Vigente) — header con `Th`+iconos, filas ~48px, `formatMXN0`, `DifBadge`, Estado en
+  puntos. Lógica/colSpans/links/rollup **sin tocar**.
+- **`buyout/evolucion-table.tsx`** — mismo lenguaje (header claro+iconos, ~48px, `formatMXN0`, `DifBadge`);
+  `BaseCell`/`MonthCell`/Reabrir y la rejilla **sin tocar** en lógica.
+- **`buyout/contratacion-table.tsx`** — header agrupado claro+iconos+divisor, `formatMXN0`, barra conservada.
+- **`buyout/base-cell.tsx` · `buyout/month-cell.tsx`** — el **despliegue** del valor usa `formatMXN0` (el
+  input de edición sigue con el valor crudo `numeric(14,2)`).
+
+### Verificación
+- **Gate verde:** `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` (buyout + lib/buyout) ✓ · `pnpm build`
+  ✓ (las 3 rutas buyout dinámicas; **las 6 de Pagos idénticas** en el manifest). Sin migración, sin commits
+  en `main`, **sin push**. Render tras login/RLS → prueba visual de Alfonso: las 3 vistas con el nuevo estilo
+  (header claro con iconos, montos sin decimales, DIF en pills, estado en puntos) y **toda la funcionalidad
+  igual** (editar Ppto Base/meses, modos, "▸ Meses", rollup, %, marcar vigente, puente a Pagos).
 
 ## Qué sigue
 
