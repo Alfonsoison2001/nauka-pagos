@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import type { PagosLinkInfo } from "@/lib/buyout/pagos-link"
+import { formatDate } from "@/lib/format/fecha"
 import { formatMXN } from "@/lib/utils"
 import {
   crearContratoPagos,
@@ -121,6 +122,11 @@ function LigadoView({
           {" · "}
           {link.partidaNombre}
         </span>
+        {link.fecha ? (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {formatDate(link.fecha)}
+          </span>
+        ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <Link

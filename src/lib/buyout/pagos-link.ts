@@ -16,6 +16,8 @@ export type PagosLinkInfo = {
   partidaId: string
   partidaNombre: string
   contratistaNombre: string
+  /** Fecha del contrato en Pagos (`partidas.fecha_firma`, yyyy-mm-dd) o null. */
+  fecha: string | null
 }
 
 /**
@@ -32,7 +34,7 @@ export async function loadPagosLinkInfo(
   if (!pagosPartidaId) return null
   const { data: partida } = await sb
     .from("partidas")
-    .select("id, nombre, contratista_id")
+    .select("id, nombre, contratista_id, fecha_firma")
     .eq("id", pagosPartidaId)
     .is("deleted_at", null)
     .maybeSingle()
@@ -47,6 +49,7 @@ export async function loadPagosLinkInfo(
     partidaId: partida.id as string,
     partidaNombre: (partida.nombre as string) ?? "",
     contratistaNombre: (contratista?.nombre as string) ?? "",
+    fecha: (partida.fecha_firma as string | null) ?? null,
   }
 }
 

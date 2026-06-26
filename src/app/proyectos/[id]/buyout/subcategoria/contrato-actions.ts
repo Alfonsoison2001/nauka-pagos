@@ -28,6 +28,9 @@ type VigenteContrato = {
   proveedor: string | null
   baseMxn: number
   ivaPct: number
+  /** Fecha de la cotización vigente (quote_date, yyyy-mm-dd). Va a la fecha de la
+   * partida de Pagos (`fecha_firma`). */
+  quoteDate: string | null
 }
 
 /**
@@ -52,7 +55,7 @@ async function loadVigenteContrato(
 
   const { data: quote } = await sb
     .from("buyout_quote")
-    .select("id, contratado, pagos_partida_id, pdf_url")
+    .select("id, contratado, pagos_partida_id, pdf_url, quote_date")
     .eq("item_id", itemId)
     .eq("is_selected", true)
     .is("deleted_at", null)
@@ -95,6 +98,7 @@ async function loadVigenteContrato(
       proveedor: ((line.proveedor as string | null) ?? "").trim() || null,
       baseMxn,
       ivaPct,
+      quoteDate: (quote.quote_date as string | null) ?? null,
     },
   }
 }
@@ -159,8 +163,9 @@ function revalidate(projectId: string): void {
  * Crea/liga el contrato de Pagos de un concepto CONTRATADO. Idempotente: si la
  * cotización vigente ya está ligada a una partida viva, no duplica. Resuelve el
  * contratista por el proveedor (lo crea si no existe), crea la partida (nombre =
- * concepto, presupuesto = base sin IVA en MXN, iva_pct del concepto, hereda el
- * PDF) y guarda el enlace en `buyout_quote.pagos_partida_id`. Admin-only.
+ * concepto, presupuesto = base sin IVA en MXN, iva_pct del concepto, fecha =
+ * quote_date de la vigente, hereda el PDF) y guarda el enlace en
+ * `buyout_quote.pagos_partida_id`. Admin-only.
  */
 export async function crearContratoPagos(
   projectId: string,
@@ -229,6 +234,7 @@ export async function crearContratoPagos(
         nombre: v.conceptoNombre,
         presupuesto_sin_iva: v.baseMxn,
         iva_pct: v.ivaPct,
+        fecha_firma: v.quoteDate ?? null,
       })
       .select("id")
       .single()
@@ -250,9 +256,10 @@ export async function crearContratoPagos(
 }
 
 /**
- * Re-sincroniza el presupuesto de la partida de Pagos ligada con el monto
- * contratado ACTUAL del concepto (base sin IVA en MXN + iva_pct de la cotización
- * vigente). No toca nombre/contratista/PDF. Admin-only.
+ * Re-sincroniza la partida de Pagos ligada con los datos ACTUALES del concepto:
+ * presupuesto (base sin IVA en MXN), iva_pct y **fecha** (quote_date de la
+ * cotización vigente). Completa la fecha si la partida estaba sin ella. No toca
+ * nombre/contratista/PDF. Admin-only.
  */
 export async function resincronizarContratoPagos(
   projectId: string,
@@ -286,7 +293,11 @@ export async function resincronizarContratoPagos(
 
   const { error: updErr } = await sb
     .from("partidas")
-    .update({ presupuesto_sin_iva: v.baseMxn, iva_pct: v.ivaPct })
+    .update({
+      presupuesto_sin_iva: v.baseMxn,
+      iva_pct: v.ivaPct,
+      fecha_firma: v.quoteDate ?? null,
+    })
     .eq("id", partida.id)
     .is("deleted_at", null)
   if (updErr) return { error: updErr.message }

@@ -71,6 +71,11 @@
    indicador **"Ligado a Pagos"** + enlace a Presupuesto + **Re-sincronizar** (actualiza el monto). **Sin
    migración** (reusa el FK del Slice 1); **Pagos intacto** (solo INSERT/UPDATE de datos reusando su
    estructura, sin tocar esquema/RLS/componentes/lógica). Detalle abajo.
+✅ **Puente a Pagos — fecha del ppto al contrato (2026-06-25 · sesión 10)** — al crear/re-sincronizar el
+   contrato, ahora también pasa la **fecha de la cotización vigente** (`quote_date`) al campo de fecha de
+   la partida de Pagos (`partidas.fecha_firma`, la col "Fecha presupuesto" que ya rinde Presupuesto). En el
+   panel **"Ligado a Pagos"** se muestra esa fecha. **Sin migración** (`fecha_firma` ya existe); **Pagos
+   intacto** (cero archivos de Pagos tocados). Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se
    marca al editar la línea en la Partida). Pendiente Resumen: modo **Qué falta** (nota libre por partida
    no contratada).
@@ -779,12 +784,47 @@ en los 4 casos. En el caso común (MXN, sobrecosto 0) la base = `cantidad×unita
 (ver "Qué sigue"). ⚠️ La partida creada **se verá en Pagos real** (Presupuesto): usar un concepto de
 prueba y **borrarla** si era prueba.
 
+## Puente a Pagos — fecha del ppto al contrato (hecho 2026-06-25, sesión 10)
+
+Pequeño complemento del puente: la partida que se crea/liga en Pagos **no traía fecha**. Ahora se pasa la
+**fecha de la cotización vigente** (`buyout_quote.quote_date`) al campo de fecha de la partida de Pagos.
+**Sin migración** (el campo ya existe); **Pagos intacto** (cero archivos de Pagos tocados). 3 archivos.
+
+### Qué cambió
+- **Campo destino = `partidas.fecha_firma`** (tipo `date`, nullable). Es la columna que la pantalla
+  **Presupuesto** ya rinde como **"Fecha presupuesto"** (`formatDate(p.fecha_firma)`), así que la fecha se
+  ve **sin tocar ningún componente de Pagos**. No existe campo separado de "fecha de contrato" en
+  `partidas`; `fecha_firma` es el único campo de fecha y es el correcto (fecha del ppto firmado/contrato).
+- **Crear** (`crearContratoPagos`): el INSERT de la partida nueva ahora incluye
+  `fecha_firma: v.quoteDate ?? null`. La ruta de **reúso** (cuando ya existe una partida con ese nombre)
+  **no** pisa la fecha (no-clobber, igual que el monto) → Re-sincronizar la completa.
+- **Re-sincronizar** (`resincronizarContratoPagos`): el UPDATE ahora setea `fecha_firma` junto con
+  `presupuesto_sin_iva` e `iva_pct`. Si la partida estaba **sin fecha**, la **completa** (requisito 4).
+- **`loadVigenteContrato`**: el SELECT de `buyout_quote` añade `quote_date`; `VigenteContrato` += `quoteDate`.
+- **`pagos-link.ts`**: `loadPagosLinkInfo` lee `partidas.fecha_firma`; `PagosLinkInfo` += `fecha`.
+- **Panel "Ligado a Pagos"**: muestra la fecha (`formatDate(link.fecha)`) cuando existe.
+
+### Por qué cuadra / no rompe nada
+- `quote_date` es `date NOT NULL` → siempre hay fecha; el `?? null` es defensivo. La columna destino es
+  `date` nullable → acepta el string ISO `yyyy-mm-dd` tal cual (igual que la captura de Presupuesto de
+  Pagos, que hace `fecha_firma: d.fecha_firma || null`). **No** se tocan las columnas generadas
+  (`iva_monto`, `presupuesto_con_iva`). El trigger de audit corre normal en el UPDATE/INSERT.
+- **Archivos tocados:** `contrato-actions.ts`, `pagos-link.ts`, `contrato-pagos-panel.tsx` — **ningún
+  archivo de Pagos**, ninguna migración, ningún cambio de RLS.
+
+### Gate verde
+`pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (**las 6 de Pagos idénticas** en el
+manifest). Cambio revisado con un workflow multi-agente (correctness · regresión Pagos · requisitos/edge),
+cada hallazgo verificado adversarialmente. Render/escritura tras login/RLS → prueba de Alfonso.
+
 ## Qué sigue
 
 - **Probar el puente (Alfonso):** en un concepto **contratado**, abrir su **historial** → "Crear/ligar
   contrato en Pagos"; verificar que aparece la partida en **Presupuesto** bajo el contratista correcto con
-  su monto/IVA/PDF, que el panel queda **"Ligado a Pagos"**, y que **Re-sincronizar** actualiza el monto.
-  ⚠️ La partida es **real**: borrarla en Pagos si era prueba (el panel volverá a ofrecer "crear").
+  su monto/IVA/PDF **y la fecha del ppto** (col "Fecha presupuesto" = `quote_date` de la vigente), que el
+  panel queda **"Ligado a Pagos"** mostrando esa fecha, y que **Re-sincronizar** actualiza monto **y fecha**
+  (si la partida estaba sin fecha, la completa). ⚠️ La partida es **real**: borrarla en Pagos si era prueba
+  (el panel volverá a ofrecer "crear").
 - **Resumen (resto):** modo **Qué falta** (nota libre por partida no contratada). (El modo
   **Contratado vs No** ya está → "Contratación".)
 - Luego: **Fase 5 (resto):** **marcar contratado** como acción dedicada (hoy se marca al editar la línea
