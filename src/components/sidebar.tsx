@@ -23,13 +23,26 @@ import { cn } from "@/lib/utils"
 
 type IconType = ComponentType<{ className?: string }>
 
-const TABS: { slug: string; label: string; icon: IconType }[] = [
+// Tabs de PAGOS (rutas por-proyecto). `hidden` = oculto del menú pero la ruta
+// sigue viva (accesible por URL); para reactivarlo, quita `hidden`.
+const PAGOS_TABS: {
+  slug: string
+  label: string
+  icon: IconType
+  hidden?: boolean
+}[] = [
   { slug: "resumen", label: "Resumen", icon: LayoutDashboard },
   { slug: "presupuesto", label: "Presupuesto", icon: Wallet },
   { slug: "flujo-de-pagos", label: "Flujo de Pagos", icon: ArrowRightLeft },
   { slug: "caratula", label: "Carátula", icon: FileText },
-  { slug: "resumen-mensual", label: "Resumen Mensual", icon: CalendarDays },
-  { slug: "configuracion", label: "Configuración", icon: Settings },
+  // Resumen Mensual: oculto del menú por ahora. La ruta /resumen-mensual sigue
+  // viva (accesible por URL). Para reactivarlo, quita `hidden: true`.
+  {
+    slug: "resumen-mensual",
+    label: "Resumen Mensual",
+    icon: CalendarDays,
+    hidden: true,
+  },
 ]
 
 type Props = {
@@ -84,6 +97,7 @@ export function Sidebar({
 
       <nav aria-label="Navegación" className="flex-1 px-3">
         <ul className="flex flex-col gap-1">
+          {/* Home: link suelto, arriba de todo. */}
           <li>
             <SidebarLink
               href="/"
@@ -92,7 +106,10 @@ export function Sidebar({
               active={pathname === "/"}
             />
           </li>
-          {TABS.map((item) => {
+
+          {/* PAGOS */}
+          <SectionHeader label="Pagos" />
+          {PAGOS_TABS.filter((item) => !item.hidden).map((item) => {
             const href = `${base}/${item.slug}`
             const active = pathname === href || pathname.startsWith(`${href}/`)
             return (
@@ -106,24 +123,41 @@ export function Sidebar({
               </li>
             )
           })}
-          {/* Buy-Out: sección aparte (un "libro distinto"), no una 7ª tab de
-              Pagos. Separada por un divisor; solo dentro de un proyecto. */}
-          {projectId ? (
-            <li className="mt-2 border-t border-white/10 pt-2">
-              <SidebarLink
-                href={`${base}/buyout`}
-                label="Buy-Out"
-                Icon={ShoppingCart}
-                active={pathname.startsWith(`${base}/buyout`)}
-              />
-            </li>
-          ) : null}
-          <li className="mt-1">
+          <li>
             <SidebarLink
               href={aprobHref}
               label="Aprobaciones"
               Icon={ClipboardCheck}
               active={pathname === "/aprobaciones"}
+            />
+          </li>
+
+          {/* BUY-OUT: "libro distinto", solo dentro de un proyecto. */}
+          {projectId ? (
+            <>
+              <SectionHeader label="Buy-Out" />
+              <li>
+                <SidebarLink
+                  href={`${base}/buyout`}
+                  label="Buy-Out"
+                  Icon={ShoppingCart}
+                  active={pathname.startsWith(`${base}/buyout`)}
+                />
+              </li>
+            </>
+          ) : null}
+
+          {/* GENERAL */}
+          <SectionHeader label="General" />
+          <li>
+            <SidebarLink
+              href={`${base}/configuracion`}
+              label="Configuración"
+              Icon={Settings}
+              active={
+                pathname === `${base}/configuracion` ||
+                pathname.startsWith(`${base}/configuracion/`)
+              }
             />
           </li>
           {isAdmin ? (
@@ -136,7 +170,7 @@ export function Sidebar({
               />
             </li>
           ) : null}
-          <li className="mt-1">
+          <li>
             <SidebarLink
               href="/guia"
               label="¿Cómo funciona?"
@@ -158,6 +192,16 @@ export function Sidebar({
         </button>
       </div>
     </aside>
+  )
+}
+
+/** Encabezado de sección del sidebar: estilo sutil (texto chico, gris, mayúsculas)
+ *  precedido por el divisor sutil que separa los grupos (tokens NAUKA). */
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <li className="mt-3 border-t border-white/10 px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-white/40">
+      {label}
+    </li>
   )
 }
 

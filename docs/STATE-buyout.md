@@ -100,6 +100,15 @@
    derecha), eliminando el hueco vertical; (#5) la **tabla del Vigente** quedó **full-width**, más legible
    (`text-[15px]`) y con filas cómodas (`h-14`). Montos sin decimales; área y TC con decimales. **Cero cambios de
    datos/cálculos**; **Evolución/Contratación/Pagos intactos**; **sin migración**. Detalle abajo.
+✅ **Sidebar reorganizado en 3 secciones — Pagos / Buy-Out / General (2026-06-25 · sesión 14)** — el sidebar
+   (componente **compartido** con Pagos) se reagrupó: **Home** suelto arriba → **PAGOS** (Resumen · Presupuesto ·
+   Flujo de Pagos · Carátula · Aprobaciones) → **BUY-OUT** (Buy-Out, solo dentro de un proyecto) → **GENERAL**
+   (Configuración · Usuarios · ¿Cómo funciona?) → **Cerrar sesión** abajo. Encabezados de sección sutiles
+   (`text-[11px]` mayúsculas `text-white/40`) con el divisor existente. **Resumen Mensual oculto del menú** con
+   flag `hidden: true` (su ruta `/proyectos/[id]/resumen-mensual` **sigue viva y accesible por URL**;
+   reactivar = quitar el flag). **Solo reordena/agrupa/oculta links** — cero cambios de rutas/páginas/lógica/datos
+   de Pagos ni Buy-Out; saludo + campana + Cerrar sesión sin tocar. **1 archivo** (`components/sidebar.tsx`).
+   Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se
    marca al editar la línea en la Partida). Pendiente Resumen: modo **Qué falta** (nota libre por partida
    no contratada).
@@ -997,6 +1006,48 @@ datos/cálculos/queries**; **Evolución/Contratación/Pagos intactos**; **sin mi
   tarjetas sin leyenda, no hay botón de mes (sí en **Evolución**), "▸ Meses" está arriba junto a las pestañas, y
   la tabla se ve full-width; el Estado muestra los % por eje (cuadran con Contratación). **Evolución/Contratación
   y Pagos intactos.**
+
+## Sidebar reorganizado en 3 secciones — Pagos / Buy-Out / General (hecho 2026-06-25, sesión 14)
+
+El sidebar es un **componente compartido** con Pagos. Este cambio **solo reordena/agrupa/oculta links de
+navegación**: NO toca ninguna página, ruta, lógica ni dato de Pagos ni de Buy-Out (las rutas siguen existiendo;
+solo cambia el menú). **1 archivo** (`src/components/sidebar.tsx`); **sin migración**; **Pagos intacto**.
+
+### Estructura nueva del menú
+- **Home** — link suelto, arriba de todo (como antes).
+- **PAGOS** — Resumen · Presupuesto · Flujo de Pagos · Carátula · **Aprobaciones** (Aprobaciones se movió a esta
+  sección).
+- **BUY-OUT** — Buy-Out (solo dentro de un proyecto; mantiene el guard `projectId`).
+- **GENERAL** — **Configuración** (se movió aquí desde las tabs de Pagos) · Usuarios (admin) · ¿Cómo funciona?.
+- **Cerrar sesión** — abajo (como antes). Saludo + campana de notificaciones intactos.
+
+### Cómo se hizo (solo presentación)
+- La constante `TABS` se renombró a **`PAGOS_TABS`** y se le quitó `configuracion` (ahora va en GENERAL).
+- **Resumen Mensual oculto** con un flag **`hidden: true`** en su entrada de `PAGOS_TABS` + un
+  `.filter((t) => !t.hidden)` al render. La **ruta `/proyectos/[id]/resumen-mensual` sigue viva** (el archivo
+  `src/app/proyectos/[id]/resumen-mensual/page.tsx` no se tocó; aparece en el manifest del build y es accesible
+  por URL). **Reactivar = quitar el flag.**
+- Nuevo componente **`SectionHeader`**: encabezado sutil (`text-[11px]` mayúsculas `tracking-wider`
+  `text-white/40`) precedido por el divisor existente (`border-t border-white/10`). Tokens NAUKA, sin hexes.
+- Los hrefs y la lógica de estado activo (`pathname === href` / `startsWith`) se conservan idénticos; los 3
+  call sites del sidebar (layout del proyecto, `/guia`, `/aprobaciones`) compilan con los **mismos props**.
+
+### Verificación
+- **Gate verde:** `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓. El manifest del build
+  **sigue listando** `/proyectos/[id]/resumen-mensual`, `/aprobaciones`, `/usuarios`, `/guia`,
+  `/proyectos/[id]/buyout` y todas las rutas de Pagos. **Review adversarial multiagente** (aislamiento/regresión ·
+  requisitos/UX, cada hallazgo verificado por un escéptico): **isolation PASS** (solo `sidebar.tsx`, sin tocar
+  rutas/páginas/lógica, sin imports muertos, props sin cambio); requisitos cumplidos. **0 regresiones.**
+- **Notas (hallazgos pre-existentes, NO regresiones — diferidos a propósito):** (1) en el caso degenerado de
+  **cero proyectos** (`projectId=""`, prácticamente inalcanzable: la app tiene 3 proyectos sembrados y el layout
+  de proyecto hace `notFound()`), los links por-proyecto de PAGOS y Configuración rinden hrefs `/proyectos//slug`
+  — **comportamiento idéntico al de `main`** (las tabs ya eran incondicionales); el reorg lo conserva tal cual,
+  no lo introduce. (2) Los `SectionHeader` son `<li>` no interactivos dentro del `<ul>` (nit de a11y, patrón
+  común). Se dejan **sin cambio** para respetar el mandato "solo reordenar/agrupar/ocultar" y la regla quirúrgica
+  de CLAUDE.md; se documentan por si más adelante se quieren endurecer.
+- **Sin push**, `main` intacto. Render tras login/RLS → prueba de Alfonso: el menú muestra las 3 secciones en el
+  orden pedido; Resumen Mensual ya no está en el menú pero su URL responde; todos los demás links funcionan;
+  Pagos intacto.
 
 ## Qué sigue
 
