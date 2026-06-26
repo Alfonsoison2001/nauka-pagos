@@ -63,8 +63,17 @@
    (`{formatMXN}`, sin lápiz). Mismo criterio que las celdas de mes → **toda la edición vive en
    Evolución**, Vigente es de consulta. Misma fuente (`buyout_partida_base`) en ambas vistas; **DIF y
    rollup sin tocar**. **Sin migración**; **Pagos intacto**. Detalle abajo.
-⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** + botón manual a Pagos.
-   Pendiente Resumen: modo **Qué falta** (nota libre por partida no contratada).
+✅ **Puente a Pagos — crear/ligar contrato desde contratado (2026-06-25 · sesión 9)** — el **cruce**
+   de SPEC-buyout.md §8 (V1 manual). En el **historial** de un concepto (Subcategoría), si su cotización
+   **vigente** está **contratada**, un panel **"Contrato en Pagos"** deja al admin **crear/ligar** el
+   contrato en la sección **Presupuesto de Pagos** (crea contratista por proveedor si no existe + partida
+   = el concepto, monto/IVA/PDF heredados) y guarda el enlace en `buyout_quote.pagos_partida_id`. Ya ligado:
+   indicador **"Ligado a Pagos"** + enlace a Presupuesto + **Re-sincronizar** (actualiza el monto). **Sin
+   migración** (reusa el FK del Slice 1); **Pagos intacto** (solo INSERT/UPDATE de datos reusando su
+   estructura, sin tocar esquema/RLS/componentes/lógica). Detalle abajo.
+⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se
+   marca al editar la línea en la Partida). Pendiente Resumen: modo **Qué falta** (nota libre por partida
+   no contratada).
 
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
@@ -710,12 +719,76 @@ pantalla **Partida** como hoy.
   el valor se ve **igual en Vigente** (sin lápiz) y el **DIF cuadra** en ambas; ninguna otra columna
   cambia.
 
+## Puente a Pagos — crear/ligar contrato desde contratado (hecho 2026-06-25, sesión 9)
+
+El **cruce** de SPEC-buyout.md §8 en su forma **V1 manual**: al marcar un concepto **contratado**, ligarlo
+a un contrato en la sección **Presupuesto de Pagos** para registrar pagos. **Sin migración** (reusa el FK
+`buyout_quote.pagos_partida_id → public.partidas` que existe desde el Slice 1). 5 archivos (3 nuevos).
+
+### Alcance respecto a Pagos (importante)
+- **SÍ escribe en tablas de Pagos** (`contratistas`, `partidas`): es el propósito del puente. Reusa su
+  **estructura existente** — mismas columnas, FKs, `numeric(14,2)`, **columnas generadas**
+  (`iva_monto`/`presupuesto_con_iva` NO se insertan), índice único `(contratista_id, nombre)`, soft-delete
+  y triggers de audit (`fn_audit_change()` corre solo en el INSERT/UPDATE).
+- **NO modifica** esquema, RLS, componentes ni lógica de Pagos. No se tocó ningún archivo de Pagos. El
+  enlace a la pantalla va a `/proyectos/[id]/presupuesto` (sin deep-anchor para no tocar su page).
+
+### Qué muestra / hace (pantalla Subcategoría = historial del concepto)
+- Panel **"Contrato en Pagos"** arriba del historial cuando existe una cotización vigente:
+  - **No contratado:** texto guía (marca la vigente como Contratada al editar la línea en la Partida).
+  - **Contratado y sin ligar (admin):** botón **"Crear/ligar contrato en Pagos"** con diálogo de
+    confirmación (muestra proveedor, concepto y total con IVA).
+  - **Ya ligado:** indicador **"Ligado a Pagos"** + `<contratista> · <partida>` + enlace **"Ver en
+    Presupuesto"** + (admin) botón **"Re-sincronizar"**.
+- **Crear** = (1) contratista por proveedor: lo busca en el proyecto por nombre exacto y lo crea si no
+  existe (mismo criterio que la captura de Presupuesto de Pagos); (2) **una partida por concepto**
+  (nombre = concepto) bajo ese contratista, `presupuesto_sin_iva` = base sin IVA en MXN, `iva_pct` = el de
+  la cotización, y **hereda el PDF** (copia el PDF del buyout a `…/presupuestos/{partidaId}.pdf`); (3)
+  guarda `buyout_quote.pagos_partida_id`. **Re-sincronizar** = actualiza solo `presupuesto_sin_iva` +
+  `iva_pct` de esa partida con el monto contratado actual (no toca contratista/nombre/PDF/pagos).
+
+### Monto que cuadra (decisión)
+`presupuesto_sin_iva` (Pagos) = **(importe sin IVA + sobrecosto) × TC**, redondeado a 2 decimales; el IVA
+lo aplica Pagos vía `iva_pct` → su columna generada **`presupuesto_con_iva` = el Total MXN (col T)** que
+muestra el Buy-Out. Verificado con node (MXN, USD+sobrecosto, EUR iva 0, decimales): **cuadra al centavo**
+en los 4 casos. En el caso común (MXN, sobrecosto 0) la base = `cantidad×unitario`, el valor literal.
+
+### Idempotencia / soft-delete
+- No duplica: si la cotización vigente ya apunta a una partida **viva**, la acción es no-op (devuelve la
+  existente). Defensa extra: si ya existe una partida con ese nombre bajo el contratista, la **reutiliza**
+  sin pisar su monto (cubre re-ligar tras cambiar la vigente, sin clobber de una partida manual).
+- **Soft-delete:** `loadPagosLinkInfo` ignora partidas con `deleted_at` → si Alfonso borra la partida de
+  prueba en Pagos, el panel vuelve a ofrecer "crear" (con aviso de que la anterior ya no existe).
+  Re-sincronizar sobre una partida borrada devuelve error legible (no escribe).
+- **Admin-only:** ambas actions checan `getMyProfile().role==='admin'` (lo refuerza la RLS de
+  `contratistas`/`partidas` de Pagos). El botón solo se muestra a admin.
+
+### Archivos
+- **`src/lib/buyout/pagos-link.ts` (nuevo)** — `loadPagosLinkInfo` (estado del enlace, ignora borradas) +
+  `contratoBaseMxn` (base sin IVA en MXN, puro, reusa `calcLinea`).
+- **`src/lib/buyout/history.ts`** — `QuoteVersion` += `pagosPartidaId` (un campo en el select + el map).
+- **`buyout/subcategoria/contrato-actions.ts` (nuevo)** — Server Actions `crearContratoPagos` /
+  `resincronizarContratoPagos` (Zod no aplica: no hay form, solo ids; validan item∈proyecto + estado).
+- **`buyout/subcategoria/contrato-pagos-panel.tsx` (nuevo, client)** — el panel + diálogos de confirmación
+  (patrón de `MarcarVigenteButton`).
+- **`buyout/subcategoria/page.tsx`** — carga el enlace de la vigente y monta el panel (quirúrgico).
+
+### Gate verde
+`pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (las 3 rutas buyout dinámicas;
+**las 6 de Pagos idénticas** en el manifest). El render/escritura quedan tras login/RLS → prueba de Alfonso
+(ver "Qué sigue"). ⚠️ La partida creada **se verá en Pagos real** (Presupuesto): usar un concepto de
+prueba y **borrarla** si era prueba.
+
 ## Qué sigue
 
+- **Probar el puente (Alfonso):** en un concepto **contratado**, abrir su **historial** → "Crear/ligar
+  contrato en Pagos"; verificar que aparece la partida en **Presupuesto** bajo el contratista correcto con
+  su monto/IVA/PDF, que el panel queda **"Ligado a Pagos"**, y que **Re-sincronizar** actualiza el monto.
+  ⚠️ La partida es **real**: borrarla en Pagos si era prueba (el panel volverá a ofrecer "crear").
 - **Resumen (resto):** modo **Qué falta** (nota libre por partida no contratada). (El modo
   **Contratado vs No** ya está → "Contratación".)
-- Luego: **Fase 5 (resto):** marcar contratado + botón manual a Pagos (el historial/comparativo ya
-  está) · Fase 6 carga real de L3 + cuadre.
+- Luego: **Fase 5 (resto):** **marcar contratado** como acción dedicada (hoy se marca al editar la línea
+  en la Partida) · **vista de cuadre** Presupuestado→Contratado→Pagado (§8) · Fase 6 carga real de L3.
 - **Import de Excel = diferido** (futuro opcional, §5); la captura es manual en V1.
 - **Taxonomía ya reconciliada** a las 24 partidas + 92 conceptos del doc oficial (Slice 2c).
   Pendiente: áreas Villa/Casita finas si se necesitan para $/m² por unidad.

@@ -9,12 +9,14 @@ import {
   loadItemHistory,
   type QuoteVersion,
 } from "@/lib/buyout/history"
+import { loadPagosLinkInfo, type PagosLinkInfo } from "@/lib/buyout/pagos-link"
 import { formatDate } from "@/lib/format/fecha"
 import { createClient } from "@/lib/supabase/server"
 import { cn, formatMXN } from "@/lib/utils"
 import { DifText } from "../dif-text"
 import type { CurrencyOption } from "../partida/actions"
 import { BuyoutPdfCell } from "../partida/buyout-pdf-cell"
+import { ContratoPagosPanel } from "./contrato-pagos-panel"
 import { MarcarVigenteButton } from "./marcar-vigente-button"
 
 export const metadata = { title: "Buy-Out · Subcategoría" }
@@ -58,7 +60,19 @@ export default async function BuyoutSubcategoriaPage({
   if (itemId) {
     const history = await loadItemHistory(sb, id, itemId, fxList)
     if (!history) return <ConceptoNoEncontrado projectId={id} />
-    return <HistoryView projectId={id} history={history} admin={admin} />
+    const vigente = history.versions.find((v) => v.isSelected) ?? null
+    const pagosLink = vigente
+      ? await loadPagosLinkInfo(sb, vigente.pagosPartidaId)
+      : null
+    return (
+      <HistoryView
+        projectId={id}
+        history={history}
+        admin={admin}
+        vigente={vigente}
+        pagosLink={pagosLink}
+      />
+    )
   }
 
   // Índice de conceptos (sin uno elegido) → agrupado por partida (orden de catálogo).
@@ -82,10 +96,14 @@ function HistoryView({
   projectId,
   history,
   admin,
+  vigente,
+  pagosLink,
 }: {
   projectId: string
   history: ItemHistory
   admin: boolean
+  vigente: QuoteVersion | null
+  pagosLink: PagosLinkInfo | null
 }) {
   const { versions } = history
   const sola = versions.length <= 1
@@ -119,6 +137,20 @@ function HistoryView({
           usan el Resumen y la Partida.
         </p>
       </div>
+
+      {vigente ? (
+        <ContratoPagosPanel
+          projectId={projectId}
+          itemId={history.itemId}
+          admin={admin}
+          contratado={vigente.contratado}
+          link={pagosLink}
+          staleLink={Boolean(vigente.pagosPartidaId) && !pagosLink}
+          conceptoNombre={history.concepto}
+          proveedor={vigente.proveedor}
+          totalMxn={vigente.totalMxn}
+        />
+      ) : null}
 
       {versions.length === 0 ? (
         <EmptyBox

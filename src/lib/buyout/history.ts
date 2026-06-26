@@ -25,6 +25,8 @@ export type QuoteVersion = {
   contratado: boolean
   pdfPath: string | null
   isSelected: boolean
+  /** FK a la partida de Pagos si esta cotización ya se ligó (§8). */
+  pagosPartidaId: string | null
 }
 
 /** Meta del concepto + sus versiones (desc por fecha). */
@@ -80,7 +82,7 @@ export async function loadItemHistory(
   const { data: quoteRows } = await sb
     .from("buyout_quote")
     .select(
-      "id, quote_date, currency, kind, contratado, pdf_url, is_selected, monto_sin_iva, iva_pct, created_at",
+      "id, quote_date, currency, kind, contratado, pdf_url, is_selected, pagos_partida_id, monto_sin_iva, iva_pct, created_at",
     )
     .eq("item_id", itemId)
     .is("deleted_at", null)
@@ -106,6 +108,7 @@ export async function loadItemHistory(
       contratado: Boolean(q.contratado),
       pdfPath: (q.pdf_url as string | null) ?? null,
       isSelected: Boolean(q.is_selected),
+      pagosPartidaId: (q.pagos_partida_id as string | null) ?? null,
     }
     if (line) {
       const c = calcLinea({
