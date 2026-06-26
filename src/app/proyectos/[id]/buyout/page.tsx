@@ -23,10 +23,8 @@ import {
 } from "@/lib/buyout/month-close"
 import {
   aggregateLines,
-  type Contratacion,
   difPct,
   loadPartidaAggs,
-  type Maturity,
   type PartidaAgg,
 } from "@/lib/buyout/rollup"
 import { formatDate } from "@/lib/format/fecha"
@@ -452,17 +450,17 @@ export default async function BuyoutResumenPage({
             </span>
           </div>
 
-          {/* Leyenda: el Estado son 2 ejes (madurez arriba · contratación abajo). */}
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <EstadoCell madurez="parcial" contratacion="parcial" />
+          {/* Leyenda: el Estado son 2 ejes con % (madurez arriba · contratación abajo). */}
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <EstadoCell ppto={60} contratado={70} total={100} />
             <span>
-              Estado · 2 ejes:{" "}
+              Estado · 2 ejes con %:{" "}
               <span className="font-medium text-nauka-dark">arriba</span>{" "}
-              madurez (Paramétrico / Ppto / Parcial),{" "}
+              madurez (la barra verde = % en Ppto, el resto Paramétrico),{" "}
               <span className="font-medium text-nauka-dark">abajo</span>{" "}
-              contratación (Contratado / No contratado / Parcial).{" "}
-              <span className="font-medium text-nauka-dark">Parcial</span> = la
-              partida mezcla estados entre sus conceptos.
+              contratación (barra verde = % Contratado, el resto No contratado).
+              Los % cuadran con el modo{" "}
+              <span className="font-medium text-nauka-dark">Contratación</span>.
             </span>
           </div>
         </>
@@ -582,8 +580,9 @@ function ChapterGroup({
             </td>
             <td className="px-4 py-3">
               <EstadoCell
-                madurez={p.agg.madurez}
-                contratacion={p.agg.contratacion}
+                ppto={p.agg.ppto}
+                contratado={p.agg.contratado}
+                total={p.agg.total}
               />
             </td>
           </tr>
@@ -633,72 +632,98 @@ function proveedorLabel(provs: string[]): string {
   return "Varios"
 }
 
-// Estado en PUNTO de color + texto (no pill). Colores semánticos NAUKA.
-const ESTADO_ROW_CLS = "inline-flex items-center gap-1.5 text-xs leading-none"
-const ESTADO_DOT_CLS = "size-2 shrink-0 rounded-full"
+// Estado: 2 mini-barras de % por eje (madurez · contratación). El % reusa las
+// cubetas del rollup (p.agg: ppto/contratado/total) — % = cubeta ÷ total —
+// anclando ppto/contratado y derivando el complemento, IDÉNTICO al modo
+// Contratación (contratacion-table.tsx → estadoPcts) para que los números
+// CUADREN. Verde (relleno) = Ppto/Contratado; gris (track) = Paramétrico/No
+// contratado. total ≤ 0 → placeholder neutro "—" (sin barras).
+const ESTADO_PLACEHOLDER_CLS =
+  "inline-flex items-center gap-1.5 text-xs leading-none text-nauka-neutral"
 
-function MaturityBadge({ value }: { value: Maturity | null }) {
-  if (value === null) {
-    return (
-      <span className={cn(ESTADO_ROW_CLS, "text-nauka-neutral")}>
-        <span
-          className={cn(ESTADO_DOT_CLS, "border border-nauka-neutral/50")}
-        />
-        —
-      </span>
-    )
-  }
-  const map: Record<Maturity, { label: string; dot: string }> = {
-    ppto: { label: "Ppto", dot: "bg-nauka-success" },
-    parametrico: { label: "Paramétrico", dot: "bg-nauka-warning" },
-    parcial: { label: "Parcial", dot: "bg-nauka-accent" },
-  }
-  const { label, dot } = map[value]
+/** Mini-barra de un eje: % verde (success) sobre track gris (subtle). */
+function EjeBar({ pct }: { pct: number }) {
   return (
-    <span className={cn(ESTADO_ROW_CLS, "text-foreground")}>
-      <span className={cn(ESTADO_DOT_CLS, dot)} />
-      {label}
-    </span>
+    <div className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-nauka-subtle">
+      <div
+        className="h-full rounded-full bg-nauka-success"
+        style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+      />
+    </div>
   )
 }
 
-function ContratacionBadge({ value }: { value: Contratacion | null }) {
-  if (value === null) {
-    return (
-      <span className={cn(ESTADO_ROW_CLS, "text-nauka-neutral")}>
-        <span
-          className={cn(ESTADO_DOT_CLS, "border border-nauka-neutral/50")}
-        />
-        —
-      </span>
-    )
-  }
-  const map: Record<Contratacion, { label: string; dot: string }> = {
-    contratado: { label: "Contratado", dot: "bg-nauka-success" },
-    no_contratado: { label: "No contratado", dot: "bg-nauka-neutral" },
-    parcial: { label: "Parcial", dot: "bg-nauka-accent" },
-  }
-  const { label, dot } = map[value]
-  return (
-    <span className={cn(ESTADO_ROW_CLS, "text-foreground")}>
-      <span className={cn(ESTADO_DOT_CLS, dot)} />
-      {label}
-    </span>
-  )
-}
-
-/** Estado de 2 ejes (spec §6): madurez arriba · contratación abajo. */
-function EstadoCell({
-  madurez,
-  contratacion,
+/** Fila de un eje: barra + etiqueta. 100% en un estado → solo ese (sin "·"). */
+function EjeRow({
+  pct,
+  domLabel,
+  restoAbbr,
+  restoFull,
 }: {
-  madurez: Maturity | null
-  contratacion: Contratacion | null
+  pct: number
+  /** Estado "verde" (dominante de la barra): "Ppto" / "Contratado". */
+  domLabel: string
+  /** Abreviación del resto en modo mezcla: "Param." / "No". */
+  restoAbbr: string
+  /** Nombre completo del resto cuando está al 100%: "Paramétrico" / "No contratado". */
+  restoFull: string
 }) {
+  const resto = 100 - pct
+  const text =
+    pct === 100
+      ? `${domLabel} 100%`
+      : pct === 0
+        ? `${restoFull} 100%`
+        : `${domLabel} ${pct}% · ${restoAbbr} ${resto}%`
+  return (
+    <div className="flex items-center gap-2">
+      <EjeBar pct={pct} />
+      <span className="whitespace-nowrap text-[11px] leading-none text-muted-foreground tabular-nums">
+        {text}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * Estado de 2 ejes con % (spec §6): madurez arriba (Ppto vs Paramétrico) ·
+ * contratación abajo (Contratado vs No contratado). El % de cada eje sale de las
+ * cubetas del rollup (cubeta ÷ total), con la MISMA fórmula del modo Contratación
+ * → los números cuadran. total ≤ 0 → "—".
+ */
+function EstadoCell({
+  ppto,
+  contratado,
+  total,
+}: {
+  ppto: number
+  contratado: number
+  total: number
+}) {
+  if (!(total > 0)) {
+    return (
+      <span className={ESTADO_PLACEHOLDER_CLS}>
+        <span className="size-2 shrink-0 rounded-full border border-nauka-neutral/50" />
+        —
+      </span>
+    )
+  }
+  const pptoPct = Math.round((ppto / total) * 100)
+  const contratadoPct = Math.round((contratado / total) * 100)
   return (
     <div className="flex flex-col gap-1.5">
-      <MaturityBadge value={madurez} />
-      <ContratacionBadge value={contratacion} />
+      <EjeRow
+        pct={pptoPct}
+        domLabel="Ppto"
+        restoAbbr="Param."
+        restoFull="Paramétrico"
+      />
+      <EjeRow
+        pct={contratadoPct}
+        domLabel="Contratado"
+        restoAbbr="No"
+        restoFull="No contratado"
+      />
     </div>
   )
 }

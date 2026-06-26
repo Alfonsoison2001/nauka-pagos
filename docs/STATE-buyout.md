@@ -84,6 +84,13 @@
    apilados, antes pills). Contratación conserva su header agrupado "Madurez ‖ Contratación" + barra de %
    Contratado. **Cero cambios de datos/cálculos/lógica** (rollup, edición inline, cierre de mes, modos, %,
    marcar vigente, puente a Pagos intactos); **Pagos intacto**; **sin migración**. Detalle abajo.
+✅ **% por eje en la celda Estado del Vigente (2026-06-25 · sesión 12)** — en el modo **Vigente**, la columna
+   **Estado** pasó de puntos (solo estado dominante / "Parcial") a **2 mini-barras de %** por partida:
+   **Madurez** (barra verde = % en Ppto; etiqueta "Ppto X% · Param. Y%") y **Contratación** (barra verde =
+   % Contratado; "Contratado X% · No Y%"). El % reusa las **cubetas del rollup** (`p.agg.ppto/contratado/
+   total`) con la **misma fórmula** que el modo Contratación (`estadoPcts`) → los números **cuadran**. 100%
+   en un estado → solo ese; `total ≤ 0` → "—". **Solo presentación** (cero queries/cálculos nuevos);
+   **Evolución/Contratación/Pagos intactos**; **sin migración**. **1 archivo** (`buyout/page.tsx`). Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se
    marca al editar la línea en la Partida). Pendiente Resumen: modo **Qué falta** (nota libre por partida
    no contratada).
@@ -882,6 +889,56 @@ manifest. 8 archivos (2 nuevos).
   en `main`, **sin push**. Render tras login/RLS → prueba visual de Alfonso: las 3 vistas con el nuevo estilo
   (header claro con iconos, montos sin decimales, DIF en pills, estado en puntos) y **toda la funcionalidad
   igual** (editar Ppto Base/meses, modos, "▸ Meses", rollup, %, marcar vigente, puente a Pagos).
+
+## % por eje en la celda Estado del Vigente (hecho 2026-06-25, sesión 12)
+
+Pedido de Alfonso: en **Vigente**, la columna **Estado** mostraba solo el estado dominante (o "Parcial") con
+puntos; ahora muestra el **porcentaje de cada eje** por partida. **100% de presentación** (cero datos/
+cálculos/queries nuevos); **sin migración**; **Evolución/Contratación/Pagos intactos**. **1 archivo tocado**
+(`buyout/page.tsx`).
+
+### Qué muestra
+- Por partida, la celda Estado rinde **2 mini-barras apiladas** (mismo orden de ejes que antes):
+  - **Madurez** (arriba): barra verde = **% en Ppto** (resto = Paramétrico). Etiqueta **"Ppto X%"** y, si hay
+    mezcla, **"· Param. Y%"**.
+  - **Contratación** (abajo): barra verde = **% Contratado** (resto = No contratado). Etiqueta
+    **"Contratado X%"** y, si hay mezcla, **"· No Y%"**.
+- **100% en un estado** → muestra **solo ese** (sin el "·" del resto): "Ppto 100%" / "Paramétrico 100%" /
+  "Contratado 100%" / "No contratado 100%".
+- **Sin datos** (`total ≤ 0`) → **placeholder neutro "—"** (sin barras), como antes.
+- Colores **NAUKA**: relleno **verde** `bg-nauka-success` (Ppto/Contratado), track **gris** `bg-nauka-subtle`
+  (Paramétrico/No contratado); texto `text-[11px]` atenuado. Sin hexes ni paleta nueva.
+- **Leyenda** del Vigente actualizada (ejemplo "Ppto 60% · Param. 40%" / "Contratado 70% · No 30%" + nota de
+  que los % cuadran con Contratación).
+
+### Cómo cuadra (sin lógica nueva)
+- El % reusa las **cubetas que ya trae `p.agg`** del rollup (`ppto`, `contratado`, `total`) — `% = cubeta ÷
+  total` — con la **fórmula IDÉNTICA** al modo Contratación (`estadoPcts` en `contratacion-table.tsx`):
+  `pptoPct = Math.round(ppto/total*100)`, `contratadoPct = Math.round(contratado/total*100)`, y el resto se
+  deriva como `100 − pct`. Por construcción, los enteros mostrados en Vigente **coinciden** con los del modo
+  Contratación para cada partida. (Ej. mármol: Madurez "Ppto 71% · Param. 29%", Contratación "Contratado
+  67% · No 33%" — los mismos números que Contratación.)
+- **Subtotal/TOTAL** de Vigente: la celda Estado sigue **vacía** (sin barras), como estaba. La columna no
+  cambió de ancho fijo; `whitespace-nowrap` evita el wrap y el contenedor ya hace scroll horizontal si hace
+  falta.
+
+### Archivos / limpieza
+- **`buyout/page.tsx`** — nuevos `EjeBar` (mini-barra verde/gris) + `EjeRow` (barra + etiqueta) + `EstadoCell`
+  reescrito (recibe `ppto`/`contratado`/`total`). Se **eliminaron** los ya-muertos `MaturityBadge`/
+  `ContratacionBadge` y las constantes de punto, y los imports de tipo `Maturity`/`Contratacion` que quedaban
+  sin uso. La llamada en la fila de partida pasa `p.agg.ppto/contratado/total`; la leyenda pasa un ejemplo.
+- **Evolución/Contratación NO se tocaron** (su `estadoPcts` local sigue igual; se replicó la fórmula en
+  Vigente para no modificar Contratación — decisión de aislamiento, mínima superficie).
+
+### Verificación
+- **Gate verde:** `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` (buyout + lib/buyout) ✓ · `pnpm build`
+  ✓ (las 3 rutas buyout dinámicas; **las 6 de Pagos idénticas** en el manifest). **Review adversarial
+  multiagente** (paridad con Contratación · aislamiento/regresión · cobertura de requisitos, cada hallazgo
+  verificado por un escéptico): **0 defectos confirmados**; 2 observaciones nivel *nit* spec-compliant
+  (colapso a 100% por redondeo —exigido por el requisito 4, y ambos modos redondean igual— y ancho de la
+  columna sin tope pero con `nowrap`+scroll). Sin migración, sin commits en `main`, **sin push**. Render tras
+  login/RLS → prueba de Alfonso: en Vigente, una partida **mixta** muestra los % por eje (cuadran con
+  Contratación), una **100%** muestra solo su estado, y una **vacía** muestra "—".
 
 ## Qué sigue
 
