@@ -57,9 +57,7 @@ export function CerrarMesButton({ projectId, periodoShort, yaCerrado }: Props) {
         }}
       >
         <CalendarCheck />
-        {yaCerrado
-          ? `Actualizar mes · ${periodoShort}`
-          : `Cerrar mes · ${periodoShort}`}
+        {yaCerrado ? `Actualizar ${periodoShort}` : `Cerrar ${periodoShort}`}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>

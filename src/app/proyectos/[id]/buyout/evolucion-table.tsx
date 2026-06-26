@@ -1,6 +1,7 @@
 import { Fragment } from "react"
 import { formatMXN } from "@/lib/utils"
 import { DifText } from "./dif-text"
+import { MonthCell } from "./month-cell"
 import { ReabrirMesButton } from "./reabrir-mes-button"
 
 /** Partida en la rejilla de Evolución (total = vigente del mes en curso, vivo). */
@@ -47,10 +48,12 @@ type Props = {
  * Modo Evolución del Resumen (SPEC-buyout.md §6): columnas = Ppto Base + cada mes
  * cerrado (foto congelada, incluido el mes actual si ya cerró) + PPTO Vigente (el
  * total vivo de hoy) + Dif (Base vs PPTO Vigente = lo más reciente). Un mes cerrado
- * es solo una columna congelada: NO se compara con lo vivo ni avisa nada. Las MISMAS
- * columnas de mes alimentan el grupo "▸ Meses" del Vigente. Por partida, con subtotal
- * por capítulo y TOTAL. La rejilla alinea todas las partidas en todos los meses;
- * donde un mes no tiene la partida (no existía / sin datos al cerrar) se rellena 0.
+ * es solo una columna congelada: NO se compara con lo vivo ni avisa nada. Cada celda
+ * de mes (por partida) es editable a mano por un admin (lápiz → `setMonthSnapshot`),
+ * para cualquier mes cerrado incluido uno pasado. Las MISMAS columnas de mes alimentan
+ * el grupo "▸ Meses" del Vigente (ahí solo-lectura). Por partida, con subtotal por
+ * capítulo y TOTAL. La rejilla alinea todas las partidas en todos los meses; donde un
+ * mes no tiene la partida (no existía / sin datos al cerrar) se rellena 0.
  */
 export function EvolucionTable({
   projectId,
@@ -134,7 +137,14 @@ export function EvolucionTable({
                     </td>
                     {months.map((m) => (
                       <td key={m.id} className="px-3 py-2 text-right">
-                        {formatMXN(snap(m.id, p.id))}
+                        <MonthCell
+                          projectId={projectId}
+                          monthCloseId={m.id}
+                          partidaCatalogId={p.id}
+                          monto={snap(m.id, p.id)}
+                          mesLabel={m.short}
+                          admin={admin}
+                        />
                       </td>
                     ))}
                     <td className="px-3 py-2 text-right font-medium text-nauka-dark">

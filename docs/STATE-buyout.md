@@ -51,6 +51,13 @@
    en Evolución y en "▸ Meses" del Vigente (`monthCols` único). Botón "Actualizar foto" → **"Actualizar
    mes"** (re-toma el total de hoy); **Reabrir (↩)** se conserva. **Sin migración**; `cerrarMesActual`/
    `reabrirMes` sin tocar; **Pagos intacto**. Detalle abajo.
+✅ **Meses editables inline + etiqueta dinámica (2026-06-25 · sesión 7)** — en **Evolución**, cada celda
+   de un mes cerrado (por partida) es **editable a mano con lápiz** (admin), igual que el Ppto Base
+   (`MonthCell` → Server Action **`setMonthSnapshot`**). Sirve para **cualquier** mes cerrado, incluido
+   uno **pasado** (corregir Junio estando en Julio). Sobrescribe **solo** ese `buyout_month_snapshot`;
+   **no toca el rollup vivo** ni otros meses. En "▸ Meses" del Vigente las celdas siguen **solo-lectura**
+   (mismos valores). Botón de cierre con **etiqueta dinámica**: "Cerrar `<Mes> <Año>`" / "Actualizar
+   `<Mes> <Año>`". **Sin migración**; **Pagos intacto**. Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** + botón manual a Pagos.
    Pendiente Resumen: modo **Qué falta** (nota libre por partida no contratada).
 
@@ -610,6 +617,61 @@ también en Vigente, es un añadido trivial (admin-only) — se deja fuera por m
   de Alfonso: cerrar un mes congela su columna; editar un concepto después **no** mueve el mes cerrado
   ni muestra "desactualizado"; **"Actualizar mes"** sí re-toma el valor; **Evolución y Vigente muestran
   las mismas columnas de mes**; conceptos nuevos salen en $0 en meses previos.
+
+## Meses editables inline + etiqueta dinámica (hecho 2026-06-25, sesión 7)
+
+Edición manual del valor congelado de un mes por partida (como el lápiz del Ppto Base) y etiqueta
+dinámica del botón de cierre. **Sin migración** (reusa `buyout_month_snapshot` del Slice 1, con su
+índice único parcial, RLS `is_admin()` y audit). **Cerrar/Reabrir y el rollup sin tocar**; **Pagos
+intacto**. 5 archivos (1 nuevo).
+
+### Qué cambió
+- **Celdas de mes editables (Evolución).** Cada celda de un mes cerrado —por partida— es **editable
+  inline con lápiz** para admin (no-admin = solo lectura), idéntica en UX a `BaseCell`. Componente
+  nuevo **`buyout/month-cell.tsx`** (`MonthCell`).
+- **Server Action `setMonthSnapshot(projectId, monthCloseId, partidaCatalogId, totalMxn)`** en
+  `buyout/actions.ts`: Zod + admin-only (`getMyProfile`, lo refuerza la RLS). Valida que el cierre
+  **pertenezca al proyecto** (no se puede editar la foto de otro proyecto vía un id arbitrario).
+  **Upsert** del par (mes, partida) respetando el índice único parcial
+  `(month_close_id, partida_catalog_id) WHERE deleted_at IS NULL`: **update** si existe, **insert** si
+  no (p. ej. una partida que estaba en $0 ese mes). `revalidatePath`. Dinero `numeric(14,2)`.
+- **Cualquier mes, incluido pasado.** La action filtra por `month_close_id` (no por periodo actual) →
+  se puede corregir **Junio estando en Julio**. La columna del mes vive en `monthCols` (todos los
+  cerrados), así que su celda es editable sin importar qué mes esté en curso.
+- **Etiqueta dinámica del botón** (`CerrarMesButton`): mes en curso **no cerrado** → "Cerrar
+  `<Mes> <Año>`"; **ya cerrado** → "Actualizar `<Mes> <Año>`" (re-toma la foto del mes en curso; misma
+  action `cerrarMesActual`, sin cambio de funcionalidad). Antes decía "Cerrar mes · …".
+- **Reabrir (↩)** por columna de mes cerrado en Evolución: **conservado** (sin cambios).
+- **Subtotales de capítulo y TOTAL** de cada mes siguen **solo-lectura** (son sumas; se recalculan al
+  revalidar tras editar una celda).
+
+### Por qué no afecta el rollup vivo ni otros meses
+`setMonthSnapshot` escribe **una sola fila** de `buyout_month_snapshot` (la del par mes/partida). No
+toca `buyout_line`/`buyout_quote` (fuente del rollup) → la columna **PPTO Vigente** (vivo) y el modo
+Vigente quedan igual. No toca otras filas → otras partidas y otros meses intactos. Tras guardar,
+`revalidatePath` re-renderiza: la celda, su subtotal, el TOTAL y —misma fuente— el "▸ Meses" del
+Vigente reflejan el nuevo valor; el rollup vivo no se mueve.
+
+### Unificación Evolución ↔ Vigente (se mantiene)
+Las columnas de mes siguen saliendo del **único `monthCols`** (todos los cerrados) y del mismo
+`snapshotByMonth` → **mismos valores, etiquetas y orden** en ambas vistas. La **edición vive solo en
+Evolución**; en "▸ Meses" del Vigente las celdas son solo-lectura (muestran el mismo snapshot, ya
+editado si se cambió).
+
+### Archivos
+- **`buyout/month-cell.tsx` (nuevo)** — celda editable (clon de `BaseCell`, llama `setMonthSnapshot`).
+- **`buyout/actions.ts`** — `setMonthSnapshot` (al final, junto a las actions de mes).
+- **`buyout/evolucion-table.tsx`** — la celda de mes por partida usa `<MonthCell>` (subtotal/TOTAL sin
+  cambio); doc comment actualizado.
+- **`buyout/cerrar-mes-button.tsx`** — etiqueta "Cerrar/Actualizar `<Mes> <Año>`".
+- **`buyout/page.tsx`** — leyenda de Evolución menciona la edición con lápiz.
+
+### Verificación
+- **Gate verde:** `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (las 3 rutas
+  buyout dinámicas; **las 6 de Pagos idénticas** en el manifest). Render/escritura tras login/RLS →
+  prueba de Alfonso: con el lápiz, editar el valor de **Junio** por partida estando en cualquier mes;
+  el cambio **persiste** y **no mueve** PPTO Vigente; la etiqueta del botón cambia según el mes en
+  curso esté cerrado o no; "▸ Meses" del Vigente muestra el mismo valor editado (solo-lectura).
 
 ## Qué sigue
 

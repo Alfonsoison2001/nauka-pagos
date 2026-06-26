@@ -294,8 +294,9 @@ export default async function BuyoutResumenPage({
             <span className="font-medium text-nauka-dark">PPTO Vigente</span> es
             el total vivo de hoy. Dif compara el Ppto Base contra PPTO Vigente
             (lo más reciente). Conceptos/partidas nuevos aparecen en $0 en los
-            meses previos a su captura. Para re-tomar un mes cerrado usa
-            “Actualizar mes”; ↩ lo reabre.
+            meses previos. Un admin puede editar a mano cualquier celda de mes
+            con el lápiz (solo cambia esa foto, no el rollup vivo); ↩ reabre el
+            mes.
           </p>
         </>
       ) : modo === "contratacion" ? (

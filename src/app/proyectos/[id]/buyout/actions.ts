@@ -198,3 +198,76 @@ export async function reabrirMes(
   revalidatePath(`/proyectos/${projectId}/buyout`)
   return { ok: true }
 }
+
+const monthSnapSchema = z.object({
+  month_close_id: z.string().trim().min(1, "Mes requerido"),
+  partida_catalog_id: z.string().trim().min(1, "Partida requerida"),
+  total_mxn: z.coerce.number().min(0, "El monto debe ser ≥ 0"),
+})
+
+/**
+ * Edita A MANO el valor congelado de una partida en un mes CERRADO (la celda
+ * editable del modo Evolución). Upsert sobre el snapshot vigente del par
+ * (mes, partida): actualiza si existe, inserta si no (p. ej. partida que estaba
+ * en $0). Sobrescribe SOLO esa foto — no toca el rollup vivo ni otros meses ni
+ * otras partidas. Funciona para cualquier mes cerrado, incluido uno pasado.
+ * Admin-only (lo refuerza la RLS `is_admin()` de buyout_month_snapshot).
+ */
+export async function setMonthSnapshot(
+  projectId: string,
+  monthCloseId: string,
+  partidaCatalogId: string,
+  totalMxn: number,
+): Promise<ActionResult> {
+  const parsed = monthSnapSchema.safeParse({
+    month_close_id: monthCloseId,
+    partida_catalog_id: partidaCatalogId,
+    total_mxn: totalMxn,
+  })
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+  const { month_close_id, partida_catalog_id, total_mxn } = parsed.data
+  const sb = await createClient()
+  const profile = await getMyProfile()
+  if (profile?.role !== "admin") {
+    return { error: "Solo un administrador puede editar un mes cerrado." }
+  }
+
+  // El cierre debe existir, estar vigente y pertenecer a ESTE proyecto (evita
+  // editar la foto de otro proyecto a través de un id arbitrario).
+  const { data: close } = await sb
+    .from("buyout_month_close")
+    .select("id")
+    .eq("id", month_close_id)
+    .eq("project_id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  if (!close) return { error: "Ese mes no está cerrado en este proyecto." }
+
+  // Upsert del snapshot (mes, partida): respeta el índice único parcial
+  // (month_close_id, partida_catalog_id) WHERE deleted_at IS NULL.
+  const { data: existing } = await sb
+    .from("buyout_month_snapshot")
+    .select("id")
+    .eq("month_close_id", month_close_id)
+    .eq("partida_catalog_id", partida_catalog_id)
+    .is("deleted_at", null)
+    .maybeSingle()
+
+  if (existing) {
+    const { error } = await sb
+      .from("buyout_month_snapshot")
+      .update({ total_mxn })
+      .eq("id", existing.id)
+    if (error) return { error: error.message }
+  } else {
+    const { error } = await sb
+      .from("buyout_month_snapshot")
+      .insert({ month_close_id, partida_catalog_id, total_mxn })
+    if (error) return { error: error.message }
+  }
+
+  revalidatePath(`/proyectos/${projectId}/buyout`)
+  return { ok: true }
+}
