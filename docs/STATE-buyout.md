@@ -45,6 +45,12 @@
    "$240,700 (67%)", % atenuado). Cada par suma **100%** (complemento derivado → sin descuadre por
    redondeo); base 0 → "—". También en subtotales de capítulo y TOTAL general. **Solo presentación**
    (cero queries; reusa las cubetas del rollup). Detalle abajo.
+✅ **Meses congelados sin "desactualizado" (2026-06-25 · sesión 6)** — quitada la lógica de **drift**
+   y los badges **"cerrado ✓" / "desactualizado"** en ambas vistas. Un mes cerrado es **solo una
+   columna congelada** (su snapshot); no se compara con lo vivo ni avisa. **Mismas columnas de mes**
+   en Evolución y en "▸ Meses" del Vigente (`monthCols` único). Botón "Actualizar foto" → **"Actualizar
+   mes"** (re-toma el total de hoy); **Reabrir (↩)** se conserva. **Sin migración**; `cerrarMesActual`/
+   `reabrirMes` sin tocar; **Pagos intacto**. Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** + botón manual a Pagos.
    Pendiente Resumen: modo **Qué falta** (nota libre por partida no contratada).
 
@@ -545,6 +551,65 @@ Mejora **solo de presentación** sobre el modo Contratación. **Un solo archivo 
   rutas buyout dinámicas; **las 6 de Pagos idénticas** en el manifest). Render tras login/RLS → prueba
   de Alfonso: en una partida mixta, cada cubeta muestra su % y cada par suma 100%; subtotales y TOTAL
   igual; el Total sigue cuadrando con Vigente.
+
+## Meses congelados sin "desactualizado" (hecho 2026-06-25, sesión 6)
+
+Quitar la fricción del aviso "desactualizado" / "Actualizar foto" al editar tras cerrar un mes, y
+**unificar** las columnas de mes entre Evolución y Vigente. **Sin migración**; las Server Actions de
+cierre (`cerrarMesActual` / `reabrirMes`) **no se tocaron**; **Pagos intacto**. 4 archivos.
+
+### Qué cambió
+- **Fuera el drift y los badges.** Se eliminó el cálculo `enCursoDrift` (comparar total vivo vs foto)
+  y los badges **"cerrado ✓"** y **"desactualizado"** de la columna del mes en curso (Evolución). Un
+  mes cerrado ya **no se compara con lo vivo**; es solo su foto congelada.
+- **Columnas de mes unificadas (req. clave).** Antes Evolución usaba `frozenMonths` (cerrados *excepto*
+  el actual) + el mes en curso como columna **viva** con badges; Vigente usaba `vigenteMonths` (*todos*
+  los cerrados). Ahora hay **un único `monthCols` = TODOS los meses cerrados** (incl. el actual si ya
+  cerró), que alimenta **ambas** vistas → **mismas etiquetas** (`periodoLabel` "Ppto Junio 2026"),
+  **mismos valores congelados** (`buyout_month_snapshot`) y **mismo orden** (ascendente por periodo).
+- **Columna viva aparte.** En Evolución la última columna de datos pasó de "Ppto {mes} (en curso)" con
+  badges a **"PPTO Vigente"** (el total vivo de hoy), sin badges ni Reabrir. Es el análogo de la
+  columna **Ppto** del Vigente (mismo `p.total` del rollup). Dif = Base vs PPTO Vigente (lo más
+  reciente), igual que antes.
+- **Botón "Actualizar mes".** `CerrarMesButton`: cuando el mes ya está cerrado, el botón pasó de
+  **"Actualizar foto"** a **"Actualizar mes"** (re-toma el total vigente de hoy y sobrescribe el valor
+  congelado del mes en curso; misma action `cerrarMesActual`). Textos del diálogo actualizados.
+- **Reabrir (↩) conservado.** Cada columna de mes cerrado en Evolución mantiene su `ReabrirMesButton`
+  (admin). Como el mes actual cerrado ahora es **una columna de mes normal**, su ↩ vive en su propia
+  cabecera (antes estaba en la columna "en curso").
+- **Limpieza:** `periodoLabel(periodo, enCurso?)` perdió el parámetro muerto (el sufijo "(en curso)"
+  ya no se usa) → `periodoLabel(periodo)`.
+
+### Archivos
+- **`buyout/page.tsx`** — `monthCols` único (reemplaza `frozenMonths`/`evoMonths`/`vigenteMonths`);
+  borrado el bloque de drift (`currentSnap`/`enCursoDrift`/`enCurso`); `EvolucionTable` recibe
+  `months={monthCols}` + `enCursoLabel="PPTO Vigente"`; leyenda de Evolución reescrita (sin "foto/
+  desactualizado"). El render del Vigente y su grupo "▸ Meses" quedan **iguales** (ya usaban todos los
+  meses cerrados).
+- **`buyout/evolucion-table.tsx`** — fuera el tipo `EnCurso` y los imports `Check`/`TriangleAlert`;
+  prop `enCurso` → `enCursoLabel: string`; cabecera de la columna viva simplificada a solo la etiqueta.
+- **`buyout/cerrar-mes-button.tsx`** — "Actualizar foto" → "Actualizar mes" + textos del diálogo.
+- **`lib/buyout/month-close.ts`** — `periodoLabel` sin el parámetro `enCurso` muerto.
+
+### Por qué se conserva el congelado (no cambia al editar)
+Las columnas de mes leen **solo** de `snapshotByMonth` (la foto escrita por `cerrarMesActual` al
+cerrar). Editar un concepto cambia el **rollup vivo** (`loadPartidaAggs` → `p.total` → "PPTO Vigente" /
+"Ppto"), **no** el snapshot. Por eso un mes cerrado no se mueve al editar, y "Actualizar mes" es la
+única forma de re-tomarlo. Conceptos nuevos que no existían en un mes → **$0** en esa columna
+(`snapshot ?? 0`).
+
+### Decisión (consistencia de columnas)
+El **valor/etiqueta/orden** de las columnas de mes ahora es idéntico entre Evolución y "▸ Meses". El
+botón **Reabrir (↩)** se mantiene **solo en Evolución** (es la vista de gestión del comparativo); el
+grupo "▸ Meses" del Vigente sigue siendo solo-lectura de columnas, como antes. Si Alfonso quiere ↩
+también en Vigente, es un añadido trivial (admin-only) — se deja fuera por mínimo alcance.
+
+### Verificación
+- **Gate verde:** `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (las 3
+  rutas buyout dinámicas; **las 6 de Pagos idénticas** en el manifest). Render tras login/RLS → prueba
+  de Alfonso: cerrar un mes congela su columna; editar un concepto después **no** mueve el mes cerrado
+  ni muestra "desactualizado"; **"Actualizar mes"** sí re-toma el valor; **Evolución y Vigente muestran
+  las mismas columnas de mes**; conceptos nuevos salen en $0 en meses previos.
 
 ## Qué sigue
 

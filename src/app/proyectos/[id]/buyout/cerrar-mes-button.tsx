@@ -18,14 +18,15 @@ type Props = {
   projectId: string
   /** Mes en curso legible, p. ej. "Junio 2026". */
   periodoShort: string
-  /** ¿El mes en curso ya está cerrado? (entonces es "actualizar la foto"). */
+  /** ¿El mes en curso ya está cerrado? (entonces el botón es "Actualizar mes"). */
   yaCerrado: boolean
 }
 
 /**
- * Botón (admin) "Cerrar mes" del Resumen: congela el total vigente por partida del
- * mes en curso en una foto comparable. Si ya estaba cerrado, recierra = sobrescribe
- * la foto. Confirma en un diálogo (acción con efecto sobre datos).
+ * Botón (admin) del Resumen: "Cerrar mes" congela el total vigente por partida del
+ * mes en curso como una columna comparable. Si el mes ya está cerrado, el botón pasa
+ * a "Actualizar mes" = re-toma el total de hoy y sobrescribe el valor congelado de
+ * ese mes (no toca otros meses). Confirma en un diálogo (acción con efecto en datos).
  */
 export function CerrarMesButton({ projectId, periodoShort, yaCerrado }: Props) {
   const [open, setOpen] = useState(false)
@@ -57,7 +58,7 @@ export function CerrarMesButton({ projectId, periodoShort, yaCerrado }: Props) {
       >
         <CalendarCheck />
         {yaCerrado
-          ? `Actualizar foto · ${periodoShort}`
+          ? `Actualizar mes · ${periodoShort}`
           : `Cerrar mes · ${periodoShort}`}
       </Button>
 
@@ -66,15 +67,15 @@ export function CerrarMesButton({ projectId, periodoShort, yaCerrado }: Props) {
           <DialogHeader>
             <DialogTitle>
               {yaCerrado
-                ? `¿Actualizar la foto de ${periodoShort}?`
+                ? `¿Actualizar ${periodoShort}?`
                 : `¿Cerrar ${periodoShort}?`}
             </DialogTitle>
             <DialogDescription>
               {error ??
-                `Se guardará el total vigente actual de cada partida como la foto de ${periodoShort}.${
+                `${yaCerrado ? "Se re-tomará" : "Se guardará"} el total vigente actual de cada partida como la columna de ${periodoShort}.${
                   yaCerrado
-                    ? " Sobrescribe la foto anterior de este mes (no toca otros meses)."
-                    : " Podrás verla como una columna en el modo Evolución."
+                    ? " Sobrescribe el valor congelado anterior de este mes (no toca otros meses)."
+                    : " La verás como una columna en Evolución y en el grupo “▸ Meses” del Vigente."
                 }`}
             </DialogDescription>
           </DialogHeader>

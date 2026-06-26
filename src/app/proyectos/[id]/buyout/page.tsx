@@ -188,45 +188,33 @@ export default async function BuyoutResumenPage({
     )
   }
 
-  // Cierre mensual / Evolución (SPEC §6): meses cerrados + fotos congeladas.
-  // El mes EN CURSO se muestra siempre en UNA sola columna (su total vivo). Si ya
-  // está cerrado, esa columna lleva "cerrado ✓" en vez de duplicarse con su foto; y
-  // si el vivo difiere de la foto (se editó tras cerrar), se marca "desactualizado".
+  // Cierre mensual / Evolución (SPEC §6): meses cerrados = columnas CONGELADAS.
+  // Un mes cerrado es solo una foto (buyout_month_snapshot); NO se compara con el
+  // total vivo ni avisa nada (sin "desactualizado"). Las MISMAS columnas de mes
+  // alimentan Evolución y el grupo "▸ Meses" del Vigente (mismas etiquetas, valores
+  // y orden). La columna viva "PPTO Vigente" es aparte: el total de hoy.
   const periodoActual = currentPeriodo()
   const closedMonths = await loadClosedMonths(sb, id)
-  const currentClose = closedMonths.find((m) => m.periodo === periodoActual)
-  const currentClosed = currentClose != null
-  // EVOLUCIÓN (no se toca): columnas congeladas = meses cerrados ANTERIORES; el mes
-  // en curso va aparte como su columna "en curso" (live), colapsando su foto.
-  const frozenMonths = closedMonths.filter((m) => m.periodo !== periodoActual)
-  const evoMonths = frozenMonths.map((m) => ({
+  const currentClosed = closedMonths.some((m) => m.periodo === periodoActual)
+  // ÚNICO set de columnas de mes = TODOS los meses cerrados (incl. el actual si ya
+  // cerró), ascendentes. Lo comparten Evolución y el grupo "▸ Meses" del Vigente.
+  const monthCols: EvoMonth[] = closedMonths.map((m) => ({
     id: m.id,
     periodo: m.periodo,
     label: periodoLabel(m.periodo),
     short: periodoShort(m.periodo),
   }))
-  // VIGENTE → grupo "▸ Meses": TODOS los meses cerrados, INCLUYENDO el mes actual si
-  // ya está cerrado (p. ej. tras cerrar Junio, aparece la columna "Ppto Junio 2026").
-  // El mes en curso aún NO cerrado no genera columna aquí: es la columna PPTO Vigente.
-  const vigenteMonths: EvoMonth[] = closedMonths.map((m) => ({
-    id: m.id,
-    periodo: m.periodo,
-    label: periodoLabel(m.periodo),
-    short: periodoShort(m.periodo),
-  }))
-  // Fotos congeladas (buyout_month_snapshot): las usan Evolución y —misma fuente—
-  // el grupo de meses expandible del Vigente (NO se duplica el cálculo).
+  // Fotos congeladas (buyout_month_snapshot): mismo origen para ambas vistas.
   const needSnapshots =
-    modo === "evolucion" || (mesesOpen && closedMonths.length > 0)
+    (modo === "evolucion" || mesesOpen) && closedMonths.length > 0
   const snapshotByMonth = needSnapshots
     ? await loadSnapshots(
         sb,
         closedMonths.map((m) => m.id),
       )
     : new Map<string, Map<string, number>>()
-  // Columnas de meses a intercalar en el Vigente (solo si está expandido): todos los
-  // meses cerrados (incl. el actual si ya cerró). PPTO Vigente sigue siendo el vivo.
-  const mesesCols: EvoMonth[] = mesesOpen ? vigenteMonths : []
+  // En el Vigente, las columnas de mes solo se intercalan si "▸ Meses" está abierto.
+  const mesesCols: EvoMonth[] = mesesOpen ? monthCols : []
   const evoChapters: EvoChapter[] = chapterViews.map((ch) => ({
     nombre: ch.nombre,
     base: ch.base,
@@ -264,26 +252,6 @@ export default async function BuyoutResumenPage({
           total: ch.total,
         }))
       : []
-  // ¿La foto del mes en curso quedó desfasada vs el total vivo de hoy? (drift por
-  // partida: alguna difiere → la columna en curso se marca "desactualizado".)
-  const currentSnap = currentClose
-    ? snapshotByMonth.get(currentClose.id)
-    : undefined
-  const enCursoDrift = currentClosed
-    ? evoChapters.some((ch) =>
-        ch.partidas.some(
-          (p) => Math.abs(p.total - (currentSnap?.get(p.id) ?? 0)) > 0.005,
-        ),
-      )
-    : false
-  const enCurso = {
-    label: periodoLabel(periodoActual, !currentClosed),
-    closed: currentClosed,
-    drift: enCursoDrift,
-    periodo: periodoActual,
-    short: periodoShort(periodoActual),
-  }
-
   return (
     <div className="flex flex-col gap-4">
       {/* Toolbar: toggle Vigente/Evolución + (admin) Cerrar mes en curso. */}
@@ -311,9 +279,9 @@ export default async function BuyoutResumenPage({
           <EvolucionTable
             projectId={id}
             chapters={evoChapters}
-            months={evoMonths}
+            months={monthCols}
             snapshotByMonth={snapshotByMonth}
-            enCurso={enCurso}
+            enCursoLabel="PPTO Vigente"
             totalBase={totalBase}
             total={total}
             totalDif={totalDif}
@@ -321,15 +289,13 @@ export default async function BuyoutResumenPage({
           />
           <p className="text-sm text-muted-foreground">
             Cada columna de mes es la foto congelada del total vigente por
-            partida al cerrarlo;{" "}
-            <span className="font-medium text-nauka-dark">{enCurso.label}</span>{" "}
-            es el total vivo de hoy
-            {enCurso.closed
-              ? " (ya cerrado: la foto y el vivo van en una sola columna; si difieren, se marca “desactualizado” y puedes Actualizar foto)"
-              : ""}
-            . Dif compara el Ppto Base contra el mes más reciente (el en curso).
-            Donde un mes no tenía una partida, se muestra $0 para alinear la
-            rejilla.
+            partida al cerrar ese mes (incluye el mes actual si ya está
+            cerrado);{" "}
+            <span className="font-medium text-nauka-dark">PPTO Vigente</span> es
+            el total vivo de hoy. Dif compara el Ppto Base contra PPTO Vigente
+            (lo más reciente). Conceptos/partidas nuevos aparecen en $0 en los
+            meses previos a su captura. Para re-tomar un mes cerrado usa
+            “Actualizar mes”; ↩ lo reabre.
           </p>
         </>
       ) : modo === "contratacion" ? (

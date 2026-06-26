@@ -28,9 +28,9 @@ export function periodoShort(periodo: string): string {
   }
 }
 
-/** Etiqueta legible "Ppto Junio 2026" (+ " (en curso)" cuando es el mes vivo). */
-export function periodoLabel(periodo: string, enCurso = false): string {
-  return `Ppto ${periodoShort(periodo)}${enCurso ? " (en curso)" : ""}`
+/** Etiqueta legible de una columna de mes cerrado: "Ppto Junio 2026". */
+export function periodoLabel(periodo: string): string {
+  return `Ppto ${periodoShort(periodo)}`
 }
 
 /** Meses cerrados (vigentes, no reabiertos) del proyecto, ascendentes por periodo. */
