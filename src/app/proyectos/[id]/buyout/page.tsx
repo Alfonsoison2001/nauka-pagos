@@ -259,10 +259,15 @@ export default async function BuyoutResumenPage({
       : []
   return (
     <div className="flex flex-col gap-4">
-      {/* Toolbar: toggle Vigente/Evolución + (admin) Cerrar mes en curso. */}
+      {/* Toolbar: pestañas (Vigente·Evolución·Contratación) a la izquierda + control
+          contextual a la derecha — en Vigente el toggle "▸ Meses (n)"; en Evolución
+          (admin) Cerrar/Actualizar mes. El cierre de mes vive SOLO en Evolución (la
+          vista de gestión de meses); en Vigente solo se revelan las columnas. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ResumenModeToggle modo={modo} />
-        {admin ? (
+        {modo === "vigente" && closedMonths.length > 0 ? (
+          <MesesToggle open={mesesOpen} count={closedMonths.length} />
+        ) : modo === "evolucion" && admin ? (
           <CerrarMesButton
             projectId={id}
             periodoShort={periodoShort(periodoActual)}
@@ -323,16 +328,10 @@ export default async function BuyoutResumenPage({
         </>
       ) : (
         <>
-          {/* Grupo de columnas de meses (colapsable): aparece si hay ≥1 mes cerrado
-              que revelar (incluye el mes actual si ya está cerrado). */}
-          {closedMonths.length > 0 ? (
-            <div className="flex justify-end">
-              <MesesToggle open={mesesOpen} count={closedMonths.length} />
-            </div>
-          ) : null}
-
-          <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
-            <table className="w-full text-sm tabular-nums">
+          {/* El toggle "▸ Meses (n)" vive en la barra superior (toolbar). Aquí las
+              columnas de meses solo se intercalan si está abierto (mesesCols). */}
+          <div className="max-h-[78vh] w-full overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
+            <table className="w-full text-[15px] tabular-nums">
               <thead className="sticky top-0 z-10">
                 <tr className={cn(HEAD_ROW, "border-b border-nauka-subtle")}>
                   <Th icon={Tag}>Concepto</Th>
@@ -430,38 +429,31 @@ export default async function BuyoutResumenPage({
             </p>
           ) : null}
 
-          {/* Pie: $/m² interior + USD/m² (spec §6). */}
-          <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm text-muted-foreground">
-            <span>
-              $/m² interior:{" "}
-              <span className="font-medium tabular-nums text-nauka-dark">
-                {costoM2 != null ? formatMXN0(costoM2) : "—"}
-              </span>
-              {areaInt
-                ? ` · área interior ${areaFormatter.format(areaInt)} m²`
-                : " · área interior —"}
-            </span>
-            <span>
-              USD/m²:{" "}
-              <span className="font-medium tabular-nums text-nauka-dark">
-                {usdM2 != null ? formatUSD0(usdM2) : "—"}
-              </span>
-              {usdRate ? ` · TC ${usdRate}` : " · TC —"}
-            </span>
-          </div>
-
-          {/* Leyenda: el Estado son 2 ejes con % (madurez arriba · contratación abajo). */}
-          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-            <EstadoCell ppto={60} contratado={70} total={100} />
-            <span>
-              Estado · 2 ejes con %:{" "}
-              <span className="font-medium text-nauka-dark">arriba</span>{" "}
-              madurez (la barra verde = % en Ppto, el resto Paramétrico),{" "}
-              <span className="font-medium text-nauka-dark">abajo</span>{" "}
-              contratación (barra verde = % Contratado, el resto No contratado).
-              Los % cuadran con el modo{" "}
-              <span className="font-medium text-nauka-dark">Contratación</span>.
-            </span>
+          {/* Pie: métricas clave como TARJETAS (spec §6). Montos sin decimales;
+              área y tipo de cambio conservan sus decimales. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <MetricCard
+              label="$/m² interior"
+              value={costoM2 != null ? formatMXN0(costoM2) : "—"}
+            />
+            <MetricCard
+              label="USD/m²"
+              value={usdM2 != null ? formatUSD0(usdM2) : "—"}
+            />
+            <MetricCard
+              label="Área interior"
+              value={
+                areaInt != null ? `${areaFormatter.format(areaInt)} m²` : "—"
+              }
+            />
+            <MetricCard
+              label="Tipo de cambio"
+              value={
+                usdRate != null
+                  ? `${areaFormatter.format(usdRate)} MXN/USD`
+                  : "—"
+              }
+            />
           </div>
         </>
       )}
@@ -543,7 +535,7 @@ function ChapterGroup({
         chapter.partidas.map((p) => (
           <tr
             key={p.id}
-            className="h-12 border-b border-nauka-subtle transition-colors hover:bg-nauka-bg"
+            className="h-14 border-b border-nauka-subtle transition-colors hover:bg-nauka-bg"
           >
             <td className="px-4 py-3">
               <Link
@@ -630,6 +622,21 @@ function proveedorLabel(provs: string[]): string {
   if (provs.length === 0) return "—"
   if (provs.length === 1) return provs[0]
   return "Varios"
+}
+
+/** Tarjeta de métrica del pie: label chico arriba + número grande abajo, sobre
+ *  fondo secundario sutil (token NAUKA). */
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-nauka-subtle px-4 py-3.5">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 text-2xl font-medium tabular-nums text-nauka-dark">
+        {value}
+      </p>
+    </div>
+  )
 }
 
 // Estado: 2 mini-barras de % por eje (madurez · contratación). El % reusa las

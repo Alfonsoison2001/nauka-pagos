@@ -91,6 +91,15 @@
    total`) con la **misma fórmula** que el modo Contratación (`estadoPcts`) → los números **cuadran**. 100%
    en un estado → solo ese; `total ≤ 0` → "—". **Solo presentación** (cero queries/cálculos nuevos);
    **Evolución/Contratación/Pagos intactos**; **sin migración**. **1 archivo** (`buyout/page.tsx`). Detalle abajo.
+✅ **Pulido visual del Resumen — pie en tarjetas + layout de meses + tabla full-width (2026-06-25 · sesión 13)** —
+   4 ajustes **solo de presentación** sobre el Resumen, **1 archivo** (`buyout/page.tsx`): (#2) el **pie** pasó de
+   una línea de texto a **4 tarjetas de métrica** ("$/m² interior", "USD/m²", "Área interior", "Tipo de cambio";
+   label chico + número grande, fondo `nauka-subtle`, grid responsivo) y se **quitó por completo la leyenda del
+   Estado**; (#3) el botón **Cerrar/Actualizar mes** ya **no aparece en Vigente** — vive **solo en Evolución**
+   (admin); (#4) el toggle **"▸ Meses (n)"** subió a la **barra superior** (misma fila que las pestañas, a la
+   derecha), eliminando el hueco vertical; (#5) la **tabla del Vigente** quedó **full-width**, más legible
+   (`text-[15px]`) y con filas cómodas (`h-14`). Montos sin decimales; área y TC con decimales. **Cero cambios de
+   datos/cálculos**; **Evolución/Contratación/Pagos intactos**; **sin migración**. Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se
    marca al editar la línea en la Partida). Pendiente Resumen: modo **Qué falta** (nota libre por partida
    no contratada).
@@ -939,6 +948,55 @@ cálculos/queries nuevos); **sin migración**; **Evolución/Contratación/Pagos 
   columna sin tope pero con `nowrap`+scroll). Sin migración, sin commits en `main`, **sin push**. Render tras
   login/RLS → prueba de Alfonso: en Vigente, una partida **mixta** muestra los % por eje (cuadran con
   Contratación), una **100%** muestra solo su estado, y una **vacía** muestra "—".
+
+## Pulido visual del Resumen — pie en tarjetas + layout de meses + tabla full-width (hecho 2026-06-25, sesión 13)
+
+4 ajustes **100% de presentación** sobre el Resumen, **1 solo archivo** (`buyout/page.tsx`). **Cero cambios de
+datos/cálculos/queries**; **Evolución/Contratación/Pagos intactos**; **sin migración**. El Entregable #1
+(Estado con %) ya venía de la sesión 12 y **quedó intacto**.
+
+### #2 — Pie como tarjetas de métrica + sin leyenda del Estado
+- La línea de texto del pie ("$/m² interior … área … USD/m² … TC …") se reemplazó por una **rejilla de 4
+  tarjetas** (`grid grid-cols-2 sm:grid-cols-4`), una por número, con el nuevo componente **`MetricCard`**
+  (label chico uppercase atenuado arriba + número `text-2xl` abajo, fondo **`bg-nauka-subtle`**, `rounded-2xl`).
+  - **$/m² interior** → `formatMXN0(costoM2)` (sin decimales)
+  - **USD/m²** → `formatUSD0(usdM2)` (sin decimales)
+  - **Área interior** → `areaFormatter.format(areaInt) + " m²"` (**con** decimales)
+  - **Tipo de cambio** → `areaFormatter.format(usdRate) + " MXN/USD"` (**con** decimales; sufijo de unidad
+    explícito para no confundir con un monto en pesos — corrección del review).
+  - Cualquier valor nulo (sin área/TC) → **"—"**.
+- Se **eliminó por completo** la leyenda explicativa del Estado ("Estado · 2 ejes … "). El subtítulo de la
+  columna Estado en el header de la tabla ("(madurez · contratación)") se conserva.
+
+### #3 — Botón de cierre de mes solo en Evolución
+- `CerrarMesButton` ("Cerrar/Actualizar `<mes>`") se **quitó de Vigente**: ahora se renderiza **solo** cuando
+  `modo === "evolucion"` (y `admin`). El cierre/actualización de mes vive en la **vista de gestión** (Evolución);
+  la acción (`cerrarMesActual`) no se tocó. En Vigente/Contratación el botón ya no aparece.
+
+### #4 — "▸ Meses (n)" en la barra superior
+- El toggle `MesesToggle` se **subió a la toolbar** (misma fila que las pestañas Vigente·Evolución·Contratación,
+  alineado a la derecha), reemplazando el bloque vertical aparte (`flex justify-end`) que dejaba un hueco. La
+  toolbar ahora muestra un **control contextual** a la derecha: en **Vigente** el toggle "▸ Meses (n)" (si hay
+  ≥1 mes cerrado), en **Evolución** el botón Cerrar/Actualizar (admin). Su función (expandir/colapsar las
+  columnas de meses vía `?meses=open` → `mesesCols`) **no cambió**.
+
+### #5 — Tabla full-width / más prominente
+- El contenedor de la tabla del Vigente quedó **`w-full`** y un poco más alto (`max-h-[78vh]`); la tabla subió a
+  **`text-[15px]`** (más legible) y las filas de partida a **`h-14`** (más cómodas). El header sigue compacto
+  (usa el `HEAD_ROW` compartido `text-[11px]`, **no modificado** → Evolución/Contratación sin cambios) y el
+  overflow lo sigue manejando el contenedor con scroll.
+
+### Verificación
+- **Gate verde:** `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` (buyout + lib/buyout) ✓ · `pnpm build`
+  ✓ (las 3 rutas buyout dinámicas; **las 6 de Pagos idénticas** en el manifest). **Review adversarial
+  multiagente** (cobertura de requisitos · aislamiento/regresión · diseño/tokens NAUKA, cada hallazgo verificado
+  por un escéptico): los 5 entregables correctos, #1 intacto, aislamiento OK; **1 hallazgo menor confirmado**
+  (símbolo "$" ambiguo en la tarjeta de Tipo de cambio → **corregido** a sufijo "MXN/USD") y 1 nit no
+  reproducible con datos reales (overflow de valor largo — descartado por disciplina quirúrgica). Sin migración,
+  sin commits en `main`, **sin push**. Render tras login/RLS → prueba de Alfonso: en **Vigente** el pie son 4
+  tarjetas sin leyenda, no hay botón de mes (sí en **Evolución**), "▸ Meses" está arriba junto a las pestañas, y
+  la tabla se ve full-width; el Estado muestra los % por eje (cuadran con Contratación). **Evolución/Contratación
+  y Pagos intactos.**
 
 ## Qué sigue
 
