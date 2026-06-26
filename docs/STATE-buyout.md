@@ -58,6 +58,11 @@
    **no toca el rollup vivo** ni otros meses. En "▸ Meses" del Vigente las celdas siguen **solo-lectura**
    (mismos valores). Botón de cierre con **etiqueta dinámica**: "Cerrar `<Mes> <Año>`" / "Actualizar
    `<Mes> <Año>`". **Sin migración**; **Pagos intacto**. Detalle abajo.
+✅ **Ppto Base editable solo en Evolución (2026-06-25 · sesión 8)** — se **movió** la edición inline del
+   Ppto Base (lápiz / `setPartidaBase`) de **Vigente → Evolución**; en **Vigente** queda **solo-lectura**
+   (`{formatMXN}`, sin lápiz). Mismo criterio que las celdas de mes → **toda la edición vive en
+   Evolución**, Vigente es de consulta. Misma fuente (`buyout_partida_base`) en ambas vistas; **DIF y
+   rollup sin tocar**. **Sin migración**; **Pagos intacto**. Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** + botón manual a Pagos.
    Pendiente Resumen: modo **Qué falta** (nota libre por partida no contratada).
 
@@ -672,6 +677,38 @@ editado si se cambió).
   prueba de Alfonso: con el lápiz, editar el valor de **Junio** por partida estando en cualquier mes;
   el cambio **persiste** y **no mueve** PPTO Vigente; la etiqueta del botón cambia según el mes en
   curso esté cerrado o no; "▸ Meses" del Vigente muestra el mismo valor editado (solo-lectura).
+
+## Ppto Base editable solo en Evolución (hecho 2026-06-25, sesión 8)
+
+Un único lugar de edición = **Evolución** (mismo criterio que las celdas de mes). El Ppto Base por
+partida pasó de editable en Vigente a editable en Evolución; en Vigente queda **solo-lectura**.
+**Sin migración**, **sin nuevas actions** (reusa `setPartidaBase`), **DIF/rollup sin tocar**;
+**Pagos intacto**. 2 archivos.
+
+### Qué cambió
+- **Evolución** (`buyout/evolucion-table.tsx`): la celda **Ppto Base** por partida pasó de
+  `{formatMXN(p.base)}` (solo-lectura, atenuada) a **`<BaseCell>`** (editable inline con lápiz,
+  admin), igual que las celdas de mes (`MonthCell`). Se quitó el `text-muted-foreground` para que se
+  vea como celda editable. Subtotal de capítulo y TOTAL del Base siguen solo-lectura (son sumas).
+- **Vigente** (`buyout/page.tsx`, `ChapterGroup`): la celda Ppto Base pasó de **`<BaseCell>`** a
+  **`{formatMXN(p.base)}`** (solo-lectura, sin lápiz). Se quitó el import de `BaseCell` y el prop
+  `admin` de `ChapterGroup` (ya no lo usaba nadie más ahí) + su call site.
+- **Leyenda de Evolución** y doc-comments actualizados: "aquí (admin) se edita el Ppto Base y las
+  celdas de mes; en Vigente son solo-lectura".
+
+### Por qué cuadra (misma fuente, DIF intacto)
+Ambas vistas leen `p.base` del mismo `baseByPartida` (de `buyout_partida_base`) → **mismo valor**.
+`setPartidaBase` (sin cambios) hace `revalidatePath` al guardar → Vigente y Evolución recargan la
+base y **recalculan el DIF** (`difPct(total, base)`, sin tocar) en el servidor. No se tocó el rollup
+ni la fórmula del DIF; solo **dónde** se dispara la edición. La captura de conceptos sigue en la
+pantalla **Partida** como hoy.
+
+### Verificación
+- **Gate verde:** `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` ✓ · `pnpm build` ✓ (las 3
+  rutas buyout dinámicas; **las 6 de Pagos idénticas** en el manifest). Render/escritura tras
+  login/RLS → prueba de Alfonso: en **Evolución**, editar el Ppto Base de una partida con el lápiz;
+  el valor se ve **igual en Vigente** (sin lápiz) y el **DIF cuadra** en ambas; ninguna otra columna
+  cambia.
 
 ## Qué sigue
 

@@ -20,7 +20,6 @@ import {
 import { formatDate } from "@/lib/format/fecha"
 import { createClient } from "@/lib/supabase/server"
 import { cn, formatMXN } from "@/lib/utils"
-import { BaseCell } from "./base-cell"
 import { CerrarMesButton } from "./cerrar-mes-button"
 import { type ContraChapter, ContratacionTable } from "./contratacion-table"
 import { DifText } from "./dif-text"
@@ -65,9 +64,9 @@ type ChapterView = {
  * Resumen (tablero BUY OUT) — Fase 3a: FUNCIONAL. Suma de verdad. Por cada
  * partida, total = Σ del total MXN de la cotización VIGENTE de cada concepto
  * (rollup de `lib/buyout/rollup`), luego partida → capítulo → TOTAL. Muestra
- * Ppto Base (editable), Ppto vigente, DIF (vigente ÷ base − 1), $/m², última
- * actualización y el Estado agregado (madurez · contratación). $/m² + USD/m² al
- * pie. Misma fuente de datos que las tarjetas de Partida → nunca difieren.
+ * Ppto Base (solo-lectura aquí; se edita en Evolución), Ppto vigente, DIF
+ * (vigente ÷ base − 1), $/m², última actualización y el Estado agregado (madurez ·
+ * contratación). $/m² + USD/m² al pie. Misma fuente que las tarjetas de Partida.
  */
 export default async function BuyoutResumenPage({
   params,
@@ -294,8 +293,9 @@ export default async function BuyoutResumenPage({
             <span className="font-medium text-nauka-dark">PPTO Vigente</span> es
             el total vivo de hoy. Dif compara el Ppto Base contra PPTO Vigente
             (lo más reciente). Conceptos/partidas nuevos aparecen en $0 en los
-            meses previos. Un admin puede editar a mano cualquier celda de mes
-            con el lápiz (solo cambia esa foto, no el rollup vivo); ↩ reabre el
+            meses previos. Aquí (admin) se edita con el lápiz el{" "}
+            <span className="font-medium text-nauka-dark">Ppto Base</span> y
+            cualquier celda de mes; en Vigente son solo-lectura. ↩ reabre el
             mes.
           </p>
         </>
@@ -361,7 +361,6 @@ export default async function BuyoutResumenPage({
                     chapter={ch}
                     projectId={id}
                     areaInt={areaInt}
-                    admin={admin}
                     months={mesesCols}
                     snapshotByMonth={snapshotByMonth}
                   />
@@ -495,14 +494,12 @@ function ChapterGroup({
   chapter,
   projectId,
   areaInt,
-  admin,
   months,
   snapshotByMonth,
 }: {
   chapter: ChapterView
   projectId: string
   areaInt: number | null
-  admin: boolean
   months: EvoMonth[]
   snapshotByMonth: Map<string, Map<string, number>>
 }) {
@@ -545,14 +542,8 @@ function ChapterGroup({
             <td className="px-3 py-2 text-muted-foreground">
               {proveedorLabel(p.agg.proveedores)}
             </td>
-            <td className="px-3 py-2 text-right">
-              <BaseCell
-                projectId={projectId}
-                partidaCatalogId={p.id}
-                monto={p.base}
-                admin={admin}
-              />
-            </td>
+            {/* Ppto Base = solo-lectura aquí; la edición vive en Evolución. */}
+            <td className="px-3 py-2 text-right">{formatMXN(p.base)}</td>
             {months.map((m) => (
               <td
                 key={m.id}

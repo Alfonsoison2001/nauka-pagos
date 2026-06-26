@@ -1,5 +1,6 @@
 import { Fragment } from "react"
 import { formatMXN } from "@/lib/utils"
+import { BaseCell } from "./base-cell"
 import { DifText } from "./dif-text"
 import { MonthCell } from "./month-cell"
 import { ReabrirMesButton } from "./reabrir-mes-button"
@@ -48,12 +49,13 @@ type Props = {
  * Modo Evolución del Resumen (SPEC-buyout.md §6): columnas = Ppto Base + cada mes
  * cerrado (foto congelada, incluido el mes actual si ya cerró) + PPTO Vigente (el
  * total vivo de hoy) + Dif (Base vs PPTO Vigente = lo más reciente). Un mes cerrado
- * es solo una columna congelada: NO se compara con lo vivo ni avisa nada. Cada celda
- * de mes (por partida) es editable a mano por un admin (lápiz → `setMonthSnapshot`),
- * para cualquier mes cerrado incluido uno pasado. Las MISMAS columnas de mes alimentan
- * el grupo "▸ Meses" del Vigente (ahí solo-lectura). Por partida, con subtotal por
- * capítulo y TOTAL. La rejilla alinea todas las partidas en todos los meses; donde un
- * mes no tiene la partida (no existía / sin datos al cerrar) se rellena 0.
+ * es solo una columna congelada: NO se compara con lo vivo ni avisa nada. Evolución es
+ * el ÚNICO lugar de edición (admin): el **Ppto Base** por partida (lápiz →
+ * `setPartidaBase`) y cada celda de **mes** (lápiz → `setMonthSnapshot`, cualquier mes
+ * cerrado incluido uno pasado). En el grupo "▸ Meses" del Vigente esas MISMAS columnas
+ * (Base + meses) son solo-lectura. Por partida, con subtotal por capítulo y TOTAL. La
+ * rejilla alinea todas las partidas en todos los meses; donde un mes no tiene la partida
+ * (no existía / sin datos al cerrar) se rellena 0.
  */
 export function EvolucionTable({
   projectId,
@@ -132,8 +134,13 @@ export function EvolucionTable({
                     className="border-b border-nauka-subtle hover:bg-nauka-bg"
                   >
                     <td className="px-3 py-2">{p.nombre}</td>
-                    <td className="px-3 py-2 text-right text-muted-foreground">
-                      {formatMXN(p.base)}
+                    <td className="px-3 py-2 text-right">
+                      <BaseCell
+                        projectId={projectId}
+                        partidaCatalogId={p.id}
+                        monto={p.base}
+                        admin={admin}
+                      />
                     </td>
                     {months.map((m) => (
                       <td key={m.id} className="px-3 py-2 text-right">
