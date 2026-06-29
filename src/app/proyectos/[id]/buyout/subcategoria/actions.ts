@@ -7,11 +7,12 @@ import { createClient } from "@/lib/supabase/server"
 export type ActionResult = { error: string } | { ok: true }
 
 /**
- * Marca una cotización (versión) como la VIGENTE de su concepto. Baja la vigente
- * anterior (índice único: 1 vigente por item) ANTES de subir la elegida, y
- * actualiza `selected_quote_id`. El rollup (Partida + Resumen) usa la vigente → el
- * cambio se refleja al instante. Admin-only (lo refuerza la RLS `is_admin()` de
- * buyout_quote/buyout_item).
+ * Marca una cotización (versión) como la VIGENTE de su concepto. El swap (baja la
+ * anterior → sube la elegida → apunta `selected_quote_id`) corre ATÓMICO en la RPC
+ * `buyout_mark_vigente` (una sola transacción Postgres): si algo falla, se revierte
+ * todo y el concepto conserva su vigente anterior, nunca queda sin vigente (BO-09).
+ * El rollup (Partida + Resumen) usa la vigente → el cambio se refleja al instante.
+ * Admin-only (guard server + re-check `is_admin()` dentro de la RPC).
  */
 export async function marcarVigente(
   projectId: string,
@@ -44,26 +45,15 @@ export async function marcarVigente(
   if (!quote) return { error: "Esa versión no existe o fue eliminada." }
   if (quote.is_selected) return { ok: true } // ya es la vigente
 
-  // Baja la vigente anterior antes de subir la elegida (1-vigente por item).
-  const { error: downErr } = await sb
-    .from("buyout_quote")
-    .update({ is_selected: false })
-    .eq("item_id", itemId)
-    .eq("is_selected", true)
-    .is("deleted_at", null)
-  if (downErr) return { error: downErr.message }
-
-  const { error: upErr } = await sb
-    .from("buyout_quote")
-    .update({ is_selected: true })
-    .eq("id", quoteId)
-  if (upErr) return { error: upErr.message }
-
-  const { error: itemErr } = await sb
-    .from("buyout_item")
-    .update({ selected_quote_id: quoteId })
-    .eq("id", itemId)
-  if (itemErr) return { error: itemErr.message }
+  // Swap ATÓMICO vía RPC: baja la anterior + sube la elegida + apunta el item en
+  // UNA sola transacción Postgres. Si algo falla, se revierte completo y el
+  // concepto conserva su vigente anterior → nunca queda sin vigente (BO-09).
+  const { error: rpcErr } = await sb.rpc("buyout_mark_vigente", {
+    p_project_id: projectId,
+    p_item_id: itemId,
+    p_quote_id: quoteId,
+  })
+  if (rpcErr) return { error: rpcErr.message }
 
   // Refleja al instante en Resumen, Partida y este historial.
   revalidatePath(`/proyectos/${projectId}/buyout`)

@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import type {
+  ActionResult,
   ConceptoOption,
   CurrencyOption,
   LineaRow,
@@ -153,6 +154,8 @@ export function LineaDialog(props: Props) {
   const pdfRef = useRef<HTMLInputElement>(null)
   const [pending, startTransition] = useTransition()
   const [submitError, setSubmitError] = useState<string | null>(null)
+  // Aviso no-fatal: la línea SÍ se guardó pero el PDF no subió (BO-10).
+  const [submitWarning, setSubmitWarning] = useState<string | null>(null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -164,6 +167,7 @@ export function LineaDialog(props: Props) {
     if (!next) {
       form.reset(getDefaults(props))
       setSubmitError(null)
+      setSubmitWarning(null)
     }
     onOpenChange(next)
   }
@@ -186,6 +190,7 @@ export function LineaDialog(props: Props) {
       return
     }
     setSubmitError(null)
+    setSubmitWarning(null)
     startTransition(async () => {
       const fd = new FormData()
       const put = (k: string, val?: string) => {
@@ -214,7 +219,7 @@ export function LineaDialog(props: Props) {
       const pdfFile = pdfRef.current?.files?.[0]
       if (pdfFile) fd.append("pdf", pdfFile)
 
-      let result: { error: string } | { ok: true }
+      let result: ActionResult
       if (props.mode === "new") {
         fd.append("partida_catalog_id", props.partidaCatalogId)
         result = await createLinea(projectId, fd)
@@ -230,6 +235,12 @@ export function LineaDialog(props: Props) {
       }
       if ("error" in result) {
         setSubmitError(result.error)
+        return
+      }
+      if (result.warning) {
+        // La línea SÍ se guardó; solo falló el PDF. No cerramos: mostramos el
+        // aviso y deshabilitamos reenviar (evita duplicar la línea ya creada).
+        setSubmitWarning(result.warning)
         return
       }
       onOpenChange(false)
@@ -267,6 +278,11 @@ export function LineaDialog(props: Props) {
               {submitError}
             </p>
           ) : null}
+          {submitWarning ? (
+            <p className="mt-3 text-sm text-amber-600" role="status">
+              {submitWarning}
+            </p>
+          ) : null}
           <DialogFooter className="mt-4">
             <DialogClose
               render={
@@ -275,7 +291,7 @@ export function LineaDialog(props: Props) {
             >
               Cancelar
             </DialogClose>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || !!submitWarning}>
               {pending ? "Guardando..." : copy.cta}
             </Button>
           </DialogFooter>

@@ -117,6 +117,14 @@
    las que él creó/ligó; manual homónima → avisa, en crear **y** en re-sincronizar); **BO-08** cada select
    que alimenta el dinero revisa su `.error` (error de Supabase ≠ "no encontrado" → aborta). **Pagos intacto**
    (cero esquema/RLS/lógica de Pagos tocados); **sin migración**. Detalle abajo.
+✅ **Atomicidad PRE-MERGE (2026-06-29 · auditoría) — BO-09/10** — 2 arreglos quirúrgicos de la auditoría
+   (`docs/audit-buyout-2026-06-29.md`): **BO-09** `marcarVigente` hace el swap (baja anterior → sube elegida →
+   apunta item) **atómico** vía RPC `buyout_mark_vigente` (1 transacción Postgres) → un fallo a media ya **no**
+   deja al concepto **sin vigente** (no desaparece del rollup); **BO-10** la captura inserta la **línea ANTES**
+   del PDF y un **fallo de PDF ya no aborta** (la línea queda guardada; se **avisa** en ámbar para reintentar al
+   editar). **1 migración aditiva** (solo una función `buyout_*`, aplicada a prod con `db push` — opción B) +
+   **3 archivos** (`subcategoria/actions.ts`, `partida/actions.ts`, `partida/linea-dialog.tsx`). **Pagos
+   intacto**; **sin tocar** ninguna tabla/RLS/lógica de Pagos. Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se
    marca al editar la línea en la Partida). Pendiente Resumen: modo **Qué falta** (nota libre por partida
    no contratada).
@@ -1108,6 +1116,60 @@ datos reusando la estructura existente).
 - **Diff:** solo `subcategoria/contrato-actions.ts` (+helper, +error checks, +guards) y `lib/buyout/rollup.ts`
   (`rateOf`). `git diff --name-only` no toca ningún archivo de Pagos.
 - Render real tras login/RLS → prueba de Alfonso (ver "Qué sigue").
+
+## Atomicidad PRE-MERGE — marcar-vigente + captura sin perder línea — BO-09/10 (hecho 2026-06-29)
+
+Dos arreglos **quirúrgicos** de la auditoría (`docs/audit-buyout-2026-06-29.md`), ambos de **atomicidad de
+escrituras multi-paso**. **Solo estos 2**, sin tocar otra cosa. **1 migración aditiva** (una función `buyout_*`)
++ **3 archivos**; **Pagos intacto** (cero esquema/RLS/componentes/lógica de Pagos modificados).
+
+### BO-09 🟠 — `marcarVigente` atómico (no dejar un concepto sin vigente)
+- **Antes** (`subcategoria/actions.ts`): el swap eran **3 escrituras secuenciales sin transacción** (baja la
+  vigente anterior → sube la elegida → apunta `selected_quote_id`). Si la 1ª tenía éxito y la 2ª/3ª fallaba, el
+  concepto quedaba con **todas** sus cotizaciones en `is_selected=false` → **sin vigente** → `loadVigenteLines`
+  (filtra `is_selected=true`) **dejaba de devolverlo** y **desaparecía del rollup** (Resumen y Partida),
+  descuadrando el tablero sin aviso.
+- **Ahora:** el swap completo corre dentro de la RPC **`public.buyout_mark_vigente(p_project_id, p_item_id,
+  p_quote_id)`** — una función `plpgsql` = **una sola transacción**. Si cualquier paso falla, Postgres revierte
+  TODO y el concepto **conserva intacta su vigente anterior**. Nunca queda sin vigente.
+- **Migración** `20260629120000_buyout_mark_vigente_rpc.sql` (**aditiva**, aplicada a prod con `supabase db push`
+  — opción B): crea **una** función + su `GRANT EXECUTE … TO authenticated` (+ `REVOKE … FROM public`). No toca
+  ninguna tabla/RLS/grant existente.
+- **Seguridad:** `SECURITY DEFINER` (mismo patrón que `is_admin()`/`fn_notify_admins`) con `SET search_path =
+  public`. Como ignora RLS, **re-valida `public.is_admin()` dentro** y aborta si no es admin; valida también que
+  el item ∈ proyecto y la cotización ∈ item (misma defensa que el server action, que además mantiene su guard
+  `getMyProfile()`). El orden baja→sube respeta el índice único parcial "1 vigente por item".
+- **Server action:** `marcarVigente` conserva su validación y su short-circuit "ya es la vigente"; solo cambió
+  las 3 escrituras por **`sb.rpc("buyout_mark_vigente", …)`** (un round-trip, atómico). Su firma y tipo de
+  retorno **no cambian** → `marcar-vigente-button.tsx` sin tocar.
+
+### BO-10 🟠 — captura: un fallo de PDF no debe perder la línea
+- **Antes** (`partida/actions.ts`, `insertVigenteQuoteAndLine`): el orden era quote → item → **subir PDF (si
+  falla, `return {error}`)** → insertar `buyout_line`. Un fallo de PDF **abortaba antes** de crear el renglón →
+  quedaba una cotización **vigente sin línea** y la anterior ya degradada → `loadVigenteLines` (join por
+  `quote_id`) no devolvía nada y el concepto **desaparecía del tablero**.
+- **Ahora:** se inserta la **`buyout_line` PRIMERO** (el dato crítico) y el **PDF al final**. Un fallo de PDF
+  **ya no aborta**: devuelve `{ ok: true, warning }` con la línea **ya guardada**, y el aviso pide reintentar el
+  PDF **editando la línea** (el PDF es opcional/progresivo, §5). El happy-path (con PDF OK) es idéntico.
+- **Tipo `ActionResult`** ampliado a `{ ok: true; warning?: string }` (aditivo: quien solo checa `"error" in
+  res` / `ok` sigue igual). `createLinea`/`addBudgetVersion` **propagan** el `warning` (antes lo descartaban con
+  `return { ok: true }`).
+- **UI** (`linea-dialog.tsx`): si vuelve `warning`, el diálogo **no cierra**, muestra el aviso en ámbar
+  (`role="status"`) y **deshabilita reenviar** (evita duplicar la línea ya creada); el usuario cierra con
+  "Cancelar" y ve la fila en la tabla revalidada. `updateLinea` **no se tocó** (fuera del alcance de BO-10).
+
+### Verificación
+- **Gate verde:** `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` (los 3 archivos tocados) ✓ ·
+  `pnpm build` ✓ (11 rutas; **las 6 de Pagos idénticas**, las 3 buyout dinámicas).
+- **Migración a prod:** `supabase db push` aplicó **solo** `20260629120000` (dry-run + `migration list`
+  confirman que era la única pendiente; Local y Remote ya la listan). Función aditiva y exclusiva de `buyout_*`.
+- **BO-09 (atómico por construcción):** una RPC `plpgsql` corre en una transacción; una excepción no atrapada en
+  cualquier UPDATE revierte los anteriores → es **imposible** terminar con 0 vigentes. El concepto **sigue en el
+  rollup** con su vigente previa.
+- **BO-10 (línea antes que PDF):** el `insert` de `buyout_line` ocurre y se confirma **antes** del upload; el
+  fallo de PDF es una rama posterior que **no** revierte la línea → la fila **queda guardada** y se **avisa**.
+- **Pagos intacto:** `git diff --name-only` toca solo `buyout/*` + la migración nueva; las 6 rutas de Pagos
+  idénticas en el build. Render real tras login/RLS → prueba de Alfonso.
 
 ## Qué sigue
 

@@ -8,7 +8,10 @@ import { createClient } from "@/lib/supabase/server"
 // Tipos compartidos con los componentes cliente
 // ---------------------------------------------------------------------------
 
-export type ActionResult = { error: string } | { ok: true }
+// `warning` (opcional) = la operación guardó el dato crítico pero algo secundario
+// y no-fatal falló (p. ej. el PDF opcional). La línea queda guardada; el aviso es
+// para reintentar. Quien no lo lea ve `ok: true` y trata todo como éxito (BO-10).
+export type ActionResult = { error: string } | { ok: true; warning?: string }
 
 export type SupplierOption = { id: string; nombre: string }
 export type UnitOption = { id: string; nombre: string }
@@ -247,12 +250,9 @@ async function insertVigenteQuoteAndLine(
     .update({ selected_quote_id: quoteId })
     .eq("id", itemId)
 
-  if (pdfFile && pdfFile.size > 0) {
-    const up = await uploadBuyoutPdf(sb, pdfFile, projectId, quoteId)
-    if ("error" in up) return { error: up.error }
-    await sb.from("buyout_quote").update({ pdf_url: up.path }).eq("id", quoteId)
-  }
-
+  // La LÍNEA va PRIMERO: es el dato crítico (sin renglón, el join por quote_id no
+  // devuelve nada y el concepto DESAPARECE del rollup). El PDF es opcional y se
+  // sube DESPUÉS, sin poder tumbar la línea ya guardada (BO-10).
   const { error: lineErr } = await sb.from("buyout_line").insert({
     quote_id: quoteId,
     categoria: partidaNombre,
@@ -271,6 +271,20 @@ async function insertVigenteQuoteAndLine(
     notas: d.notas ?? null,
   })
   if (lineErr) return { error: lineErr.message }
+
+  // PDF al final: un fallo NO aborta (la línea ya está guardada). Se avisa para
+  // reintentar subiéndolo al editar la línea. El PDF es opcional/progresivo.
+  if (pdfFile && pdfFile.size > 0) {
+    const up = await uploadBuyoutPdf(sb, pdfFile, projectId, quoteId)
+    if ("error" in up) {
+      return {
+        ok: true,
+        warning: `La línea se guardó, pero el PDF no se subió (${up.error}). Ábrela con “Editar” para reintentar la subida.`,
+      }
+    }
+    await sb.from("buyout_quote").update({ pdf_url: up.path }).eq("id", quoteId)
+  }
+
   return { ok: true }
 }
 
@@ -327,7 +341,7 @@ export async function createLinea(
   )
   if ("error" in res) return res
   revalidatePath(`/proyectos/${projectId}/buyout/partida`)
-  return { ok: true }
+  return res // propaga el aviso si la línea se guardó pero el PDF no subió (BO-10)
 }
 
 // ---------------------------------------------------------------------------
@@ -380,7 +394,7 @@ export async function addBudgetVersion(
   )
   if ("error" in res) return res
   revalidatePath(`/proyectos/${projectId}/buyout/partida`)
-  return { ok: true }
+  return res // propaga el aviso si la línea se guardó pero el PDF no subió (BO-10)
 }
 
 // ---------------------------------------------------------------------------
