@@ -44,25 +44,33 @@ async function loadVigenteContrato(
   projectId: string,
   itemId: string,
 ): Promise<{ error: string } | { data: VigenteContrato }> {
-  const { data: item } = await sb
+  // BO-08: cada select que alimenta el cálculo del dinero revisa su `.error`. Un
+  // error de Supabase (red/timeout/RLS) NO es "no encontrado": confundirlo con null
+  // nos haría seguir al cálculo/escritura con datos faltantes. Ante error de lectura
+  // abortamos con un mensaje DISTINTO del "no existe".
+  const { data: item, error: itemErr } = await sb
     .from("buyout_item")
     .select("id, concepto")
     .eq("id", itemId)
     .eq("project_id", projectId)
     .is("deleted_at", null)
     .maybeSingle()
+  if (itemErr) return { error: `Error al leer el concepto: ${itemErr.message}` }
   if (!item) return { error: "Concepto no encontrado." }
 
-  const { data: quote } = await sb
+  const { data: quote, error: quoteErr } = await sb
     .from("buyout_quote")
     .select("id, contratado, pagos_partida_id, pdf_url, quote_date")
     .eq("item_id", itemId)
     .eq("is_selected", true)
     .is("deleted_at", null)
     .maybeSingle()
+  if (quoteErr) {
+    return { error: `Error al leer la cotización vigente: ${quoteErr.message}` }
+  }
   if (!quote) return { error: "Este concepto no tiene una cotización vigente." }
 
-  const { data: line } = await sb
+  const { data: line, error: lineErr } = await sb
     .from("buyout_line")
     .select("cantidad, unitario, sobrecosto_pct, iva_pct, moneda, proveedor")
     .eq("quote_id", quote.id as string)
@@ -70,22 +78,43 @@ async function loadVigenteContrato(
     .order("created_at")
     .limit(1)
     .maybeSingle()
+  if (lineErr) return { error: `Error al leer el renglón: ${lineErr.message}` }
   if (!line) return { error: "La cotización vigente no tiene renglón." }
 
-  const { data: fxRows } = await sb
+  const { data: fxRows, error: fxErr } = await sb
     .from("buyout_fx")
     .select("currency, rate")
     .eq("project_id", projectId)
     .is("deleted_at", null)
+  if (fxErr)
+    return { error: `Error al leer el tipo de cambio: ${fxErr.message}` }
+
+  // BO-01: el factor 1 solo es legítimo para MXN. Para una divisa (USD/EUR) sin TC
+  // configurado NO usamos 1 como fallback —escribiría a Pagos un monto ~17-20×
+  // subestimado, en silencio—: abortamos con un mensaje claro. (`buyout_fx` solo
+  // está sembrado para L3; cualquier línea en divisa de otro proyecto cae aquí.)
   const moneda = (line.moneda as string) ?? "MXN"
-  const rate = (fxRows ?? []).find((r) => r.currency === moneda)?.rate
+  let tc: number
+  if (moneda === "MXN") {
+    tc = 1
+  } else {
+    const rate = (fxRows ?? []).find((r) => r.currency === moneda)?.rate
+    const rateNum = Number(rate)
+    if (rate == null || !Number.isFinite(rateNum) || rateNum <= 0) {
+      return {
+        error: `Falta (o es inválido) el tipo de cambio de ${moneda} en este proyecto. Configúralo en Buy-Out antes de crear o re-sincronizar el contrato en Pagos.`,
+      }
+    }
+    tc = rateNum
+  }
+
   const ivaPct = Number(line.iva_pct ?? 0)
   const baseMxn = contratoBaseMxn({
     cantidad: Number(line.cantidad ?? 0),
     unitario: Number(line.unitario ?? 0),
     sobrecosto_pct: Number(line.sobrecosto_pct ?? 0),
     iva_pct: ivaPct,
-    tc: Number(rate ?? 1),
+    tc,
   })
 
   return {
@@ -129,6 +158,31 @@ async function resolveContratista(
     }
   }
   return { id: created.id as string }
+}
+
+/**
+ * BO-02: ¿alguna cotización del puente (no borrada) está ligada a esta partida de
+ * Pagos (`buyout_quote.pagos_partida_id = partidaId`)? Sirve para NO adoptar ni
+ * pisar una partida capturada MANUALMENTE en Pagos que solo coincide en nombre: el
+ * puente reutiliza una partida únicamente si él la creó/ligó. Solo LEE una tabla
+ * propia del Buy-Out; no toca el esquema/lógica de Pagos.
+ */
+async function partidaLigadaAlPuente(
+  sb: Sb,
+  partidaId: string,
+): Promise<{ linked: boolean } | { error: string }> {
+  const { data, error } = await sb
+    .from("buyout_quote")
+    .select("id")
+    .eq("pagos_partida_id", partidaId)
+    .is("deleted_at", null)
+    .limit(1)
+  if (error) {
+    return {
+      error: `No se pudo verificar el origen de la partida en Pagos: ${error.message}`,
+    }
+  }
+  return { linked: (data ?? []).length > 0 }
 }
 
 /** Copia el PDF de la cotización del Buy-Out a la ruta de PDF de la partida de
@@ -212,9 +266,10 @@ export async function crearContratoPagos(
   const contratista = await resolveContratista(sb, projectId, v.proveedor)
   if ("error" in contratista) return contratista
 
-  // Una partida por concepto: si ya existe una con ese nombre bajo el contratista
-  // (índice único (contratista_id, nombre)), la reutiliza sin pisar su monto; si
-  // no, la crea con el monto/IVA/PDF del concepto.
+  // Una partida por concepto: si ya existe una VIVA con ese nombre bajo el
+  // contratista (índice único (contratista_id, nombre)), puede ser la del puente o
+  // una capturada MANUALMENTE en Pagos. Solo reutilizamos la del puente; si no, la
+  // creamos.
   const { data: prior } = await sb
     .from("partidas")
     .select("id")
@@ -225,6 +280,18 @@ export async function crearContratoPagos(
 
   let partidaId: string
   if (prior) {
+    // BO-02: NO adoptar/pisar una partida manual de Pagos por coincidencia de
+    // nombre. Solo reutilizamos `prior` si ya está ligada a una cotización del
+    // puente; si es manual, el índice único (contratista_id, nombre) impide crear
+    // otra con el mismo nombre → avisamos para que el admin la renombre o la ligue
+    // a mano (nunca la sobrescribimos).
+    const owned = await partidaLigadaAlPuente(sb, prior.id as string)
+    if ("error" in owned) return owned
+    if (!owned.linked) {
+      return {
+        error: `Ya existe una partida «${v.conceptoNombre}» capturada manualmente en Pagos bajo el contratista «${v.proveedor}». El puente no la sobrescribe: renómbrala o lígala manualmente antes de crear el contrato desde Buy-Out.`,
+      }
+    }
     partidaId = prior.id as string
   } else {
     const { data: created, error: insErr } = await sb
@@ -288,6 +355,19 @@ export async function resincronizarContratoPagos(
     return {
       error:
         "La partida ligada ya no existe en Pagos (se eliminó). Vuelve a crear el contrato.",
+    }
+  }
+
+  // BO-02: re-sincronizar solo escribe sobre una partida que el puente creó/ligó,
+  // nunca sobre una partida MANUAL de Pagos. Tras el fix de creación, el enlace solo
+  // apunta a partidas del puente; esta verificación lo refuerza antes de sobrescribir
+  // monto/IVA/fecha.
+  const owned = await partidaLigadaAlPuente(sb, partida.id as string)
+  if ("error" in owned) return owned
+  if (!owned.linked) {
+    return {
+      error:
+        "La partida ligada no fue creada por el puente; no se re-sincroniza para no sobrescribir datos capturados manualmente en Pagos.",
     }
   }
 

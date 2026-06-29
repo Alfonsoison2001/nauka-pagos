@@ -213,8 +213,14 @@ export async function loadVigenteLines(
     .is("deleted_at", null)
     .order("created_at")
 
+  // BO-01: el factor 1 solo es legítimo para MXN. Para una divisa (USD/EUR) sin TC
+  // configurado NO caemos a 1 (mostraría un monto ~17-20× subestimado): devolvemos
+  // NaN para no fingir un valor en el display. (La escritura a Pagos aborta aparte,
+  // en el puente; el rollup es solo lectura.)
   const rateOf = (cur: string) =>
-    fxList.find((c) => c.currency === cur)?.rate ?? 1
+    cur === "MXN"
+      ? 1
+      : (fxList.find((c) => c.currency === cur)?.rate ?? Number.NaN)
 
   return (lineRows ?? []).map((l) => {
     const q = quoteById.get(l.quote_id as string)

@@ -1,6 +1,6 @@
 # STATE — Módulo Buy-Out
 
-> Bitácora de avance del módulo. Última actualización: **2026-06-25**.
+> Bitácora de avance del módulo. Última actualización: **2026-06-29**.
 > Spec: [`docs/SPEC-buyout.md`](SPEC-buyout.md) · Análisis del Excel: [`docs/future-modules/buyout-L3-estructura.md`](future-modules/buyout-L3-estructura.md).
 
 ## Estado actual
@@ -109,6 +109,14 @@
    reactivar = quitar el flag). **Solo reordena/agrupa/oculta links** — cero cambios de rutas/páginas/lógica/datos
    de Pagos ni Buy-Out; saludo + campana + Cerrar sesión sin tocar. **1 archivo** (`components/sidebar.tsx`).
    Detalle abajo.
+✅ **Robustez PRE-MERGE del puente a Pagos (2026-06-29 · auditoría) — BO-01/02/08** — 3 arreglos quirúrgicos
+   de la auditoría (`docs/audit-buyout-2026-06-29.md`), **2 archivos** (`subcategoria/contrato-actions.ts`,
+   `lib/buyout/rollup.ts`): **BO-01** TC de divisa sin fallback a 1 (USD/EUR sin TC → **aborta** la escritura
+   a Pagos en vez de registrar un monto ~17-20× subestimado; MXN=1 sigue legítimo); **BO-02** el puente ya
+   **no adopta/pisa** una partida capturada manualmente en Pagos por coincidencia de nombre (solo reutiliza
+   las que él creó/ligó; manual homónima → avisa, en crear **y** en re-sincronizar); **BO-08** cada select
+   que alimenta el dinero revisa su `.error` (error de Supabase ≠ "no encontrado" → aborta). **Pagos intacto**
+   (cero esquema/RLS/lógica de Pagos tocados); **sin migración**. Detalle abajo.
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se
    marca al editar la línea en la Partida). Pendiente Resumen: modo **Qué falta** (nota libre por partida
    no contratada).
@@ -1048,6 +1056,58 @@ solo cambia el menú). **1 archivo** (`src/components/sidebar.tsx`); **sin migra
 - **Sin push**, `main` intacto. Render tras login/RLS → prueba de Alfonso: el menú muestra las 3 secciones en el
   orden pedido; Resumen Mensual ya no está en el menú pero su URL responde; todos los demás links funcionan;
   Pagos intacto.
+
+## Robustez PRE-MERGE del puente a Pagos — BO-01/02/08 (hecho 2026-06-29)
+
+Tres arreglos **quirúrgicos** de la auditoría (`docs/audit-buyout-2026-06-29.md`), sobre la **única ruta que
+escribe dinero en Pagos** (el puente §8). **Solo estos 3**, sin tocar otra cosa. **2 archivos**, **sin migración**,
+**Pagos intacto** (cero esquema/RLS/componentes/lógica de Pagos modificados; el puente sigue solo INSERT/UPDATE de
+datos reusando la estructura existente).
+
+### BO-01 🔴 — TC de divisa sin fallback a 1
+- **Escritura** (`subcategoria/contrato-actions.ts`, `loadVigenteContrato`): al resolver el TC, **MXN = 1** sigue
+  siendo legítimo, pero una **divisa (USD/EUR) sin fila en `buyout_fx`** (o con rate nulo/≤0/no finito) ya **NO**
+  cae a `1` — **aborta** con mensaje claro ("Falta (o es inválido) el tipo de cambio de {moneda}…"). Antes,
+  `tc: Number(rate ?? 1)` escribía a `partidas.presupuesto_sin_iva` un monto **~17-20× subestimado en silencio**.
+  Reachability real: `buyout_fx` solo está sembrado para L3 → cualquier línea en divisa de L44/Beachfront/proyecto
+  nuevo caía aquí.
+- **Display** (`lib/buyout/rollup.ts`, `rateOf`): mismo criterio — `cur === "MXN" ? 1 : (rate ?? NaN)`. Una divisa
+  sin TC ya no finge `1` en el tablero (devuelve `NaN`, no un monto plausible-pero-falso). El rollup es solo
+  lectura; no escribe a Pagos.
+
+### BO-02 🟠 — reuso de partida: no adoptar/pisar una partida MANUAL de Pagos
+- Nuevo helper `partidaLigadaAlPuente(sb, partidaId)` (solo **lee** `buyout_quote`, tabla propia del Buy-Out): ¿hay
+  alguna cotización del puente ligada a esa partida (`pagos_partida_id`)?
+- **Crear** (`crearContratoPagos`): cuando ya existe una partida **viva** con el mismo nombre bajo el contratista
+  (`prior`), solo se **reutiliza si está ligada al puente**. Si es una partida **capturada manualmente** que solo
+  coincide en nombre → **aborta y avisa** (el índice único `partidas (contratista_id, nombre) WHERE deleted_at IS
+  NULL` impide crear otra homónima; "crea una nueva" no es posible, así que se avisa para que el admin la renombre
+  o la ligue a mano). **Nunca la pisa.**
+- **Re-sincronizar** (`resincronizarContratoPagos`): antes de sobrescribir `presupuesto_sin_iva`/`iva_pct`/
+  `fecha_firma`, verifica que la partida ligada esté **creada/ligada por el puente**; si no, aborta. (Tras el fix de
+  creación, el enlace solo puede apuntar a partidas del puente; esta verificación lo refuerza.)
+- **Caveat honesto:** la protección sustantiva vive en **crear** (la adopción por nombre ya no ocurre). En re-sync,
+  como `pagos_partida_id` proviene de la propia cotización vigente, la verificación se cumple por construcción para
+  enlaces creados con el código nuevo; un enlace **heredado** de una adopción previa (solo posible en datos de
+  prueba de L3, la rama nunca se pusheó) no se distingue retroactivamente — Alfonso puede revisar/limpiar esos
+  enlaces de prueba si los hubiera.
+
+### BO-08 🟠 — errores de select que alimentan el dinero
+- En `loadVigenteContrato`, cada uno de los **4 selects** (`buyout_item`, `buyout_quote`, `buyout_line`,
+  `buyout_fx`) ahora revisa su `.error`. Un error de Supabase (red/timeout/RLS) **no** es "no encontrado":
+  se aborta con un mensaje **distinto** del "no existe", **antes** de llegar al cálculo/escritura. Alimenta también
+  el BO-01 (el error de `buyout_fx` ya no se traga).
+
+### Verificación
+- **Gate verde:** `pnpm exec tsc --noEmit` ✓ · `pnpm exec biome check` (los 2 archivos tocados) ✓ ·
+  `pnpm build` ✓ (11 rutas; **las 6 de Pagos idénticas** en el manifest, las 3 buyout dinámicas).
+- **Casos (node, réplica de las ramas de aborto):** línea **USD sin TC → aborta** (no escribe 1×) · USD con TC
+  17.5 → usa 17.5 · MXN sin fila → 1 (legítimo) · EUR rate 0 → aborta · **select con error → aborta** (no MXN=1) ·
+  **partida manual homónima → NO la sobrescribe** (avisa) · partida del puente → reutiliza · sin homónima → crea
+  nueva. **8/8 OK.**
+- **Diff:** solo `subcategoria/contrato-actions.ts` (+helper, +error checks, +guards) y `lib/buyout/rollup.ts`
+  (`rateOf`). `git diff --name-only` no toca ningún archivo de Pagos.
+- Render real tras login/RLS → prueba de Alfonso (ver "Qué sigue").
 
 ## Qué sigue
 
