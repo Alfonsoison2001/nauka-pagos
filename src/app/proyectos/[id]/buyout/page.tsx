@@ -113,6 +113,7 @@ export default async function BuyoutResumenPage({
     sb
       .from("buyout_partida_catalog")
       .select("id, nombre, chapter_default")
+      .eq("project_id", id)
       .is("deleted_at", null)
       .order("orden"),
     sb

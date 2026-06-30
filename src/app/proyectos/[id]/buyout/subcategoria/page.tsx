@@ -79,6 +79,7 @@ export default async function BuyoutSubcategoriaPage({
   const { data: partidaRows } = await sb
     .from("buyout_partida_catalog")
     .select("id, nombre")
+    .eq("project_id", id)
     .is("deleted_at", null)
     .order("orden")
   const partidas = (partidaRows ?? []).map((p) => ({

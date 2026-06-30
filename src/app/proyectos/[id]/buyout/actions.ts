@@ -81,6 +81,7 @@ export async function cerrarMesActual(
     sb
       .from("buyout_partida_catalog")
       .select("id, nombre")
+      .eq("project_id", projectId)
       .is("deleted_at", null),
     sb
       .from("buyout_fx")
