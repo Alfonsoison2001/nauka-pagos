@@ -220,8 +220,18 @@
    aditivas) y el rollup lee el de la línea con fallback al de la cotización → **L3 idéntico** (líneas sin estado
    → cae a la cotización). **Cuadre por partida intacto** (mismos montos; verificado transaccional, 31/31).
    **L3 idéntico · Pagos intacto.** Migración `20260629190000` (db push). Detalle abajo.
+✅ **Fix: índice de Subcategoría sin conceptos duplicados (2026-06-29 · sesión fix key)** — runtime warning
+   "Encountered two children with the same key" en la pantalla **Subcategoría** (`IndexView`) tras la
+   consolidación de conceptos. **Causa:** `loadConceptoIndex` (`lib/buyout/history.ts`) hacía `lines.map(...)`
+   → **una fila por LÍNEA**; un item consolidado con N líneas por torre (ej. PILAS "Mano de Obra" = 2) producía
+   N filas con el **mismo `itemId`**, y `IndexView` usa `key={r.itemId}`. **Fix (solo render/armado, 1 archivo):**
+   `loadConceptoIndex` ahora **agrupa por `item_id`** (Map) y devuelve **1 fila por concepto** (key única), con
+   total y estado **agregados** vía `aggregateLines` (misma fuente/fórmula del Resumen) — proveedor "Varios" si
+   >1, madurez/contratación dominantes por dinero. Índice pasa de 109 filas (50 items duplicados) a **55 únicas**.
+   **Cero cambio de datos/cuadre** (solo el armado del índice). Gate verde (`tsc`/`biome`/`build`). **L3 idéntico**
+   (mismo loader; sin consolidación → 1 línea por item, sin cambio) · **Pagos intacto**.
 ⏸️ **PAUSA para que Alfonso revise BF en el navegador** (Contingencias fuera del total + desglose por ejes +
-   conceptos descriptivos). Pendiente: confirmar Herreria. Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
+   conceptos descriptivos; Subcategoría ya sin warning de key). Pendiente: confirmar Herreria. Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
    Pendiente Resumen: modo **Qué falta**. Pendiente BF (si se decide tras revisar): **desglose por depto**
    (hoy torre/piso/depto van como texto en la línea, grano = total del proyecto).
 
@@ -244,6 +254,7 @@
     - **(sesión agrupado, 2026-06-29):** `fix(buyout): re-volcado BF agrupado por partida×torre` (migración `20260629170000` + STATE; re-data de BF, sin tocar catálogo). **Local, sin push.**
     - **(sesión spec, 2026-06-29):** `fix(buyout): re-volcado BF según spec de líneas por partida` (migración `20260629180000` + `buyout-BF-lineas-spec.md` + STATE). **Local, sin push.**
     - **(sesión ajustes Resumen, 2026-06-29):** `feat(buyout): contingencias fuera del total + desglose por ejes en total + conceptos descriptivos` (migración `20260629190000` + `rollup.ts` + `buyout/page.tsx` + STATE). **Local, sin push.**
+    - **(sesión fix key, 2026-06-29):** `fix(buyout): índice de Subcategoría sin conceptos duplicados (key única)` (`lib/buyout/history.ts` + STATE; solo código, sin migración). **Local, sin push.**
 - Sin tocar: ninguna tabla, RLS, migración ni componente de **Pagos**.
 - Nota: apareció un archivo `docs/future-modules/backlog-ideas.md` sin trackear (creado fuera de esta sesión). **Lo dejé sin tocar.**
 

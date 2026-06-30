@@ -7,7 +7,7 @@
 import type { CurrencyOption } from "@/app/proyectos/[id]/buyout/partida/actions"
 import type { createClient } from "@/lib/supabase/server"
 import { calcLinea } from "./calc"
-import { lineTotalMxn, loadVigenteLines } from "./rollup"
+import { aggregateLines, loadVigenteLines } from "./rollup"
 
 type Sb = Awaited<ReturnType<typeof createClient>>
 
@@ -194,21 +194,48 @@ export async function loadConceptoIndex(
     versionsByItem.set(k, (versionsByItem.get(k) ?? 0) + 1)
   }
 
-  return lines.map((l) => ({
-    itemId: l.item_id,
-    concepto: l.concepto,
-    partidaCatalogId: l.partida_catalog_id,
-    partidaNombre: l.partidaNombre,
-    proveedor: l.proveedor,
-    totalMxn: lineTotalMxn({
-      cantidad: l.cantidad,
-      unitario: l.unitario,
-      sobrecosto_pct: l.sobrecosto_pct,
-      iva_pct: l.iva_pct,
-      tc: l.tc,
-    }),
-    versions: versionsByItem.get(l.item_id) ?? 1,
-    kind: l.kind,
-    contratado: l.contratado,
-  }))
+  // Un concepto = un buyout_item. Tras la consolidación (BF), un item puede tener
+  // VARIAS líneas (una por torre) → loadVigenteLines devuelve N filas por item. Se
+  // AGRUPA por item para que el índice tenga UNA entrada por concepto (key única en
+  // React) con su total y estado agregados (misma fuente/fórmula que el Resumen).
+  const byItem = new Map<string, typeof lines>()
+  for (const l of lines) {
+    const arr = byItem.get(l.item_id)
+    if (arr) arr.push(l)
+    else byItem.set(l.item_id, [l])
+  }
+  return [...byItem].map(([itemId, group]) => {
+    const agg = aggregateLines(
+      group.map((l) => ({
+        cantidad: l.cantidad,
+        unitario: l.unitario,
+        sobrecosto_pct: l.sobrecosto_pct,
+        iva_pct: l.iva_pct,
+        tc: l.tc,
+        kind: l.kind,
+        contratado: l.contratado,
+        quote_date: l.quote_date,
+        proveedor: l.proveedor,
+      })),
+    )
+    const first = group[0]
+    return {
+      itemId,
+      concepto: first.concepto,
+      partidaCatalogId: first.partida_catalog_id,
+      partidaNombre: first.partidaNombre,
+      proveedor:
+        agg.proveedores.length === 0
+          ? null
+          : agg.proveedores.length === 1
+            ? agg.proveedores[0]
+            : "Varios",
+      totalMxn: agg.total,
+      versions: versionsByItem.get(itemId) ?? 1,
+      // Resumen del estado para el índice (el detalle por línea/versión vive en el
+      // historial): madurez y contratación dominantes por dinero.
+      kind: agg.ppto >= agg.parametrico ? "ppto" : "parametrico",
+      contratado: agg.contratado > agg.noContratado,
+    }
+  })
 }
