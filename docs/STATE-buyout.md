@@ -176,8 +176,23 @@
    real de BF → nuevo trae 1,732 (sin dup/saltos, todas las partidas completas), el viejo perdía exactamente
    esas 10 partidas. **L3 idéntico** (usa el mismo loader; <1000 líneas → una sola página, orden por `created_at`
    preservado) · **Pagos intacto** (no usa código de Buy-Out). Gate verde. Detalle abajo.
-⏸️ **PAUSA para que Alfonso revise BF en el navegador** (Resumen + Partida de Beachfront ya cargan con su
-   volcado y suman TODAS sus líneas). Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
+✅ **RE-VOLCADO de BF AGRUPADO por partida × torre (2026-06-29 · sesión agrupado)** — Alfonso quiere BF como su
+   tablero: **pocas líneas por partida** (1-2 por torre), no el detalle de 1,732 renglones del 2b. **Migración
+   `20260629170000`** (db push, opción B) **re-agrupa** las filas de cada verde por **(PARTIDA × TORRE × madurez
+   × contratación)**; cada grupo = **UNA línea** con la **suma de su TOTAL MXN** → **72 líneas** (vs 1,732).
+   TORRE de la col TORRE (o inferida del depto: 1xx/2xx=T1, 3xx/4xx=T2; sin torre clara = "Compartido").
+   Proveedor = dominante no-NA del grupo (NULL→sin proveedor). **PDF NO se carga** (manual después); se conserva
+   la NOTA (folio/fecha). Cada grupo = item + cotización **vigente** (kind=madurez, contratado=contratación) +
+   1 línea MXN (cant=1, sobrecosto=0, iva=0, unitario=Σ). **Cuadre AL CENTAVO por partida** (mismos targets que
+   el 2b/preview; el monto no cambia, solo se agrupa), verificado transaccionalmente (rollback si falla).
+   **El estado ahora sale bien:** agrupar por estado hace que un concepto medio-contratado salga **"parcial"** —
+   p. ej. **PILAS = ppto · contratación PARCIAL (50%)** (Torre 1 contratado / Torre 2 no), que antes salía
+   "No contratado". 11 partidas con eje parcial, con % exacto por dinero. Grupos en **$0 descartados** (no
+   aportan monto; evitan "parcial" espurio) → EXCAVACION/MADERA quedan sin líneas ($0, correcto). **Reemplaza
+   el transaccional del 2b** (cleanup primero). **NO toca el catálogo** (capítulos/partidas/conceptos/bases) ·
+   **L3 idéntico · Pagos intacto · solo data de BF.** Detalle abajo.
+⏸️ **PAUSA para que Alfonso revise BF AGRUPADO en el navegador** (Resumen + Partida: pocas líneas por partida,
+   1-2 por torre; "parcial" donde aplica). Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
    Pendiente Resumen: modo **Qué falta**. Pendiente BF (si se decide tras revisar): **desglose por depto**
    (hoy torre/piso/depto van como texto en la línea, grano = total del proyecto).
 
@@ -197,6 +212,7 @@
     - **(sesión preview BF, 2026-06-29):** `docs(buyout): preview de volcado BF (etapa 2a)`. **Local, sin push.**
     - **(sesión volcado BF, 2026-06-29):** `feat(buyout): volcado de conceptos de BF (etapa 2b)` (migración `20260629160000` + STATE). **Local, sin push.**
     - **(sesión fix cap, 2026-06-29):** `fix(buyout): paginar fetch de líneas del rollup (cap max_rows) [escala BF]` (`src/lib/buyout/rollup.ts` + STATE; solo código, sin migración). **Local, sin push.**
+    - **(sesión agrupado, 2026-06-29):** `fix(buyout): re-volcado BF agrupado por partida×torre` (migración `20260629170000` + STATE; re-data de BF, sin tocar catálogo). **Local, sin push.**
 - Sin tocar: ninguna tabla, RLS, migración ni componente de **Pagos**.
 - Nota: apareció un archivo `docs/future-modules/backlog-ideas.md` sin trackear (creado fuera de esta sesión). **Lo dejé sin tocar.**
 
@@ -1501,3 +1517,55 @@ sumó las líneas **en SQL** (sin cap) → por eso cuadró y no detectó el trun
   previas); la verificación es el test del mecanismo + el cuadre SQL ya probado por la migración 2b.
 - **Aislamiento:** un solo archivo de Buy-Out; **L3 idéntico** (mismo loader, <1000 líneas → una página, orden
   `created_at` preservado) · **Pagos intacto** (no usa código de Buy-Out) · sin migración / sin tocar datos.
+
+## Re-volcado de BF AGRUPADO por partida × torre (2026-06-29)
+
+**Migración `supabase/migrations/20260629170000_buyout_bf_revolcado_agrupado.sql`** (db push, opción B).
+Reemplaza el detalle del 2b (1,732 líneas) por el **grano agrupado** que pidió Alfonso (su tablero: pocas
+líneas por partida).
+
+### Grano
+- **Grupo = (PARTIDA × TORRE × madurez(V) × contratación(W))**; cada grupo = **1 línea** con Σ TOTAL MXN.
+- **TORRE:** de la col TORRE (1,703/1,732 filas la traen); si falta/GLOBAL → inferida del depto (1xx/2xx = Torre 1,
+  3xx/4xx = Torre 2); ROOF/AZOTEAS/S-D sin número → **"Compartido"**.
+- **Estado por grupo:** `kind` = col V (ppto/parametrico); `contratado` = col W. Agrupar por estado hace que el
+  rollup muestre **"parcial"** cuando una partida mezcla (cada eje parte el total). W nulo → No contratado.
+- **Proveedor:** dominante (por dinero) no-NA del grupo; NULL si todas NA. **Nota** (folio/fecha) conservada
+  (deduplicada, ≤480 chars). **PDF no se carga** (manual después).
+- **concepto del item** = etiqueta de torre ("Torre 1"/"Torre 2"/"Compartido"); si una torre tiene split de
+  estado (>1 grupo) se le añade sufijo " · {Ppto/Paramétrico} · {Contratado/No contratado}" para unicidad.
+- **Grupos en $0 descartados** (no aportan monto; evitarían un "parcial" 0% espurio). Partidas 100% $0
+  (EXCAVACION, MADERA) quedan **sin líneas** → se muestran en $0 vía el catálogo (correcto).
+
+### Modelo / cuadre
+- Cada grupo: `buyout_item` + 1 `buyout_quote` **vigente** (is_selected, kind, contratado, supplier, currency
+  MXN, iva_pct 0, monto_sin_iva = unitario) + 1 `buyout_line` (cant=1, MXN, unitario = Σ TOTAL MXN del grupo,
+  sobrecosto/iva 0). El rollup recompone total = unitario (tc MXN=1).
+- **Cuadre AL CENTAVO por partida:** los mismos targets del 2b/preview (el monto no cambia, solo se particiona).
+  Como sumar grupos redondeados puede dejar ±$0.01, el **residual se absorbe en el grupo mayor** de la partida
+  (3 casos: PILAS, COCINAS, GRIFERIA) → Σ por partida = target exacto. Verificado transaccionalmente (DO-block
+  recompone por partida y compara; rollback si falla). **Pasó: 31/31 al centavo, 72 líneas, L3 intacto.**
+
+### Conteo / estado resultante
+- **72 líneas** (vs 1,732): casi todas 2 por partida (T1+T2); CARPINTERIAS 6, ILUMINACION/COCINAS/VIDRIOS/
+  CONDICIONES/GARDEN 4, etc.; EXCAVACION/MADERA 0. **18 proveedores** (subconjunto de los 26 del 2b; ya existían).
+- **Estado correcto** (confirmado desde la data, mismo cómputo que `aggregateLines`): **PILAS = ppto ·
+  contratación PARCIAL (50%)** (Torre 1 contratado / Torre 2 no) — el bug que reportó Alfonso queda resuelto al
+  agrupar por estado. **11 partidas** con eje parcial (ARQUITECTURA, PILAS, CONDICIONES GENERALES, OBRA CIVIL,
+  ALBAÑILERIA, ILUMINACION, VIDRIOS, COCINAS, CARPINTERIAS, ELEVADOR, GARDEN), con % exacto por dinero.
+
+### Aislamiento / idempotencia
+- **Cleanup primero** (hard delete de `buyout_item`→CASCADE quotes/lines, + falta + import_batch de BF), luego
+  re-inserta → re-correr es seguro. **NO toca el catálogo** (capítulos/partidas/conceptos/bases siguen del 2b;
+  la creación de CONTINGENCIAS es no-op `WHERE NOT EXISTS`). Todo filtra por `project_id` de BF. **L3 intacto**
+  (24/8 verificado en la migración) · **Pagos intacto** (cero tablas/lógica de Pagos).
+
+### Verificación
+- **Gate verde:** `tsc` ✓ · `biome` ✓ (158) · `pnpm build` ✓. (Esta sesión no tocó código, solo la migración.)
+- **DB (autoritativa):** DO-block transaccional pasó. Sin read-back en vivo (service_role REST bloqueado para
+  `buyout_*`); render visual queda tras login = **prueba de Alfonso**.
+- **Nota:** el `buyout_concepto_catalog` conserva los conceptos finos del 2b (no se tocó el catálogo); los items
+  agrupados usan concepto libre ("Torre 1", etc.). Si se quiere limpiar el dropdown, es aparte.
+
+### Commit (feat/buyout, sin push)
+`fix(buyout): re-volcado BF agrupado por partida×torre` — migración `20260629170000` + este STATE.
