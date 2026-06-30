@@ -191,8 +191,23 @@
    aportan monto; evitan "parcial" espurio) → EXCAVACION/MADERA quedan sin líneas ($0, correcto). **Reemplaza
    el transaccional del 2b** (cleanup primero). **NO toca el catálogo** (capítulos/partidas/conceptos/bases) ·
    **L3 idéntico · Pagos intacto · solo data de BF.** Detalle abajo.
-⏸️ **PAUSA para que Alfonso revise BF AGRUPADO en el navegador** (Resumen + Partida: pocas líneas por partida,
-   1-2 por torre; "parcial" donde aplica). Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
+✅ **RE-VOLCADO FINAL de BF según SPEC de líneas por partida (2026-06-29 · sesión spec)** — Alfonso escribió
+   `docs/future-modules/buyout-BF-lineas-spec.md` con el criterio EXACTO de cuántas líneas y cómo por partida.
+   **Migración `20260629180000`** (db push) re-vuelca BF siguiéndola al pie de la letra → **109 líneas**, conteo
+   por partida **idéntico a la spec** (verificado). Patrones: **0.5-espejo** (Imper, Inst×3, Automat, Aire,
+   Iluminación, Acabados, +Herreria) = 2 líneas cantidad 0.5, unitario = ppto total; **por torre real** (Obra
+   Civil, Albañilería) y **1 ppto×2 torres** (Albercas, Griferías, Elevador, Infraestructura, Contingencias);
+   **N pptos×2 torres** (Ingenierías 14, Vidrios 8, Cocinas 6, Jardinería 4, Exteriores 12, Otros 4 por concepto;
+   Mármol 4 por categoría Suministro/Colocación; Pilas 6 y Garden 6 por detalle); **Carpinterías 4** por
+   madurez×torre; **Arquitectura 2** por concepto (Diseño Arq + Diseño Jard); **Preliminares 3** por ppto
+   (Despalme/Malla/Plataformas); **Condiciones Generales 4** = TAL CUAL el re-volcado anterior. Excavación/Madera
+   = 0. **Cuadre AL CENTAVO por partida** (mismos targets; el monto no cambia, solo cómo se reparte), verificado
+   transaccionalmente (rollback si falla). Estado por línea = dato real → **Pilas sale parcial** (T1 contratado /
+   T2 no). **2 huecos de la spec** (no listaba Herreria ni Excavación): Excavación→0 (target $0); **Herreria→0.5-
+   espejo 2 líneas paramétrico ($4.64M) por defecto — CONFIRMAR con Alfonso.** Reemplaza el transaccional del
+   re-volcado agrupado. **NO toca catálogo · L3 idéntico · Pagos intacto.** Detalle abajo.
+⏸️ **PAUSA para que Alfonso revise BF (según spec) en el navegador** (Resumen + Partida: líneas por partida según
+   su spec; "parcial" donde aplica). Pendiente: confirmar Herreria. Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
    Pendiente Resumen: modo **Qué falta**. Pendiente BF (si se decide tras revisar): **desglose por depto**
    (hoy torre/piso/depto van como texto en la línea, grano = total del proyecto).
 
@@ -213,6 +228,7 @@
     - **(sesión volcado BF, 2026-06-29):** `feat(buyout): volcado de conceptos de BF (etapa 2b)` (migración `20260629160000` + STATE). **Local, sin push.**
     - **(sesión fix cap, 2026-06-29):** `fix(buyout): paginar fetch de líneas del rollup (cap max_rows) [escala BF]` (`src/lib/buyout/rollup.ts` + STATE; solo código, sin migración). **Local, sin push.**
     - **(sesión agrupado, 2026-06-29):** `fix(buyout): re-volcado BF agrupado por partida×torre` (migración `20260629170000` + STATE; re-data de BF, sin tocar catálogo). **Local, sin push.**
+    - **(sesión spec, 2026-06-29):** `fix(buyout): re-volcado BF según spec de líneas por partida` (migración `20260629180000` + `buyout-BF-lineas-spec.md` + STATE). **Local, sin push.**
 - Sin tocar: ninguna tabla, RLS, migración ni componente de **Pagos**.
 - Nota: apareció un archivo `docs/future-modules/backlog-ideas.md` sin trackear (creado fuera de esta sesión). **Lo dejé sin tocar.**
 
@@ -1569,3 +1585,56 @@ líneas por partida).
 
 ### Commit (feat/buyout, sin push)
 `fix(buyout): re-volcado BF agrupado por partida×torre` — migración `20260629170000` + este STATE.
+
+## Re-volcado FINAL de BF según spec de líneas por partida (2026-06-29)
+
+**Migración `supabase/migrations/20260629180000_buyout_bf_revolcado_spec.sql`** (db push, opción B). Sigue
+EXACTAMENTE `docs/future-modules/buyout-BF-lineas-spec.md`. Reemplaza el transaccional del re-volcado agrupado.
+
+### Conteo por partida (= la spec, verificado)
+**109 líneas.** Arquitectura 2 · Ingenierías 14 · Pilas 6 · Cond. Generales 4 · Preliminares 3 · Excavación 0 ·
+Obra Civil 2 · Albañilería 2 · Impermeabilización 2 · Inst. Eléctricas 2 · Inst. Hidráulicas 2 · Inst. Gas 2 ·
+Automatización 2 · Aire 2 · Iluminación 2 · Acabados 2 · Herreria 2 · Mármol 4 · Madera 0 · Vidrios 8 · Cocinas 6 ·
+Carpinterías 4 · Albercas 2 · Griferías 2 · Jardinería 4 · Elevador 2 · Exteriores 12 · Garden 6 · Infraestructura 2 ·
+Otros 4 · Contingencias 2.
+
+### Patrones (cómo se reparten las líneas)
+- **0.5-espejo** (Imper, Inst. Eléctricas/Hidráulicas/Gas, Automat, Aire, Iluminación, Acabados, **Herreria**):
+  1 ppto cubre ambas torres → 2 líneas, **cantidad 0.5 c/u, unitario = ppto total** (importe = mitad). Σ exacto
+  (0.5+0.5), sin residual.
+- **Por torre real** (Obra Civil, Albañilería) y **1 ppto × 2 torres** (Albercas, Griferías, Elevador,
+  Infraestructura, Contingencias): 2 líneas (Torre 1 / Torre 2), `cantidad 1`, unitario = monto real de la torre.
+- **N pptos × 2 torres**: Ingenierías (7 conceptos×2=14), Vidrios (4×2=8), Cocinas (3×2=6), Jardinería (2×2=4),
+  Exteriores (6×2=12), Otros (2×2=4) — por **CONCEPTO** × torre; **Mármol** (Suministro/Colocación×torre=4) por
+  **CATEGORÍA**; **Pilas** (Mano de Obra/Concreto/Varilla×torre=6) y **Garden** (Suministro/Instalación/Dalas×torre=6)
+  por **DETALLE**. Concepto del item = `"{ppto} · Torre N"`.
+- **Por madurez × torre**: Carpinterías 4 (Ppto T1/T2 + Paramétrico T1/T2).
+- **Por concepto sin torre**: Arquitectura 2 (Diseño Arquitectónico = Diseño Arq + Cuantificación + Supervisión;
+  Diseño Jardinería = Diseño Jard + su supervisión). Preliminares 3 (Despalme/Malla/Plataformas, suma ambas torres).
+- **Condiciones Generales**: las 4 líneas **idénticas** al re-volcado agrupado (no se cambió, como pidió la spec).
+- **Excavación / Madera**: 0 líneas (target $0). Grupos en $0 descartados en general.
+
+### Estado / cuadre
+- `kind`/`contratado` por línea = **dato real, dominante por dinero** del grupo → **Pilas parcial** (Torre 1
+  contratado / Torre 2 no); Obra Civil, Arquitectura, etc. también parciales donde el dato lo indica.
+- Línea en **MXN** (`cantidad × unitario` = importe; sobrecosto/iva 0; tc MXN=1). **Cuadre AL CENTAVO por
+  partida** = mismos targets del preview/2b (el monto total no cambia, solo cómo se reparte). Residual de
+  redondeo (≤$0.01 en algunas) absorbido en el grupo de mayor monto. **DO-block transaccional** recompone por
+  partida y compara; **pasó 31/31, 109 líneas, L3 intacto** (rollback si fallaba).
+
+### Decisiones / huecos de la spec (CONFIRMAR con Alfonso)
+- La spec **no listaba Herreria ni Excavación**. **Excavación → 0 líneas** (target $0, como Madera). **Herreria
+  → 0.5-espejo, 2 líneas paramétrico, $4.64M** (por consistencia con las otras "1 ppto"). **Revisar si Alfonso
+  quiere otro grano para Herreria.**
+- **Arquitectura:** Cuantificación ($67K) y las supervisiones ($0) se **doblaron en "Diseño Arquitectónico"**
+  (la spec solo nombra 2 conceptos) para cuadrar; Diseño Jardinería = Diseño Jard + su supervisión.
+
+### Aislamiento / verificación
+- **Cleanup primero** (hard delete `buyout_item`→CASCADE quotes/lines + falta + import_batch de BF), idempotente.
+  **NO toca el catálogo** (la creación de CONTINGENCIAS es no-op `WHERE NOT EXISTS`) · **L3 intacto** (24/8
+  verificado) · **Pagos intacto**. Gate verde (`tsc`/`biome`/`build`). Sin read-back en vivo (service_role REST
+  bloqueado para `buyout_*`); render queda tras login = **prueba de Alfonso**.
+
+### Commit (feat/buyout, sin push)
+`fix(buyout): re-volcado BF según spec de líneas por partida` — migración `20260629180000` +
+`docs/future-modules/buyout-BF-lineas-spec.md` (spec fuente) + este STATE.
