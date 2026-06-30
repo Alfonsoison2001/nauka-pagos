@@ -149,10 +149,23 @@
    (hard delete, seguro: 0 `buyout_item` de BF) y **re-siembra desde el doc**; CASCADE borró conceptos+bases
    viejos; **TC, área y 8 deptos conservados**; bases re-mapeadas (Σ = 427,161,130 = TOTAL del tablero). DO-block
    transaccional verificó 11/30/64/30 + L3 intacto (24 part / 8 cap). **L3 idéntico · Pagos intacto · cero DDL.**
-⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se
-   marca al editar la línea en la Partida). Pendiente Resumen: modo **Qué falta** (nota libre por partida
-   no contratada). Pendiente BF: **etapa 2** (volcado de conceptos/cotizaciones reales y, si se decide,
-   desglose por depto).
+✅ **VOLCADO de conceptos/cotizaciones de BF (etapa 2b · 2026-06-29 · sesión volcado BF)** — cargados los
+   datos REALES de Beachfront desde `reference/NAUKA - BUY OUT BF 290626.xlsx` (valores calculados, mismo
+   parseo del preview `docs/buyout-bf-volcado-preview.md` que cuadró 30/30). **Migración `20260629160000`**
+   aplicada a prod (`db push`, opción B). **144 items / 144 cotizaciones / 1,732 líneas** (143 conceptos de
+   las 30 partidas + **CONTINGENCIAS** con su concepto "Adicionales"; 1,730 líneas + 2 de Contingencias).
+   **Cuadre AL CENTAVO en las 31 partidas**, verificado **transaccionalmente** (DO-block recomputa el rollup
+   por partida y compara contra los totales del Excel = los del preview; rollback si falla). Decisiones de
+   Alfonso aplicadas: **concepto fino del tab = un item** (Iluminacion 30 cuartos, Griferia 9 baños, etc.;
+   `buyout_concepto_catalog` de BF extendido de 64 → con los conceptos finos, idempotente); **CONTINGENCIAS**
+   = capítulo propio (orden 12, tras OTROS) + partida (orden 31) + base 0, con su volcado ($12M); **quote_date
+   = 2026-06-29** (fecha del archivo, no hay fecha por línea en las verdes); **proveedor NA → cotización
+   `kind=parametrico`** (sin supplier); **"REJILLAS?"** cargado tal cual y marcado en notas. Detalles del
+   modelo y del cuadre abajo. **L3 idéntico · Pagos intacto · solo data de BF.**
+⏸️ **PAUSA para que Alfonso revise BF en el navegador** (Resumen + Partida de Beachfront ya cargan con su
+   volcado). Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
+   Pendiente Resumen: modo **Qué falta**. Pendiente BF (si se decide tras revisar): **desglose por depto**
+   (hoy torre/piso/depto van como texto en la línea, grano = total del proyecto).
 
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
@@ -167,6 +180,8 @@
     - **(sesión cimiento BF, 2026-06-29):** `feat(buyout): catálogo de partidas por-proyecto` +
       `feat(buyout): sembrar cimiento de Beachfront` (2 commits). **Local, sin push.**
     - **(sesión BF exacto, 2026-06-29):** `fix(buyout): catálogo de BF exacto al tablero (11 capítulos, desde doc)`. **Local, sin push.**
+    - **(sesión preview BF, 2026-06-29):** `docs(buyout): preview de volcado BF (etapa 2a)`. **Local, sin push.**
+    - **(sesión volcado BF, 2026-06-29):** `feat(buyout): volcado de conceptos de BF (etapa 2b)` (migración `20260629160000` + STATE). **Local, sin push.**
 - Sin tocar: ninguna tabla, RLS, migración ni componente de **Pagos**.
 - Nota: apareció un archivo `docs/future-modules/backlog-ideas.md` sin trackear (creado fuera de esta sesión). **Lo dejé sin tocar.**
 
@@ -1377,3 +1392,61 @@ de BF **idéntico al doc** y nada más (solo el proyecto Beachfront).
 ### Commit (feat/buyout, sin push)
 `fix(buyout): catálogo de BF exacto al tablero (11 capítulos, desde doc)` — migración 150000 +
 `buyout-catalogo-BF.md` (doc fuente) + este STATE.
+
+## Etapa 2b — VOLCADO de conceptos/cotizaciones de BF (2026-06-29)
+
+**Migración `supabase/migrations/20260629160000_buyout_bf_volcado.sql`** (aplicada a prod con `db push`,
+opción B). Carga los datos transaccionales reales de Beachfront. Cero cambios de código (la app ya es
+por-proyecto). `tsc`/`biome`/`build` verdes; `migration list` → 160000 local y remoto en sync.
+
+### Modelo de carga (clave para entender el cuadre)
+- **El rollup (`src/lib/buyout/rollup.ts`) suma SOLO las líneas de la cotización VIGENTE de cada item**, y el
+  índice único `buyout_quote_one_selected_uidx` permite **una sola vigente por item**. Por eso cada **concepto
+  = un `buyout_item` con UNA `buyout_quote` vigente** que agrupa **todas** sus líneas; el **proveedor va por
+  línea** (`buyout_line.proveedor`, fiel), no por cotización. Por eso #cotizaciones (144) = #items (144) y no
+  los 148 "concepto×proveedor" del preview (4 conceptos multi-proveedor cuelgan de una sola vigente).
+- **El total NO se almacena:** la app lo recomputa `cantidad*unitario*(1+sobrecosto)*(1+iva)*tc`, con
+  `tc=fx[moneda]` (BF: MXN 1 · USD 17.5 · EUR 22). Verifiqué que la col S (T.C.) del Excel == fx[moneda] en
+  TODAS las líneas, así que el recompute reproduce la col T del Excel.
+- **kind/contratado son por concepto** (toda la vigente comparte un valor): resueltos por **dominancia de
+  dinero** entre las líneas del concepto (4 conceptos con madurez mixta, 10 con contratación mixta → se toma
+  el eje con mayor Σ). `supplier_id` de la cotización = el proveedor dominante (los demás quedan por línea);
+  **proveedor NA/sin proveedor → `kind=parametrico`, supplier NULL**.
+- **TORRE/PISO/DEPTO/DETALLE** se guardan como texto en la línea (`torre→villa_casita`, `piso`, `depto`,
+  `detalle`); grano = total del proyecto (sin desglose por depto). **Cocinas y Carpinterias** (col extra
+  CATEGORÍA 2) se mapearon **por nombre de encabezado**, no por letra.
+- **NOTAS:** el relleno `###########` de la hoja se trató como vacío (NULL); se **conservaron las 22 notas
+  reales** (folios de cotización, fechas, descripciones). **"REJILLAS?"** (HERRERIA) se cargó tal cual y se
+  marcó en notas. `quote_date = 2026-06-29` (fecha del archivo) en todas.
+
+### Cuadre AL CENTAVO (verificación transaccional)
+- El DO-block final recomputa, por partida, `round(Σ cantidad*unitario*(1+sobrecosto)*(1+iva)*fx.rate, 2)`
+  sobre las **filas insertadas** y lo compara contra el **total del Excel** (= los del preview). **Si alguna
+  partida no cuadra al centavo → `RAISE EXCEPTION` → rollback de TODO el push.** Pasó: las **31 partidas
+  cuadran**. También valida conteos (144/144/1732), "1 vigente por item", **L3 intacto (24/8)** y `projects ≥ 3`.
+- **Residual de precisión (6 partidas):** `unitario` es `numeric(14,2)` pero el Excel trae unitarios USD/
+  computados con 6–11 decimales → redondearlos driftaba centavos (Imperm +$1.67, Griferia −$0.40, Cond.Gen
+  +$0.24, Carpinterias +$0.04, Ingenierias +$0.01, Pilas −$0.01). **Solución:** en esas 6 partidas, la **línea
+  de mayor monto** se almacena en MXN (cant=1, sobrecosto=0, iva=0, `unitario = su total + residual`),
+  absorbiendo el residual y **preservando su total**; las demás líneas quedan fieles. Marcado en notas de esa
+  línea. Resultado: cuadre exacto sin perder ninguna línea ni cambiar conteos.
+- **Carpinterias** redondea a `46,223,299.09` (half-up, como SQL/app) vs `…08` del preview (banker's de Python) —
+  diferencia de 1 centavo por el `.085`, dentro del centavo.
+
+### Conteos cargados (BF)
+- **144 items · 144 cotizaciones vigentes · 1,732 líneas** · **26 proveedores** asegurados globalmente
+  (creados si faltaban) · `buyout_concepto_catalog` de BF extendido con los conceptos finos (idempotente,
+  WHERE NOT EXISTS) · **CONTINGENCIAS**: capítulo (orden 12) + partida (orden 31) + base 0 + concepto
+  "Adicionales" + 2 líneas ($12M). Σ de las 30 partidas del tablero = **$420,204,639.35**; Contingencias
+  aparte = **$12,000,000.00**.
+
+### Idempotencia / aislamiento
+- La migración **borra primero** el transaccional de BF (`DELETE buyout_item` → CASCADE a quote/line; +falta
+  +import_batch), así que re-correrla es seguro y limpio. Suppliers son globales (no se borran). Todo filtra
+  por el `project_id` de 'NAUKA Beachfront'. **No toca L3, ni Pagos, ni el catálogo de L3.** Triggers de
+  `audit_log` se dispararon (esperado).
+
+### Pendiente / para Alfonso
+- Revisar **Resumen + Partida de Beachfront** en el navegador (cuadre por partida = el del preview).
+- Si quiere, decidir **desglose por depto** (hoy texto en la línea). La línea colapsada (1 por las 6 partidas
+  con drift) muestra cant=1/MXN con el total correcto — es el único punto de menor fidelidad de captura.
