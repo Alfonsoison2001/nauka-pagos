@@ -125,9 +125,23 @@
    editar). **1 migración aditiva** (solo una función `buyout_*`, aplicada a prod con `db push` — opción B) +
    **3 archivos** (`subcategoria/actions.ts`, `partida/actions.ts`, `partida/linea-dialog.tsx`). **Pagos
    intacto**; **sin tocar** ninguna tabla/RLS/lógica de Pagos. Detalle abajo.
+✅ **Catálogo de partidas POR-PROYECTO + Seed CIMIENTO de Beachfront (2026-06-29 · sesión cimiento BF)** —
+   **Parte 1:** `buyout_partida_catalog` pasó de **global** a **por-proyecto** (nueva col `project_id` FK
+   projects + índice único `(project_id, nombre)` en vez de solo `nombre`); **TODAS** las 47 filas
+   existentes (24 activas + 23 soft-deleted) se **backfillearon a Lote 3** y las 3 pantallas + la acción de
+   cierre filtran por proyecto (`.eq("project_id", id)`). `buyout_concepto_catalog` NO necesita `project_id`
+   (cuelga de la partida → aislado transitivamente). **L3 queda idéntico.** **Parte 2:** sembrado el
+   **cimiento de NAUKA Beachfront** desde `reference/NAUKA - BUY OUT BF 290626.xlsx` (valores, no fórmulas):
+   **12 capítulos** (orden del prompt), **32 partidas**, **63 conceptos**, **32 bases** (col E `PRESUPUESTO
+   IZ MXN BASE`, Σ = 427,161,130 = TOTAL PRESUPUESTO), **TC** MXN1/USD17.5/EUR22, **área interior 2927.6 m²**
+   (Torre1 AIA + Torre2 AIA) y **8 deptos** (solo referencia). **2 migraciones aditivas** auto-verificadas
+   (DO-block transaccional) aplicadas a prod (`db push`, opción B). **Pagos intacto**; BF separado de L3
+   (cada proyecto ve solo lo suyo). Detalle abajo. **NO es el volcado de conceptos/cotizaciones reales de BF
+   (etapa 2).**
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se
    marca al editar la línea en la Partida). Pendiente Resumen: modo **Qué falta** (nota libre por partida
-   no contratada).
+   no contratada). Pendiente BF: **etapa 2** (volcado de conceptos/cotizaciones reales y, si se decide,
+   desglose por depto).
 
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
@@ -137,7 +151,10 @@
   - `feat/buyout` (creada desde `main`):
     - `a39e0b3 docs(buyout): spec + análisis Excel L3`
     - `9c7b959 feat(buyout): esquema + catálogos (slice 1)` ← la migración
-    - (este STATE)
+    - … (slices 2a–5, modos, puente a Pagos, auditoría BO-01…10 — ver historial) …
+    - `b6108e5 fix(buyout): atomicidad de marcar-vigente y captura sin perder línea [BO-09/10]`
+    - **(sesión cimiento BF, 2026-06-29):** `feat(buyout): catálogo de partidas por-proyecto` +
+      `feat(buyout): sembrar cimiento de Beachfront` (2 commits). **Local, sin push.**
 - Sin tocar: ninguna tabla, RLS, migración ni componente de **Pagos**.
 - Nota: apareció un archivo `docs/future-modules/backlog-ideas.md` sin trackear (creado fuera de esta sesión). **Lo dejé sin tocar.**
 
@@ -1186,3 +1203,103 @@ escrituras multi-paso**. **Solo estos 2**, sin tocar otra cosa. **1 migración a
 - **Import de Excel = diferido** (futuro opcional, §5); la captura es manual en V1.
 - **Taxonomía ya reconciliada** a las 24 partidas + 92 conceptos del doc oficial (Slice 2c).
   Pendiente: áreas Villa/Casita finas si se necesitan para $/m² por unidad.
+
+## Catálogo per-proyecto + Seed CIMIENTO de Beachfront (2026-06-29, sesión cimiento BF)
+
+Migrar **Beachfront** POR ETAPAS. Esta sesión = **CIMIENTO** (catálogo + bases + deptos + TC + área a
+nivel proyecto, **sin desglose por depto**). El volcado de conceptos/cotizaciones reales = **etapa 2**.
+Decisiones de aislamiento respetadas: rama `feat/buyout`, **sin push**, migraciones **aditivas** a prod
+(`db push`, opción B), **cero** toques a `main`/Pagos.
+
+### Parte 1 — Catálogo de partidas POR-PROYECTO (prerequisito)
+
+`buyout_partida_catalog` era **global** (sin `project_id`, índice único en `nombre`). Cada proyecto tiene
+su propio set → no podían coexistir "OBRA CIVIL" de L3 y de BF. Solución **aditiva sin romper L3**:
+
+- **Migración `20260629130000_buyout_partida_catalog_per_project.sql`:**
+  - `ADD COLUMN project_id uuid REFERENCES projects ON DELETE CASCADE` (nullable de entrada).
+  - **Backfill**: TODAS las filas existentes (47 = 24 activas + 23 soft-deleted del glosario viejo) →
+    `project_id` de **NAUKA Lote 3** (el catálogo vigente se sembró solo para L3).
+  - `ALTER COLUMN project_id SET NOT NULL` (ya sin NULLs → auto-guarda: si L3 no existiera, aborta todo).
+  - **Índice único** `(project_id, nombre) WHERE deleted_at IS NULL` (reemplaza el global `nombre`) +
+    índice `(project_id)`. Esto **permite nombres repetidos entre proyectos**.
+  - DO-block: reportó `backfilleadas a Lote 3: 47 filas`.
+- **`buyout_concepto_catalog` NO recibe `project_id`**: cuelga de `partida_catalog_id` (FK ON DELETE
+  CASCADE), que ya es por-proyecto → conceptos **aislados transitivamente**. El único SELECT de conceptos
+  ya filtraba por `partida_catalog_id` (no por nombre global). Una columna menos que mantener.
+- **Código (4 archivos, quirúrgico):** se agregó `.eq("project_id", id)` a las 3 lecturas del catálogo que
+  cargaban TODAS las partidas — `buyout/page.tsx` (Resumen), `buyout/partida/page.tsx` (tarjetas),
+  `buyout/subcategoria/page.tsx` (índice de conceptos) — y a `buyout/actions.ts` (`cerrarMesActual`, que
+  arma el mapa `partidaNombreById` del rollup). Las demás lecturas son **por `id`** (una partida:
+  `resolvePartidaMeta`, `history.ts`) o ya estaban por-proyecto → sin cambio.
+- **L3 idéntico**: Parte 1 solo AGREGA `project_id` (no toca nombre/capítulo/orden ni conceptos/bases). Las
+  pantallas de L3 filtran por L3 y devuelven exactamente las mismas 24 partidas activas que antes.
+
+### Parte 2 — Seed CIMIENTO de Beachfront
+
+Fuente: `reference/NAUKA - BUY OUT BF 290626.xlsx` (68 hojas), leída con **openpyxl `data_only`** (VALORES,
+no fórmulas). La extracción la hizo un script (`scratchpad/extract_bf.py`) que **lee la jerarquía del
+tablero por color de relleno** de la col B: navy `FF002060` = capítulo, azul `FFD9E2F3` = partida, verde
+`FFE2EFDA`/"SUBTOTAL …" = subtotal, sin relleno = concepto. El SQL lo generó otro script para garantizar
+**nombres EXACTOS** (acentos, guiones bajos, paréntesis) y escape correcto.
+
+- **Migración `20260629140000_buyout_seed_beachfront.sql`** (idempotente, `WHERE NOT EXISTS`, todo cuelga
+  del `project_id` de **NAUKA Beachfront**):
+  - **12 capítulos** (orden EXACTO del prompt): DISEÑO · OBRA CIVIL · MEP · ACABADOS · COLOCACIONES ·
+    ALBERCAS · JARDINERIA Y RIEGO · ELEVADOR · EXTERIORES · GARDEN AND PRIVACY WALLS · INFRAESTRUCTURA · OTROS.
+  - **32 partidas** (30 bandas del tablero, nombres display limpios, + Closets + FFE del Glosario).
+  - **63 conceptos** (filas de concepto bajo cada banda, nombres exactos).
+  - **32 bases** = col **E "PRESUPUESTO IZ MXN BASE"** (fila SUBTOTAL de cada partida). **Σ = 427,161,130 =
+    TOTAL PRESUPUESTO** (col E) del tablero → **cuadre exacto**, confirma que E es la columna base.
+  - **TC**: MXN 1 · USD 17.5 · EUR 22.
+  - **Meta**: `area_int = 2927.60` (Torre1 AIA 1463.8 + Torre2 AIA 1463.8, hoja UNITARIO) +
+    `area_ext_techada = 1042.52` (521.26 ×2).
+  - **8 deptos** (`buyout_unit`, `tipo='depto'`): `T1 · 101/201 (PB)`, `T1 · 102/103, 202/203 (Dúplex)`,
+    `T2 · 301/401 (PB)`, `T2 · 302/303, 402/403 (Dúplex)`. Solo referencia (no entran al rollup aún).
+  - **DO-block de auto-verificación transaccional** al final: si algún conteo BF no cuadra, RAISE EXCEPTION
+    → rollback de TODO. Reportó `BF seed OK: 12 cap / 32 part / 63 con / 32 bases (Σ=427161130.03) / 3 fx /
+    8 deptos / 1 meta`.
+
+### ⚠️ Reportes para revisión de Alfonso (¿qué columna usé y qué reconcilié?)
+
+1. **Columna BASE = E "PRESUPUESTO IZ MXN BASE"** (NO un mes). El header del tablero tiene E=base y
+   F/G/H/I = PPTO MARZO/ABRIL/MAYO/JUNIO MXN (meses). Validado porque **Σ de las 32 bases = TOTAL
+   PRESUPUESTO** del tablero (col E). La base por partida la tomé de su fila **SUBTOTAL** (la banda-partida
+   trae E vacío; el subtotal es la suma de sus conceptos).
+2. **PILAS**: en el Excel es banda-CAPÍTULO propio; el prompt lo mete **dentro de OBRA CIVIL** → lo sembré
+   como **partida bajo OBRA CIVIL** (no capítulo).
+3. **GARDEN AND PRIVACY WALLS** e **INFRAESTRUCTURA**: en el Excel son bandas-partida bajo EXTERIORES; el
+   prompt los pide como **capítulos** → los **promoví a capítulos** (cada uno con su partida homónima).
+4. **EXCAVACION**: la banda dice "EXCAVACION - INCLUIDA EN OBRA CIVIL"; usé el nombre limpio **EXCAVACION**
+   (el capítulo ya codifica que va en OBRA CIVIL).
+5. **CLOSETS y FFE**: el prompt las pide como BF-propias, pero **NO son bandas del tablero** (Closets es un
+   concepto bajo CARPINTERIAS; FFE no aparece en el tablero). Vienen del **Glosario Partidas**. Las sembré
+   con **base 0 y sin conceptos**: Closets → COLOCACIONES, FFE → OTROS. **Mover de capítulo / agregar
+   conceptos es admin-editable.** (Resultado: 32 partidas, no ~28 — incluyo las 30 del tablero + estas 2.)
+6. **Nombres de partida** = display limpio en MAYÚSCULAS (como L3), no los underscore del Glosario.
+   **Conceptos** = nombres EXACTOS del tablero (mezcla mayús/minús, acentos, guiones bajos).
+7. **Deptos**: `tipo='depto'` (el CHECK admite villa/casita/torre/depto; no hay 'torre+depto' combinado).
+   La **Torre** vive en el prefijo del nombre (`T1·`/`T2·`). La 5ta recámara (401, 402/403 de Torre 2) **no**
+   se modeló como flag aún (es etapa 2 / por-depto).
+
+### Verificación
+
+- **DB (autoritativa, exacta, transaccional):** los 2 DO-blocks pasaron en el `db push` → Parte 1 stampó 47
+  filas a L3; Parte 2 creó **exactamente** 12/32/63/32/3/8/1 con Σbase ≈ 427.16M. Un conteo errado habría
+  hecho rollback de todo. `supabase migration list` → 130000 y 140000 **local y remoto en sync**.
+- **Aislamiento por diseño:** `project_id` + índice único `(project_id, nombre)` → BF y L3 no colisionan ni
+  en nombres compartidos. L3 conserva sus 47 filas de catálogo (24 activas) + 92 conceptos + 24 bases + 8
+  capítulos + 3 TC + 3 unidades + 1 meta, **sin cambios** (Parte 2 solo INSERTA filas de BF).
+- **Gate local verde:** `pnpm exec tsc --noEmit` ✓ (0) · `pnpm exec biome check src/` ✓ (158 archivos, 0
+  errores; los 2 errores de biome viven en `scripts/backup-storage.mjs`, fuera de alcance / sin trackear) ·
+  `pnpm build` ✓ ("Compiled successfully", 18 rutas; las 6 de Pagos y las 3 de buyout intactas).
+- **Pagos intacto:** cero archivos/tablas/RLS de Pagos tocados; la única referencia hacia Pagos sigue siendo
+  el FK nullable preexistente `buyout_quote.pagos_partida_id`.
+- **Lectura row-level por REST bloqueada** para `service_role` (config endurecida, igual que slices previos)
+  → la confirmación visual de L3-idéntico / BF-aparece queda tras login/RLS = **prueba de Alfonso**.
+
+### Commits (feat/buyout, sin push)
+
+1. `feat(buyout): catálogo de partidas por-proyecto` — migración 130000 + 4 archivos `src/`.
+2. `feat(buyout): sembrar cimiento de Beachfront` — migración 140000 + `buyout-BF-estructura.md` +
+   `reference/NAUKA - BUY OUT BF 290626.xlsx` (fuente) + este STATE.
