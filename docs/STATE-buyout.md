@@ -206,8 +206,22 @@
    T2 no). **2 huecos de la spec** (no listaba Herreria ni Excavación): Excavación→0 (target $0); **Herreria→0.5-
    espejo 2 líneas paramétrico ($4.64M) por defecto — CONFIRMAR con Alfonso.** Reemplaza el transaccional del
    re-volcado agrupado. **NO toca catálogo · L3 idéntico · Pagos intacto.** Detalle abajo.
-⏸️ **PAUSA para que Alfonso revise BF (según spec) en el navegador** (Resumen + Partida: líneas por partida según
-   su spec; "parcial" donde aplica). Pendiente: confirmar Herreria. Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
+✅ **3 ajustes del Resumen BF (2026-06-29 · sesión ajustes Resumen)** — (1) **Contingencias FUERA del TOTAL:** el
+   gran TOTAL (y $/m², DIF, desglose) **excluye** la partida `CONTINGENCIAS`; se muestra en una fila aparte
+   **abajo** ("Contingencias / Adicional · fuera del TOTAL", $12M), como en el Excel (bajo el TOTAL PRESUPUESTO).
+   Aplica a las 3 vistas. Identificada por nombre en código (`esAdicional`), sin tocar datos. (2) **Desglose del
+   TOTAL por los 2 ejes:** dos tarjetas bajo el total — **Madurez** (Ppto $233.5M 56% · Paramétrico $186.7M 44%)
+   y **Contratación** (Contratado $96.8M 23% · No contratado $323.4M 77%), reusando las cubetas del rollup (sin
+   recalcular). En modo Contratación se omite (la tabla ya lo desglosa). (3) **Conceptos descriptivos sin torre:**
+   los `buyout_item` de BF pasaron a nombres del origen (concepto/detalle) **sin** sufijo "· Torre X"/estado
+   (la torre va en su columna); duplicados por (partida, concepto) **consolidados** en 1 item con sus líneas por
+   torre → **55 items / 109 líneas** (antes 109 items). Para no perder el "parcial" al consolidar (ej. PILAS:
+   Torre 1 contratada / Torre 2 no), se agregó **estado POR LÍNEA** (`buyout_line.kind/contratado` nullable,
+   aditivas) y el rollup lee el de la línea con fallback al de la cotización → **L3 idéntico** (líneas sin estado
+   → cae a la cotización). **Cuadre por partida intacto** (mismos montos; verificado transaccional, 31/31).
+   **L3 idéntico · Pagos intacto.** Migración `20260629190000` (db push). Detalle abajo.
+⏸️ **PAUSA para que Alfonso revise BF en el navegador** (Contingencias fuera del total + desglose por ejes +
+   conceptos descriptivos). Pendiente: confirmar Herreria. Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
    Pendiente Resumen: modo **Qué falta**. Pendiente BF (si se decide tras revisar): **desglose por depto**
    (hoy torre/piso/depto van como texto en la línea, grano = total del proyecto).
 
@@ -229,6 +243,7 @@
     - **(sesión fix cap, 2026-06-29):** `fix(buyout): paginar fetch de líneas del rollup (cap max_rows) [escala BF]` (`src/lib/buyout/rollup.ts` + STATE; solo código, sin migración). **Local, sin push.**
     - **(sesión agrupado, 2026-06-29):** `fix(buyout): re-volcado BF agrupado por partida×torre` (migración `20260629170000` + STATE; re-data de BF, sin tocar catálogo). **Local, sin push.**
     - **(sesión spec, 2026-06-29):** `fix(buyout): re-volcado BF según spec de líneas por partida` (migración `20260629180000` + `buyout-BF-lineas-spec.md` + STATE). **Local, sin push.**
+    - **(sesión ajustes Resumen, 2026-06-29):** `feat(buyout): contingencias fuera del total + desglose por ejes en total + conceptos descriptivos` (migración `20260629190000` + `rollup.ts` + `buyout/page.tsx` + STATE). **Local, sin push.**
 - Sin tocar: ninguna tabla, RLS, migración ni componente de **Pagos**.
 - Nota: apareció un archivo `docs/future-modules/backlog-ideas.md` sin trackear (creado fuera de esta sesión). **Lo dejé sin tocar.**
 
@@ -1638,3 +1653,53 @@ Otros 4 · Contingencias 2.
 ### Commit (feat/buyout, sin push)
 `fix(buyout): re-volcado BF según spec de líneas por partida` — migración `20260629180000` +
 `docs/future-modules/buyout-BF-lineas-spec.md` (spec fuente) + este STATE.
+
+## 3 ajustes del Resumen BF (2026-06-29)
+
+**Migración `20260629190000_buyout_bf_conceptos_descriptivos.sql`** (db push) + `src/lib/buyout/rollup.ts` +
+`src/app/proyectos/[id]/buyout/page.tsx`. Tres pedidos de Alfonso sobre el Resumen / datos de BF.
+
+### 1 · Contingencias FUERA del TOTAL (display, `page.tsx`)
+- El gran **TOTAL** (y `$/m²`, `USD/m²`, `DIF`, el desglose y los totales de columnas de mes) ahora **excluye**
+  la partida `CONTINGENCIAS`. Se separa en `mainPartidaViews` vs `adicionalViews` (predicado `esAdicional` por
+  nombre; sin tocar datos) y el capítulo `CONTINGENCIAS` se quita de `mainChapters`.
+- Se muestra en un bloque **aparte, debajo del total**: "Contingencias / Adicional · fuera del TOTAL" con su
+  monto ($12,000,000) — como en el Excel (va bajo el TOTAL PRESUPUESTO). **Aplica a las 3 vistas** (se renderiza
+  tras el bloque condicional de modo).
+
+### 2 · Desglose del TOTAL por los 2 ejes (display, `page.tsx`)
+- Dos tarjetas bajo el total (componentes `TotalEjesDesglose`/`DesgloseCard`), reusando las **cubetas YA
+  calculadas por el rollup** (`agg.ppto/parametrico/contratado/noContratado`; suman al total → no se recalcula
+  ni cambia ningún monto): **Madurez** (Ppto $233.5M · 56% / Paramétrico $186.7M · 44%) y **Contratación**
+  (Contratado $96.8M · 23% / No contratado $323.4M · 77%). % del resto = complemento (sin descuadre). En modo
+  **Contratación** se omiten (esa tabla ya lo desglosa por capítulo).
+
+### 3 · Conceptos descriptivos sin torre + ESTADO POR LÍNEA (datos + rollup)
+- Los `buyout_item` de BF pasaron a **nombres descriptivos del origen** (concepto/detalle: "Mano de Obra",
+  "Suministro de Marmol", "Diseño Arquitectónico", "Despalme"…) **sin** el sufijo "· Torre X" ni estado. Los
+  monolíticos (espejo/torre/madurez/Cond. Generales) usan un nombre limpio de partida ("Impermeabilización",
+  "Carpinterías", …). La **torre vive en la columna** de la línea (`villa_casita`), no en el nombre.
+- **Consolidación:** los duplicados por (partida, concepto) se fusionan en **1 item con sus líneas por torre**
+  → **55 items / 109 líneas** (las mismas 109 líneas; antes 109 items 1:1). Cuadre por partida **idéntico**.
+- **Estado POR LÍNEA (para no perder "parcial" al consolidar):** se agregaron columnas **nullable**
+  `buyout_line.kind` (CHECK parametrico/ppto) y `buyout_line.contratado` (aditivas, idempotentes). El re-volcado
+  setea el estado real por torre en cada línea. **`rollup.ts`** (`loadVigenteLines`) ahora lee
+  `l.kind ?? q.kind` y `l.contratado ?? q.contratado` → con líneas sin estado (L3, captura manual) cae al de la
+  cotización (**L3 idéntico**); con BF muestra el estado por torre. Así **PILAS sigue PARCIAL** (Torre 1
+  contratada / Torre 2 no) pese a consolidar "Mano de Obra/Concreto/Varilla" en 1 item c/u. 10 partidas con eje
+  parcial.
+- **Aislamiento:** columnas aditivas/nullable (Pagos no usa `buyout_line`; L3 cae al fallback). Re-volcado
+  filtra por `project_id` de BF, cleanup primero (idempotente). **NO toca catálogo · L3 idéntico · Pagos intacto.**
+
+### Verificación
+- **DB (autoritativa):** DO-block transaccional → `BF conceptos descriptivos OK: 55 items / 109 lineas; cuadre
+  31 partidas; L3 intacto` (rollback si fallaba). Cuadre por partida = mismos targets del spec/preview.
+- **Gate verde:** `tsc` ✓ · `biome` ✓ (158) · `pnpm build` ✓. Sin read-back en vivo (service_role REST
+  bloqueado); render queda tras login = **prueba de Alfonso**.
+- **Nota:** al editar manualmente una línea de BF en la UI, el form actual no toca `buyout_line.kind/contratado`
+  (quedan con el valor cargado) — irrelevante para la revisión read-only; si se quiere editar el estado por línea
+  desde la UI, es un paso aparte.
+
+### Commit (feat/buyout, sin push)
+`feat(buyout): contingencias fuera del total + desglose por ejes en total + conceptos descriptivos` —
+migración `20260629190000` + `rollup.ts` + `buyout/page.tsx` + este STATE.

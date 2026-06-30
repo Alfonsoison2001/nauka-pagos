@@ -173,13 +173,33 @@ export default async function BuyoutResumenPage({
     }
   })
 
-  const chapterViews = groupByChapter(chapters, partidaViews)
+  // Partidas "adicionales" (Contingencias): van FUERA del TOTAL (como en el Excel,
+  // debajo del TOTAL PRESUPUESTO). Se excluyen del rollup del total, $/m², DIF y del
+  // desglose; se muestran en una fila aparte abajo. Aplica a las 3 vistas.
+  const mainPartidaViews = partidaViews.filter((p) => !esAdicional(p.nombre))
+  const adicionalViews = partidaViews.filter((p) => esAdicional(p.nombre))
+  const mainChapters = chapters.filter((c) => !esAdicional(c))
+
+  const chapterViews = groupByChapter(mainChapters, mainPartidaViews)
   const total = chapterViews.reduce((a, c) => a + c.total, 0)
   const totalBase = chapterViews.reduce((a, c) => a + c.base, 0)
   const totalCount = chapterViews.reduce((a, c) => a + c.count, 0)
   const totalDif = totalCount === 0 ? null : difPct(total, totalBase)
   const costoM2 = areaInt ? total / areaInt : null
   const usdM2 = areaInt && usdRate ? total / usdRate / areaInt : null
+  const adicionalTotal = adicionalViews.reduce((a, p) => a + p.agg.total, 0)
+  // Desglose del TOTAL por los 2 ejes (cubetas YA calculadas por el rollup; suman al
+  // total por construcción → no se recalcula nada ni cambia el monto).
+  const totalPpto = mainPartidaViews.reduce((a, p) => a + p.agg.ppto, 0)
+  const totalParam = mainPartidaViews.reduce((a, p) => a + p.agg.parametrico, 0)
+  const totalContratado = mainPartidaViews.reduce(
+    (a, p) => a + p.agg.contratado,
+    0,
+  )
+  const totalNoContratado = mainPartidaViews.reduce(
+    (a, p) => a + p.agg.noContratado,
+    0,
+  )
 
   if (chapters.length === 0) {
     return (
@@ -394,7 +414,7 @@ export default async function BuyoutResumenPage({
                       className="px-4 py-3 text-right font-semibold"
                     >
                       {formatMXN0(
-                        partidaViews.reduce(
+                        mainPartidaViews.reduce(
                           (a, p) =>
                             a + (snapshotByMonth.get(m.id)?.get(p.id) ?? 0),
                           0,
@@ -458,6 +478,152 @@ export default async function BuyoutResumenPage({
           </div>
         </>
       )}
+
+      {/* Desglose del TOTAL por los 2 ejes (madurez · contratación). En modo
+          Contratación la tabla ya lo desglosa por capítulo → aquí se omite. */}
+      {modo !== "contratacion" && total > 0 ? (
+        <TotalEjesDesglose
+          ppto={totalPpto}
+          parametrico={totalParam}
+          contratado={totalContratado}
+          noContratado={totalNoContratado}
+          total={total}
+        />
+      ) : null}
+
+      {/* Adicional / fuera del TOTAL (Contingencias), debajo del total — las 3 vistas. */}
+      {adicionalViews.length > 0 ? (
+        <AdicionalBlock views={adicionalViews} total={adicionalTotal} />
+      ) : null}
+    </div>
+  )
+}
+
+/** Partidas que van FUERA del TOTAL (adicionales, como Contingencias en el Excel). */
+const PARTIDAS_ADICIONALES = new Set(["CONTINGENCIAS"])
+function esAdicional(nombre: string): boolean {
+  return PARTIDAS_ADICIONALES.has(nombre.trim().toUpperCase())
+}
+
+/** Desglose del TOTAL en los 2 ejes (cubetas del rollup): madurez y contratación,
+ *  con monto y % por cubeta. Dos tarjetas con barra. No recalcula montos. */
+function TotalEjesDesglose({
+  ppto,
+  parametrico,
+  contratado,
+  noContratado,
+  total,
+}: {
+  ppto: number
+  parametrico: number
+  contratado: number
+  noContratado: number
+  total: number
+}) {
+  const pptoPct = Math.round((ppto / total) * 100)
+  const contratadoPct = Math.round((contratado / total) * 100)
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <DesgloseCard
+        titulo="Madurez del TOTAL"
+        domPct={pptoPct}
+        domLabel="Ppto"
+        domMonto={ppto}
+        restoLabel="Paramétrico"
+        restoMonto={parametrico}
+      />
+      <DesgloseCard
+        titulo="Contratación del TOTAL"
+        domPct={contratadoPct}
+        domLabel="Contratado"
+        domMonto={contratado}
+        restoLabel="No contratado"
+        restoMonto={noContratado}
+      />
+    </div>
+  )
+}
+
+/** Tarjeta de un eje: barra verde (cubeta dominante) + montos y % de cada cubeta.
+ *  El % del resto se deriva como complemento (sin descuadre por redondeo). */
+function DesgloseCard({
+  titulo,
+  domPct,
+  domLabel,
+  domMonto,
+  restoLabel,
+  restoMonto,
+}: {
+  titulo: string
+  domPct: number
+  domLabel: string
+  domMonto: number
+  restoLabel: string
+  restoMonto: number
+}) {
+  const restoPct = 100 - domPct
+  return (
+    <div className="rounded-2xl bg-nauka-subtle px-4 py-3.5">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        {titulo}
+      </p>
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white">
+        <div
+          className="h-full rounded-full bg-nauka-success"
+          style={{ width: `${Math.min(100, Math.max(0, domPct))}%` }}
+        />
+      </div>
+      <div className="mt-2 flex items-baseline justify-between gap-3 text-sm tabular-nums">
+        <span className="font-medium text-nauka-dark">
+          {domLabel} {formatMXN0(domMonto)}{" "}
+          <span className="font-normal text-muted-foreground">· {domPct}%</span>
+        </span>
+        <span className="text-right text-muted-foreground">
+          {restoLabel} {formatMXN0(restoMonto)} <span>· {restoPct}%</span>
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** Fila "Adicional / fuera del TOTAL" (Contingencias): debajo del total, aparte,
+ *  igual que en el tablero del Excel (va bajo el TOTAL PRESUPUESTO). */
+function AdicionalBlock({
+  views,
+  total,
+}: {
+  views: PartidaView[]
+  total: number
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-nauka-card-border bg-white px-4 py-3.5 shadow-nauka-card">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-nauka-dark">
+            Contingencias / Adicional
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Adicional · fuera del TOTAL (en el tablero va debajo del total
+            presupuesto)
+          </p>
+        </div>
+        <p className="text-lg font-semibold tabular-nums text-nauka-dark">
+          {formatMXN0(total)}
+        </p>
+      </div>
+      {views.length > 1
+        ? views.map((p) => (
+            <div
+              key={p.id}
+              className="mt-1.5 flex items-center justify-between border-t border-nauka-subtle pt-1.5 text-sm"
+            >
+              <span className="text-muted-foreground">{p.nombre}</span>
+              <span className="tabular-nums text-nauka-dark">
+                {formatMXN0(p.agg.total)}
+              </span>
+            </div>
+          ))
+        : null}
     </div>
   )
 }

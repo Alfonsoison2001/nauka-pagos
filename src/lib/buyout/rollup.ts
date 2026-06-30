@@ -238,7 +238,7 @@ export async function loadVigenteLines(
     sb
       .from("buyout_line")
       .select(
-        "id, quote_id, concepto, detalle, villa_casita, piso, depto, proveedor, unidad, cantidad, moneda, unitario, sobrecosto_pct, iva_pct, notas",
+        "id, quote_id, concepto, detalle, villa_casita, piso, depto, proveedor, unidad, cantidad, moneda, unitario, sobrecosto_pct, iva_pct, notas, kind, contratado",
       )
       .in("quote_id", quoteIds)
       .is("deleted_at", null)
@@ -278,8 +278,14 @@ export async function loadVigenteLines(
       sobrecosto_pct: Number(l.sobrecosto_pct ?? 0),
       iva_pct: Number(l.iva_pct ?? 0),
       notas: (l.notas as string | null) ?? null,
-      kind: (q?.kind as "parametrico" | "ppto") ?? "ppto",
-      contratado: Boolean(q?.contratado),
+      // Estado POR LÍNEA si está seteado (BF agrupado por torre: una torre puede
+      // estar contratada y la otra no → "parcial"); si es NULL cae al de la
+      // cotización (L3 y captura manual quedan idénticos).
+      kind:
+        (l.kind as "parametrico" | "ppto" | null) ??
+        (q?.kind as "parametrico" | "ppto") ??
+        "ppto",
+      contratado: (l.contratado as boolean | null) ?? Boolean(q?.contratado),
       quote_date: (q?.quote_date as string) ?? "",
       pdf_url: (q?.pdf_url as string | null) ?? null,
       supplier_id: (q?.supplier_id as string | null) ?? null,
