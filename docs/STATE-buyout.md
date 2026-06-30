@@ -162,8 +162,22 @@
    = 2026-06-29** (fecha del archivo, no hay fecha por línea en las verdes); **proveedor NA → cotización
    `kind=parametrico`** (sin supplier); **"REJILLAS?"** cargado tal cual y marcado en notas. Detalles del
    modelo y del cuadre abajo. **L3 idéntico · Pagos intacto · solo data de BF.**
+✅ **FIX de escala: paginar el fetch de líneas del rollup (2026-06-29 · sesión fix cap)** — tras el volcado,
+   en BF muchas partidas salían en **$0** (Carpinterias, Albercas, Jardinería, Elevador, Exteriores, Garden,
+   Infraestructura, Otros, Contingencias; Griferia parcial). **Causa raíz:** `loadVigenteLines` (`lib/buyout/
+   rollup.ts`) traía las líneas vigentes en **UNA consulta sin paginar**, y PostgREST corta a **`max_rows=1000`**
+   (`supabase/config.toml`); BF tiene **1,732** líneas → se descartaban ~732 en silencio. Los **datos en la base
+   estaban completos** (la migración cuadró en SQL, donde el cap no aplica); solo el fetch se truncaba. **Fix
+   (solo código, 1 archivo):** helper `fetchAllRows` que pagina con `.range(off, off+999)` en bloques de 1000
+   hasta una página incompleta, aplicado a las 3 queries (items · cotizaciones · líneas) con **orden estable**
+   (`id` como desempate; las 1,732 líneas comparten `created_at` por venir de un solo INSERT, así que sin orden
+   único se duplicarían/saltarían filas entre páginas). **Sin migración, sin cambio de esquema/datos, sin tocar
+   la lógica del rollup** (solo se asegura traer TODAS las filas). Verificado: test del mecanismo con la forma
+   real de BF → nuevo trae 1,732 (sin dup/saltos, todas las partidas completas), el viejo perdía exactamente
+   esas 10 partidas. **L3 idéntico** (usa el mismo loader; <1000 líneas → una sola página, orden por `created_at`
+   preservado) · **Pagos intacto** (no usa código de Buy-Out). Gate verde. Detalle abajo.
 ⏸️ **PAUSA para que Alfonso revise BF en el navegador** (Resumen + Partida de Beachfront ya cargan con su
-   volcado). Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
+   volcado y suman TODAS sus líneas). Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
    Pendiente Resumen: modo **Qué falta**. Pendiente BF (si se decide tras revisar): **desglose por depto**
    (hoy torre/piso/depto van como texto en la línea, grano = total del proyecto).
 
@@ -182,6 +196,7 @@
     - **(sesión BF exacto, 2026-06-29):** `fix(buyout): catálogo de BF exacto al tablero (11 capítulos, desde doc)`. **Local, sin push.**
     - **(sesión preview BF, 2026-06-29):** `docs(buyout): preview de volcado BF (etapa 2a)`. **Local, sin push.**
     - **(sesión volcado BF, 2026-06-29):** `feat(buyout): volcado de conceptos de BF (etapa 2b)` (migración `20260629160000` + STATE). **Local, sin push.**
+    - **(sesión fix cap, 2026-06-29):** `fix(buyout): paginar fetch de líneas del rollup (cap max_rows) [escala BF]` (`src/lib/buyout/rollup.ts` + STATE; solo código, sin migración). **Local, sin push.**
 - Sin tocar: ninguna tabla, RLS, migración ni componente de **Pagos**.
 - Nota: apareció un archivo `docs/future-modules/backlog-ideas.md` sin trackear (creado fuera de esta sesión). **Lo dejé sin tocar.**
 
@@ -1450,3 +1465,39 @@ por-proyecto). `tsc`/`biome`/`build` verdes; `migration list` → 160000 local y
 - Revisar **Resumen + Partida de Beachfront** en el navegador (cuadre por partida = el del preview).
 - Si quiere, decidir **desglose por depto** (hoy texto en la línea). La línea colapsada (1 por las 6 partidas
   con drift) muestra cant=1/MXN con el total correcto — es el único punto de menor fidelidad de captura.
+
+## Fix de escala — paginar el fetch de líneas del rollup (2026-06-29)
+
+**Bug:** en BF, partidas en **$0** pese a tener datos cargados. **Causa raíz:** `loadVigenteLines`
+(`src/lib/buyout/rollup.ts`) cargaba ítems/cotizaciones/líneas vigentes en **3 consultas sin paginar**, y el
+API PostgREST trunca a **`max_rows = 1000`** (`supabase/config.toml:18`, default de Supabase). BF tiene
+**1,732** líneas vigentes > 1000 → ~732 se descartaban en silencio; las partidas cuyas líneas caían tras la
+fila 1000 (Carpinterias, Albercas, Jardinería, Elevador, Exteriores, Garden, Infraestructura, Otros,
+Contingencias; Griferia parcial) salían en $0 con estado vacío (`aggs.get(p.id) ?? emptyAgg` en
+`buyout/page.tsx`). Es un problema de **escala** que L3 (pocas líneas) nunca tocó. La validación del volcado
+sumó las líneas **en SQL** (sin cap) → por eso cuadró y no detectó el truncado del fetch.
+
+### Fix (1 archivo, solo código — `src/lib/buyout/rollup.ts`)
+- Helper **`fetchAllRows(page)`**: itera `page(from, from+999)` acumulando bloques de hasta 1000 filas hasta
+  recibir una página incompleta → trae TODAS las filas sin depender de `max_rows`. 8 líneas, sin `any`.
+- Aplicado a las **3 consultas** de `loadVigenteLines` (items · cotizaciones · líneas), cada una con
+  `.range(from, to)` por página.
+- **Orden estable obligatorio** para paginar sin saltos/duplicados: se agregó `.order("id")` a items y
+  cotizaciones, y `.order("created_at").order("id")` a líneas (las 1,732 líneas comparten `created_at` por
+  venir de un solo INSERT del volcado → `created_at` solo no desempata). El `id` (uuid, único) garantiza el
+  orden total.
+- **Lógica del rollup intacta:** `aggregateLines`/`difPct`/el `.map` no se tocaron; la agregación es
+  independiente del orden (suma, fecha máx, set de proveedores). Solo cambió *cuántas* filas llegan.
+
+### Verificación
+- **Gate verde:** `tsc --noEmit` ✓ · `biome check src` ✓ (158 archivos) · `pnpm build` ✓ (11 rutas).
+- **Test del mecanismo** (forma real de BF: conteos de línea por partida del volcado, PostgREST simulado con
+  cap 1000): `fetchAllRows` → **1,732 filas, sin duplicados ni saltos, las 31 partidas completas**; el fetch
+  viejo (1 query) → 1,000 filas, perdiendo exactamente **10 partidas** (Griferia parcial 122/514 + Carpinterias,
+  Albercas, Jardinería, Elevador, Exteriores, Garden, Infraestructura, Otros, Contingencias en 0) = el bug
+  reportado. Con todas las líneas cargadas y el rollup sin cambios, BF suma su total real (~$420M; cuadre por
+  partida = el verificado en SQL por la migración del volcado).
+- **No hubo read-back en vivo:** service_role REST sigue bloqueado para las tablas `buyout_*` (como en sesiones
+  previas); la verificación es el test del mecanismo + el cuadre SQL ya probado por la migración 2b.
+- **Aislamiento:** un solo archivo de Buy-Out; **L3 idéntico** (mismo loader, <1000 líneas → una página, orden
+  `created_at` preservado) · **Pagos intacto** (no usa código de Buy-Out) · sin migración / sin tocar datos.

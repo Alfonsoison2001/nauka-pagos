@@ -170,6 +170,30 @@ export function difPct(total: number, base: number): number | null {
   return total / base - 1
 }
 
+/** Tamaño de página: el cap por defecto de PostgREST (`max_rows` en config.toml). */
+const PAGE_SIZE = 1000
+
+/**
+ * Trae TODAS las filas de una consulta paginando con `.range()` en bloques de
+ * PAGE_SIZE hasta recibir una página incompleta. Sortea el cap `max_rows` de
+ * PostgREST (que trunca en silencio a 1000 filas) sin depender de su valor → un
+ * proyecto con >1000 líneas (BF: 1,732) ya no pierde filas. El builder se
+ * reconstruye por página (un `.range()` ya aplicado no se reusa) y la consulta
+ * DEBE traer un orden ESTABLE/único para no saltar ni duplicar entre páginas.
+ */
+async function fetchAllRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null }>,
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data } = await page(from, from + PAGE_SIZE - 1)
+    const batch = data ?? []
+    rows.push(...batch)
+    if (batch.length < PAGE_SIZE) break
+  }
+  return rows
+}
+
 /**
  * Carga las líneas de la cotización VIGENTE de cada concepto del proyecto, en una
  * sola pasada (item → cotización is_selected → renglón), con su TC y partida.
@@ -181,37 +205,47 @@ export async function loadVigenteLines(
   fxList: CurrencyOption[],
   partidaNombreById: Map<string, string>,
 ): Promise<VigenteLine[]> {
-  const { data: itemRows } = await sb
-    .from("buyout_item")
-    .select("id, partida_catalog_id")
-    .eq("project_id", projectId)
-    .is("deleted_at", null)
-  const items = itemRows ?? []
+  const items = await fetchAllRows((from, to) =>
+    sb
+      .from("buyout_item")
+      .select("id, partida_catalog_id")
+      .eq("project_id", projectId)
+      .is("deleted_at", null)
+      .order("id")
+      .range(from, to),
+  )
   const itemPartida = new Map(
     items.map((i) => [i.id as string, i.partida_catalog_id as string]),
   )
   const itemIds = items.map((i) => i.id as string)
   if (itemIds.length === 0) return []
 
-  const { data: quoteRows } = await sb
-    .from("buyout_quote")
-    .select("id, item_id, supplier_id, quote_date, kind, contratado, pdf_url")
-    .in("item_id", itemIds)
-    .eq("is_selected", true)
-    .is("deleted_at", null)
-  const quotes = quoteRows ?? []
+  const quotes = await fetchAllRows((from, to) =>
+    sb
+      .from("buyout_quote")
+      .select("id, item_id, supplier_id, quote_date, kind, contratado, pdf_url")
+      .in("item_id", itemIds)
+      .eq("is_selected", true)
+      .is("deleted_at", null)
+      .order("id")
+      .range(from, to),
+  )
   const quoteById = new Map(quotes.map((q) => [q.id as string, q]))
   const quoteIds = quotes.map((q) => q.id as string)
   if (quoteIds.length === 0) return []
 
-  const { data: lineRows } = await sb
-    .from("buyout_line")
-    .select(
-      "id, quote_id, concepto, detalle, villa_casita, piso, depto, proveedor, unidad, cantidad, moneda, unitario, sobrecosto_pct, iva_pct, notas",
-    )
-    .in("quote_id", quoteIds)
-    .is("deleted_at", null)
-    .order("created_at")
+  const lineRows = await fetchAllRows((from, to) =>
+    sb
+      .from("buyout_line")
+      .select(
+        "id, quote_id, concepto, detalle, villa_casita, piso, depto, proveedor, unidad, cantidad, moneda, unitario, sobrecosto_pct, iva_pct, notas",
+      )
+      .in("quote_id", quoteIds)
+      .is("deleted_at", null)
+      .order("created_at")
+      .order("id")
+      .range(from, to),
+  )
 
   // BO-01: el factor 1 solo es legítimo para MXN. Para una divisa (USD/EUR) sin TC
   // configurado NO caemos a 1 (mostraría un monto ~17-20× subestimado): devolvemos
@@ -222,7 +256,7 @@ export async function loadVigenteLines(
       ? 1
       : (fxList.find((c) => c.currency === cur)?.rate ?? Number.NaN)
 
-  return (lineRows ?? []).map((l) => {
+  return lineRows.map((l) => {
     const q = quoteById.get(l.quote_id as string)
     const itemId = (q?.item_id as string) ?? ""
     const partidaId = itemPartida.get(itemId) ?? ""
