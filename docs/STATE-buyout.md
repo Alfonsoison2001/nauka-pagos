@@ -138,6 +138,17 @@
    (DO-block transaccional) aplicadas a prod (`db push`, opción B). **Pagos intacto**; BF separado de L3
    (cada proyecto ve solo lo suyo). Detalle abajo. **NO es el volcado de conceptos/cotizaciones reales de BF
    (etapa 2).**
+✅ **Catálogo de BF EXACTO al doc oficial (2026-06-29 · sesión BF exacto)** — el seed del cimiento tenía
+   desviaciones vs el tablero real (12 capítulos con GARDEN/INFRAESTRUCTURA promovidos y PILAS bajo OBRA
+   CIVIL; partidas Closets/FFE del glosario). Se dejó el catálogo de BF **EXACTAMENTE** como
+   `docs/future-modules/buyout-catalogo-BF.md` (confirmado por Alfonso): **11 capítulos** (DISEÑO · PILAS ·
+   OBRA CIVIL · MEP · ACABADOS · COLOCACIONES · ALBERCAS · JARDINERIA Y RIEGO · ELEVADOR · EXTERIORES ·
+   OTROS), **30 partidas** (PILAS = capítulo propio; GARDEN AND PRIVACY WALLS e INFRAESTRUCTURA = partidas
+   bajo EXTERIORES; **sin Closets/FFE** como partida), **64 conceptos** ("Closets" sigue como concepto de
+   CARPINTERIAS; OTROS = Otros · Fire Pit · Acustica). **1 migración** `20260629150000` que **limpia**
+   (hard delete, seguro: 0 `buyout_item` de BF) y **re-siembra desde el doc**; CASCADE borró conceptos+bases
+   viejos; **TC, área y 8 deptos conservados**; bases re-mapeadas (Σ = 427,161,130 = TOTAL del tablero). DO-block
+   transaccional verificó 11/30/64/30 + L3 intacto (24 part / 8 cap). **L3 idéntico · Pagos intacto · cero DDL.**
 ⏸️ **PAUSA para que Alfonso pruebe.** Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se
    marca al editar la línea en la Partida). Pendiente Resumen: modo **Qué falta** (nota libre por partida
    no contratada). Pendiente BF: **etapa 2** (volcado de conceptos/cotizaciones reales y, si se decide,
@@ -155,6 +166,7 @@
     - `b6108e5 fix(buyout): atomicidad de marcar-vigente y captura sin perder línea [BO-09/10]`
     - **(sesión cimiento BF, 2026-06-29):** `feat(buyout): catálogo de partidas por-proyecto` +
       `feat(buyout): sembrar cimiento de Beachfront` (2 commits). **Local, sin push.**
+    - **(sesión BF exacto, 2026-06-29):** `fix(buyout): catálogo de BF exacto al tablero (11 capítulos, desde doc)`. **Local, sin push.**
 - Sin tocar: ninguna tabla, RLS, migración ni componente de **Pagos**.
 - Nota: apareció un archivo `docs/future-modules/backlog-ideas.md` sin trackear (creado fuera de esta sesión). **Lo dejé sin tocar.**
 
@@ -1303,3 +1315,65 @@ tablero por color de relleno** de la col B: navy `FF002060` = capítulo, azul `F
 1. `feat(buyout): catálogo de partidas por-proyecto` — migración 130000 + 4 archivos `src/`.
 2. `feat(buyout): sembrar cimiento de Beachfront` — migración 140000 + `buyout-BF-estructura.md` +
    `reference/NAUKA - BUY OUT BF 290626.xlsx` (fuente) + este STATE.
+
+## Catálogo de BF EXACTO al doc oficial (2026-06-29, sesión BF exacto)
+
+Fuente de verdad: `docs/future-modules/buyout-catalogo-BF.md` (estructura oficial confirmada por Alfonso).
+El seed del cimiento (`20260629140000`) había **re-interpretado el tablero**; esta sesión deja el catálogo
+de BF **idéntico al doc** y nada más (solo el proyecto Beachfront).
+
+### Qué cambió vs el cimiento previo
+- **Capítulos 12 → 11.** Se quitan GARDEN AND PRIVACY WALLS e INFRAESTRUCTURA como capítulos; **PILAS pasa
+  a ser capítulo propio** (antes estaba dentro de OBRA CIVIL). Orden: DISEÑO · PILAS · OBRA CIVIL · MEP ·
+  ACABADOS · COLOCACIONES · ALBERCAS · JARDINERIA Y RIEGO · ELEVADOR · EXTERIORES · OTROS.
+- **Partidas 32 → 30.** Se **eliminan Closets y FFE** como partidas (eran del glosario, no del tablero).
+  **GARDEN AND PRIVACY WALLS** e **INFRAESTRUCTURA** pasan a ser **partidas dentro de EXTERIORES**.
+- **Conceptos 63 → 64.** OTROS ahora = **Otros · Fire Pit · Acustica** (el doc agrega "Otros"). "Closets"
+  permanece como **concepto** dentro de CARPINTERIAS (no como partida).
+- **Bases re-mapeadas** a las 30 partidas correctas; **Σ = 427,161,130** (= TOTAL PRESUPUESTO del tablero;
+  Closets/FFE eran 0, así que la suma no cambia). **TC (USD 17.5 / EUR 22), área (2927.6) y 8 deptos
+  se conservaron** (no se tocaron).
+
+### Migración (1 archivo, aplicada a prod con `db push` — opción B)
+`supabase/migrations/20260629150000_buyout_bf_catalog_exact.sql`, **sin DDL** (solo datos), aislada por
+`project_id` de Beachfront:
+1. **Guard**: aborta si BF no existe o si tiene ≥1 `buyout_item` (no es seguro re-sembrar con datos).
+2. **Limpieza** (hard delete): `DELETE buyout_partida_catalog WHERE project_id=BF` → **CASCADE** borra sus
+   conceptos y bases; `DELETE buyout_chapter WHERE project_id=BF`. (Seguro: BF no tiene transaccionales —
+   etapa 2 pendiente.)
+3. **Re-siembra desde el doc**: 11 capítulos, 30 partidas (cada una a su capítulo), 64 conceptos, 30 bases.
+4. **DO-block de auto-verificación transaccional**: exige 11/30/64/30 + fx 3 + deptos 8 + meta 1 + **sin
+   Closets/FFE** + toda partida bajo uno de los 11 capítulos + **L3 intacto (24 partidas / 8 capítulos)**.
+   Cualquier desviación → `RAISE EXCEPTION` → rollback de TODO. Aplicó con NOTICE:
+   `BF catálogo EXACTO OK: 11 cap / 30 part / 64 con / 30 bases (Σ=427161130.03) / fx 3 / deptos 8 / meta 1 ·
+   L3 intacto (24 part / 8 cap)`.
+
+### Jerarquía final de BF (11 → 30 → 64)
+- **DISEÑO**: ARQUITECTURA (5) · INGENIERIAS Y TOPOGRAFIA (9)
+- **PILAS**: PILAS (1)
+- **OBRA CIVIL**: CONDICIONES GENERALES (1) · PRELIMINARES (2) · EXCAVACION (1) · OBRA CIVIL (1) ·
+  ALBAÑILERIA (1) · IMPERMEABILIZACION (1)
+- **MEP**: INSTALACIONES ELECTRICAS (1) · INSTALACIONES HIDRAULICAS (1) · INSTALACIONES GAS (1) ·
+  AUTOMATIZACION Y CONTROL ILUMINACION (1) · AIRE ACONDICIONADO Y EXTRACCION (1) · ILUMINACION (1)
+- **ACABADOS**: ACABADOS (1)
+- **COLOCACIONES**: HERRERIA (2) · SUMINISTRO Y COLOCACION DE MARMOL (2) · MADERA DE INGENIERIA (2) ·
+  VIDRIOS Y CANCELES (4) · COCINAS (3) · GRIFERIA Y ACCESORIOS DE BAÑO (1) · CARPINTERIAS (6, incl. "Closets")
+- **ALBERCAS**: ALBERCAS (1)
+- **JARDINERIA Y RIEGO**: JARDINERIA Y RIEGO (2)
+- **ELEVADOR**: ELEVADOR (1)
+- **EXTERIORES**: EXTERIORES (6) · GARDEN AND PRIVACY WALLS (1) · INFRAESTRUCTURA (1)
+- **OTROS**: OTROS (3: Otros · Fire Pit · Acustica)
+
+### Verificación
+- **DB (autoritativa):** DO-block transaccional pasó (arriba). `supabase migration list` → 150000 local y
+  remoto en sync.
+- **Aislamiento:** todo filtra por `project_id` de BF; L3 verificado intacto (24/8) dentro de la propia
+  migración; Pagos sin tocar (cero DDL, cero tablas/RLS/lógica de Pagos).
+- **Gate local verde:** `tsc --noEmit` ✓ (0) · `biome check src/` ✓ (158 archivos, 0 errores; los 2 de
+  biome viven en `scripts/backup-storage.mjs`, fuera de alcance / sin trackear) · `pnpm build` ✓
+  ("Compiled successfully"). Sin cambios de código esta sesión (solo la migración de datos).
+- Render visual de L3-idéntico / BF-exacto queda tras login/RLS = **prueba de Alfonso**.
+
+### Commit (feat/buyout, sin push)
+`fix(buyout): catálogo de BF exacto al tablero (11 capítulos, desde doc)` — migración 150000 +
+`buyout-catalogo-BF.md` (doc fuente) + este STATE.
