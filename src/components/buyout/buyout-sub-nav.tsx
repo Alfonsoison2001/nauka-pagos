@@ -11,6 +11,7 @@ const TABS = [
   { slug: "", label: "Resumen" },
   { slug: "partida", label: "Partida" },
   { slug: "subcategoria", label: "Subcategoría" },
+  { slug: "glosario", label: "Glosario" },
 ] as const
 
 export function BuyoutSubNav({ projectId }: { projectId: string }) {

@@ -6,6 +6,7 @@ import { calcLinea } from "@/lib/buyout/calc"
 import { loadVigenteLines, type VigenteLine } from "@/lib/buyout/rollup"
 import { createClient } from "@/lib/supabase/server"
 import { cn, formatMXN } from "@/lib/utils"
+import { NuevaPartidaButton } from "../glosario/nueva-partida-button"
 import type { ConceptoOption, CurrencyOption } from "./actions"
 import { BuyoutPdfCell } from "./buyout-pdf-cell"
 import { DeleteLineaButton } from "./delete-linea-button"
@@ -190,12 +191,17 @@ export default async function BuyoutPartidaPage({
   const groups = buildGroups(chapters, partidas, totalsByPartida)
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-base font-semibold text-nauka-dark">Partidas</h2>
-        <p className="text-sm text-muted-foreground">
-          Elige una partida para capturar y ver sus conceptos (formato verde de
-          22 columnas). El total es la suma de sus conceptos vigentes.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-nauka-dark">Partidas</h2>
+          <p className="max-w-xl text-sm text-muted-foreground">
+            Elige una partida para capturar y ver sus conceptos (formato verde
+            de 22 columnas). El total es la suma de sus conceptos vigentes.
+          </p>
+        </div>
+        {admin ? (
+          <NuevaPartidaButton projectId={id} chapterNames={chapters} />
+        ) : null}
       </div>
       <PartidaCards projectId={id} groups={groups} />
     </div>

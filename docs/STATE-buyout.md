@@ -1,6 +1,6 @@
 # STATE — Módulo Buy-Out
 
-> Bitácora de avance del módulo. Última actualización: **2026-06-29**.
+> Bitácora de avance del módulo. Última actualización: **2026-07-02**.
 > Spec: [`docs/SPEC-buyout.md`](SPEC-buyout.md) · Análisis del Excel: [`docs/future-modules/buyout-L3-estructura.md`](future-modules/buyout-L3-estructura.md).
 
 ## Estado actual
@@ -230,14 +230,60 @@
    >1, madurez/contratación dominantes por dinero. Índice pasa de 109 filas (50 items duplicados) a **55 únicas**.
    **Cero cambio de datos/cuadre** (solo el armado del índice). Gate verde (`tsc`/`biome`/`build`). **L3 idéntico**
    (mismo loader; sin consolidación → 1 línea por item, sin cambio) · **Pagos intacto**.
-⏸️ **PAUSA para que Alfonso revise BF en el navegador** (Contingencias fuera del total + desglose por ejes +
-   conceptos descriptivos; Subcategoría ya sin warning de key). Pendiente: confirmar Herreria. Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
+✅ **Sección GLOSARIO — administración de catálogos por-proyecto (2026-07-02 · rama `feat/buyout-mejoras`)** —
+   nueva **4ª sub-pestaña** del módulo (Resumen · Partida · Subcategoría · **Glosario**), ruta
+   `/proyectos/[id]/buyout/glosario`. **Lectura para todos; edición admin-only** (guard server-side
+   `getMyProfile().role==='admin'` en cada acción + RLS `is_admin()` de las tablas). Administra los catálogos
+   del **proyecto actual** (todo scopeado por `project_id`; L3/BF no se mezclan). **Sin migración** (reusa
+   `buyout_chapter` / `buyout_partida_catalog` / `buyout_concepto_catalog` del Slice 1/2c; ya son por-proyecto).
+   **(1) CAPÍTULOS:** listar, agregar (nombre + orden), renombrar (re-apunta las partidas que colgaban del
+   nombre viejo, porque `chapter_default` es texto, no FK → no quedan huérfanas), reordenar ↑/↓ (normaliza
+   `orden` a 0..n-1, sin empates), soft-delete (bloqueado si tiene partidas activas). **(2) PARTIDAS:** listar
+   por capítulo, agregar (elegir capítulo + nombre + unidad/driver opcional → `buyout_partida_catalog` con el
+   `project_id` actual), editar = renombrar + mover de capítulo + driver en un solo diálogo, soft-delete (nunca
+   hard-delete; si tiene conceptos capturados avisa en la confirmación; los `buyout_item` quedan recuperables
+   pero dejan de verse). Nombres duplicados → mensaje legible (índice único `23505`). **(3) ATAJO "+ Nueva
+   partida"** en la pantalla Partida (vista de tarjetas, admin): abre el **MISMO** diálogo de crear partida y
+   **reusa la misma Server Action** `createPartida` (cero lógica duplicada); al guardar aparece la tarjeta
+   nueva (revalidate). **UI** con tokens/estilo NAUKA (tarjetas `nauka-card-border`, diálogos base-ui,
+   RHF+Zod cliente+servidor). Las 3 acciones que mutan catálogo revalidan Resumen · Partida · Glosario.
+   **Pagos intacto** (cero archivos/esquema/RLS de Pagos); **Resumen/rollup sin tocar** (solo lee el catálogo
+   ya editable). Gate verde: `tsc` ✓ · `biome` ✓ (169 archivos) · `pnpm build` ✓ (ruta `/buyout/glosario`
+   dinámica; las de Pagos idénticas). Detalle abajo.
+⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
+   de capítulos y partidas + atajo "+ Nueva partida" en Partida). Pendiente BF anterior: confirmar Herreria.
+   Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
    Pendiente Resumen: modo **Qué falta**. Pendiente BF (si se decide tras revisar): **desglose por depto**
    (hoy torre/piso/depto van como texto en la línea, grano = total del proyecto).
+   **Futuro Glosario (no en esta sesión):** conceptos, proveedores, unidades, monedas+TC, áreas y deptos.
+
+### Sesión Glosario — archivos (2026-07-02)
+
+Todo bajo `src/app/proyectos/[id]/buyout/glosario/` salvo 2 toques quirúrgicos de nav/atajo:
+- `glosario/actions.ts` (nuevo) — Server Actions con Zod + guard admin: `createChapter` · `renameChapter` ·
+  `moveChapter` · `deleteChapter` · `createPartida` · `updatePartida` · `deletePartida`. Helpers `requireAdmin`,
+  `dupMessage` (23505), `revalidateBuyout` (Resumen+Partida+Glosario).
+- `glosario/page.tsx` (nuevo) — Server Component: carga capítulos + partidas + conteos (conceptos del catálogo
+  y `buyout_item` capturados) del proyecto; agrupa por capítulo (+ "Sin capítulo"); render read-only para todos,
+  controles admin condicionales.
+- `glosario/partida-dialog.tsx` (nuevo, **reutilizable**) — diálogo crear/editar partida (RHF+Zod), usado por el
+  Glosario **y** por el atajo de Partida. `chapter-dialog.tsx` (crear/renombrar capítulo).
+- Botones cliente: `nueva-partida-button.tsx` (reusado en el atajo) · `edit-partida-button.tsx` ·
+  `delete-partida-button.tsx` · `nuevo-capitulo-button.tsx` · `edit-capitulo-button.tsx` ·
+  `reordenar-capitulo.tsx` · `delete-capitulo-button.tsx`.
+- `components/buyout/buyout-sub-nav.tsx` — **+1 tab** `{ slug: "glosario", label: "Glosario" }` (las otras 3 sin tocar).
+- `buyout/partida/page.tsx` — en la vista de tarjetas (admin) monta `NuevaPartidaButton` (mismo diálogo/acción);
+  el resto de la pantalla Partida intacto.
 
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
-- Rama de trabajo: **`feat/buyout`**. **Nunca se hizo push.** `main` intacto salvo el commit de docs operativos que pediste.
+- **Buy-Out ya está en `main` (publicado).** Las **mejoras** post-publicación viven en la rama
+  **`feat/buyout-mejoras`** (creada desde `main`), commits locales, **NUNCA push** (Alfonso decide cuándo
+  desplegar). Solo se toca Buy-Out; nunca `main` directo ni Pagos.
+  - `feat/buyout-mejoras` → **(sesión Glosario, 2026-07-02):** `feat(buyout): sección Glosario — capítulos y
+    partidas` (dir `glosario/` + 1 tab en `buyout-sub-nav` + atajo en `partida/page` + STATE; **sin migración**).
+    **Local, sin push.**
+- Rama histórica (pre-merge a main): **`feat/buyout`**.
 - Commits hechos:
   - `main` → `163c597 docs: runbook rotación keys + prompt auditoría` (solo `docs/runbook-rotacion-keys.md` + `docs/prompt-auditoria-calidad.md`). **Local, sin push.**
   - `feat/buyout` (creada desde `main`):
