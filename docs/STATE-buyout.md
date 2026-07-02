@@ -285,6 +285,41 @@
    `"10mb"` según lo pedido. Gate verde: `tsc` ✓ · `biome check next.config.ts` ✓ · `pnpm build` ✓ (11 rutas, Pagos
    idénticas). (Los 2 errores de `biome check` global son del script **sin trackear** `scripts/backup-storage.mjs`,
    ajeno a este cambio — no se tocó.)
+✅ **Subida de PDF DIRECTA a Storage — hasta 50 MB (2026-07-02 · rama `feat/buyout-mejoras`)** — el PDF de las
+   líneas de Buy-Out ya **no viaja por el Server Action**: el **navegador lo sube DIRECTO** a Supabase Storage
+   (bucket `proyectos`, prefijo `buyout/`, con el **cliente browser** `@/lib/supabase/client`) y el Server Action
+   recibe **solo la RUTA** (string). Así el body del Server Action queda chico y se **saltan** el límite de 1 MB de
+   Server Actions **y** el ~4.5 MB de Vercel; soporta archivos **hasta 50 MB**. Motivación: en prod los PDFs >4.5 MB
+   fallaban por el límite de Vercel (y >1 MB por el de Server Actions, ya subido a 10 MB en la sesión previa; esto lo
+   reemplaza por el mecanismo correcto). **Flujo nuevo:** (1) al enviar el diálogo, si hay archivo se **valida en
+   cliente** (tipo PDF por MIME o extensión + tamaño **≤ 50 MB**, mensaje inline junto al input); (2) se **sube**
+   con `storage.from("proyectos").upload(\`${projectId}/buyout/${crypto.randomUUID()}.pdf\`, file, {contentType:
+   "application/pdf"})` — la **sesión autenticada** hace que la **RLS admin-only** siga aplicando (INSERT en
+   `storage.objects` = `bucket_id='proyectos' AND is_admin()`, path-agnóstica → un no-admin no puede subir); (3) se
+   pasa **solo `pdf_path`** en el FormData. **Best-effort:** si la subida falla, **NO** bloquea guardar la línea —
+   se guarda sin PDF y se **avisa** (ámbar) para reintentar desde "Editar" (mismo patrón que BO-10, pero el aviso
+   ahora lo genera el **cliente**). **Server Action:** `createLinea`/`addBudgetVersion` fijan `pdf_url` **en el
+   INSERT** de `buyout_quote` (la ruta se conoce de antemano → atómico, sin paso de subida posterior que huérfane el
+   renglón); `updateLinea` actualiza `pdf_url` solo si llega ruta nueva (sin ruta → conserva el PDF anterior).
+   Helper server **`safeBuyoutPdfPath(projectId, raw)`** valida que la ruta esté dentro de `\`${projectId}/buyout/\``,
+   termine en `.pdf` y no tenga `..` antes de guardarla (defensa en profundidad; el `SELECT` del bucket ya es abierto
+   a `authenticated`). Se **eliminaron** el `uploadBuyoutPdf` server-side (recibía el `File`) y `PDF_MAX_BYTES=10MB`
+   del server (el tamaño se valida en cliente; el bucket también tiene `file_size_limit=50MiB` en `config.toml`).
+   **Reemplazar PDF = igual que hoy** (adjuntar uno nuevo → nueva ruta → `pdf_url` reapunta). **"Quitar" PDF** no
+   existía en la UI y sigue sin existir (igual que hoy). **El puente a Pagos (`subcategoria/contrato-actions.ts`) NO
+   se tocó:** su `inheritPdf` **copia** un objeto ya en Storage server-side (download→upload entre rutas), no recibe
+   un `File` por el body → no tiene este problema y lee `pdf_url` como ruta opaca (sigue igual). **Tradeoff anotado:**
+   reemplazar un PDF deja el objeto anterior **huérfano** (ruta uuid nueva por subida; el `pdf_url` apunta al nuevo).
+   Inofensivo (Storage barato; las versiones ya acumulaban objetos); posible **follow-up:** job de limpieza de objetos
+   `buyout/` no referenciados por ningún `pdf_url`. **Sin migración** (reusa bucket/RLS existentes). **3 archivos**
+   (`partida/actions.ts`, `partida/linea-dialog.tsx`, `partida/linea-form.tsx`). Gate verde: `tsc` ✓ · `biome` ✓ (3
+   archivos) · `pnpm build` ✓ (11 rutas, Pagos idénticas). **Pagos intacto** (solo Buy-Out). **Verificación por
+   razonamiento** (no-interactivo, no se puede subir tras login): el `File` solo se pasa a `storage.upload` en el
+   cliente y **nunca** al FormData del Server Action (que solo lleva `pdf_path`) → el archivo va directo a Storage;
+   cap 50 MB en cliente + bucket; RLS admin en el INSERT de storage; `pdf_url` guardado y firmado/heredado igual que
+   antes. **Follow-up (NO en esta sesión): Pagos tiene el MISMO patrón latente** (comprobantes/carátulas suben por
+   Server Action en `flujo-de-pagos/actions.ts` y `presupuesto/actions.ts`) — migrar a subida directa cuando se
+   decida; **no se tocó ahora**.
 ⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
    de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
    Partida). Pendiente BF anterior: confirmar Herreria.
@@ -338,6 +373,10 @@ Todo bajo `src/app/proyectos/[id]/buyout/glosario/` (0 archivos de Pagos, 0 migr
   - `feat/buyout-mejoras` → **(sesión límite body, 2026-07-02):** `fix(buyout): subir límite de Server Actions a 10MB
     (uploads de PDF)` (solo `next.config.ts` → `experimental.serverActions.bodySizeLimit = "10mb"` + STATE; **sin
     migración**, **sin tocar Pagos**). **Local, sin push.**
+  - `feat/buyout-mejoras` → **(sesión subida directa, 2026-07-02):** `feat(buyout): subida de PDF directa a Storage
+    (hasta 50MB)` (`partida/actions.ts` + `partida/linea-dialog.tsx` + `partida/linea-form.tsx` + STATE; el archivo
+    sube directo del navegador a Storage, el Server Action recibe solo la ruta; **sin migración**, **sin tocar
+    Pagos**). **Local, sin push.**
 - Rama histórica (pre-merge a main): **`feat/buyout`**.
 - Commits hechos:
   - `main` → `163c597 docs: runbook rotación keys + prompt auditoría` (solo `docs/runbook-rotacion-keys.md` + `docs/prompt-auditoria-calidad.md`). **Local, sin push.**

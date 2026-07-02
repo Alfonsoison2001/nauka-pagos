@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { createClient } from "@/lib/supabase/client"
 import type {
   ActionResult,
   ConceptoOption,
@@ -25,6 +26,11 @@ import type {
 import { addBudgetVersion, createLinea, updateLinea } from "./actions"
 import type { FormValues } from "./linea-form"
 import { CREAR, formSchema, LineaFormFields, NONE, OTRO } from "./linea-form"
+
+// El PDF sube DIRECTO del navegador a Supabase Storage (bucket `proyectos`,
+// prefijo `buyout/`, RLS admin-only). Así el archivo NO viaja por el Server
+// Action → se saltan el límite de 1 MB de Server Actions y el ~4.5 MB de Vercel.
+const PDF_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 
 export type Catalogs = {
   conceptos: ConceptoOption[]
@@ -156,6 +162,8 @@ export function LineaDialog(props: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null)
   // Aviso no-fatal: la línea SÍ se guardó pero el PDF no subió (BO-10).
   const [submitWarning, setSubmitWarning] = useState<string | null>(null)
+  // Error de validación del archivo (tipo/tamaño) — se muestra junto al input.
+  const [pdfError, setPdfError] = useState<string | null>(null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -168,6 +176,7 @@ export function LineaDialog(props: Props) {
       form.reset(getDefaults(props))
       setSubmitError(null)
       setSubmitWarning(null)
+      setPdfError(null)
     }
     onOpenChange(next)
   }
@@ -189,9 +198,45 @@ export function LineaDialog(props: Props) {
       })
       return
     }
+    // Validación del archivo ANTES de subir: tipo PDF + tamaño ≤ 50 MB.
+    const pdfFile = pdfRef.current?.files?.[0] ?? null
+    if (pdfFile) {
+      const isPdf =
+        pdfFile.type === "application/pdf" ||
+        pdfFile.name.toLowerCase().endsWith(".pdf")
+      if (!isPdf) {
+        setPdfError("Solo se aceptan archivos PDF")
+        return
+      }
+      if (pdfFile.size > PDF_MAX_BYTES) {
+        setPdfError("El PDF debe pesar máximo 50 MB")
+        return
+      }
+    }
+
     setSubmitError(null)
     setSubmitWarning(null)
+    setPdfError(null)
     startTransition(async () => {
+      // 1) El PDF sube DIRECTO del navegador a Storage (si hay). Best-effort: si
+      //    falla, NO bloquea guardar la línea → se guarda sin PDF y se avisa para
+      //    reintentar desde “Editar”. La sesión autenticada aplica la RLS admin.
+      let pdfPath: string | null = null
+      let pdfWarn: string | null = null
+      if (pdfFile) {
+        const supabase = createClient()
+        const path = `${projectId}/buyout/${crypto.randomUUID()}.pdf`
+        const { error: upErr } = await supabase.storage
+          .from("proyectos")
+          .upload(path, pdfFile, {
+            contentType: "application/pdf",
+            upsert: false,
+          })
+        if (upErr) pdfWarn = upErr.message
+        else pdfPath = path
+      }
+
+      // 2) El Server Action recibe solo la RUTA (string), no el archivo.
       const fd = new FormData()
       const put = (k: string, val?: string) => {
         if (val !== undefined && val !== "") fd.append(k, val)
@@ -216,8 +261,7 @@ export function LineaDialog(props: Props) {
       put("madurez", v.madurez)
       put("contratado", v.contratado)
       put("quote_date", v.quote_date)
-      const pdfFile = pdfRef.current?.files?.[0]
-      if (pdfFile) fd.append("pdf", pdfFile)
+      if (pdfPath) fd.append("pdf_path", pdfPath)
 
       let result: ActionResult
       if (props.mode === "new") {
@@ -237,9 +281,15 @@ export function LineaDialog(props: Props) {
         setSubmitError(result.error)
         return
       }
+      // La línea SÍ se guardó. Si el PDF (opcional) no subió, avisamos y NO
+      // cerramos ni permitimos reenviar (evita duplicar la línea ya creada).
+      if (pdfWarn) {
+        setSubmitWarning(
+          `La línea se guardó, pero el PDF no se subió (${pdfWarn}). Ábrela con “Editar” para reintentar la subida.`,
+        )
+        return
+      }
       if (result.warning) {
-        // La línea SÍ se guardó; solo falló el PDF. No cerramos: mostramos el
-        // aviso y deshabilitamos reenviar (evita duplicar la línea ya creada).
         setSubmitWarning(result.warning)
         return
       }
@@ -270,6 +320,7 @@ export function LineaDialog(props: Props) {
             currencies={catalogs.currencies}
             pdfInputRef={pdfRef}
             hasPdf={hasPdf}
+            pdfError={pdfError}
             conceptoLocked={mode === "version"}
             conceptoName={conceptoName}
           />

@@ -47,8 +47,6 @@ export type LineaRow = {
 
 type Sb = Awaited<ReturnType<typeof createClient>>
 
-const PDF_MAX_BYTES = 10 * 1024 * 1024
-
 // ---------------------------------------------------------------------------
 // Schema (entradas del formato verde; los % llegan como 0-100 y se guardan como fracción)
 // ---------------------------------------------------------------------------
@@ -71,6 +69,10 @@ const baseSchema = z.object({
   madurez: z.enum(["parametrico", "ppto"]).default("ppto"),
   contratado: z.enum(["contratado", "no_contratado"]).default("no_contratado"),
   quote_date: z.string().trim().optional(),
+  // Ruta del PDF que el NAVEGADOR ya subió directo a Storage (no el archivo).
+  // El Server Action recibe solo el string → su body queda chico (se salta el
+  // límite de Server Actions y el de Vercel). Se valida su forma en el server.
+  pdf_path: z.string().trim().optional(),
 })
 
 const createSchema = baseSchema.extend({
@@ -98,6 +100,7 @@ function parseForm(fd: FormData): Record<string, unknown> {
     madurez: get("madurez") ?? "ppto",
     contratado: get("contratado") ?? "no_contratado",
     quote_date: get("quote_date"),
+    pdf_path: get("pdf_path"),
   }
 }
 
@@ -181,22 +184,22 @@ async function resolveUnitName(
   return (data?.nombre as string) ?? null
 }
 
-async function uploadBuyoutPdf(
-  sb: Sb,
-  file: File,
+/**
+ * El PDF ya NO viaja por el Server Action: el navegador lo sube DIRECTO a
+ * Storage (RLS admin-only) y nos manda solo su RUTA. Aquí solo validamos que la
+ * ruta tenga la forma esperada —dentro de la carpeta `buyout/` de ESTE
+ * proyecto, con sufijo `.pdf` y sin travesía de rutas— antes de guardarla en
+ * `buyout_quote.pdf_url`. Devuelve la ruta si es válida, o null (sin PDF).
+ */
+function safeBuyoutPdfPath(
   projectId: string,
-  quoteId: string,
-): Promise<{ path: string } | { error: string }> {
-  if (file.size > PDF_MAX_BYTES)
-    return { error: "El PDF debe pesar máximo 10 MB" }
-  if (file.type !== "application/pdf")
-    return { error: "Solo se aceptan archivos PDF" }
-  const path = `${projectId}/buyout/${quoteId}.pdf`
-  const { error } = await sb.storage
-    .from("proyectos")
-    .upload(path, file, { upsert: true, contentType: "application/pdf" })
-  if (error) return { error: `Error subiendo PDF: ${error.message}` }
-  return { path }
+  raw: string | undefined,
+): string | null {
+  if (!raw) return null
+  const prefix = `${projectId}/buyout/`
+  if (raw.startsWith(prefix) && raw.endsWith(".pdf") && !raw.includes(".."))
+    return raw
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -208,14 +211,13 @@ type ParsedLinea = z.infer<typeof baseSchema>
 
 async function insertVigenteQuoteAndLine(
   sb: Sb,
-  projectId: string,
   itemId: string,
   conceptoNombre: string,
   partidaNombre: string,
   sup: { id: string | null; nombre: string | null },
   villaCasita: string | null,
   d: ParsedLinea,
-  pdfFile: File | null,
+  pdfPath: string | null,
 ): Promise<ActionResult> {
   // Baja la vigente anterior del item (índice único: 1 vigente por item).
   await sb
@@ -238,6 +240,10 @@ async function insertVigenteQuoteAndLine(
       monto_sin_iva: d.cantidad * d.unitario,
       iva_pct: d.iva_pct / 100,
       notas: d.notas ?? null,
+      // El PDF ya está en Storage (subida directa del navegador). Su ruta se
+      // conoce ANTES del insert, así que va en la MISMA fila (atómico): no hay
+      // paso de subida posterior que pueda fallar y dejar el renglón huérfano.
+      pdf_url: pdfPath,
     })
     .select("id")
     .single()
@@ -250,9 +256,8 @@ async function insertVigenteQuoteAndLine(
     .update({ selected_quote_id: quoteId })
     .eq("id", itemId)
 
-  // La LÍNEA va PRIMERO: es el dato crítico (sin renglón, el join por quote_id no
-  // devuelve nada y el concepto DESAPARECE del rollup). El PDF es opcional y se
-  // sube DESPUÉS, sin poder tumbar la línea ya guardada (BO-10).
+  // La LÍNEA es el dato crítico: sin renglón, el join por quote_id no devuelve
+  // nada y el concepto DESAPARECE del rollup. Se inserta tras crear la cotización.
   const { error: lineErr } = await sb.from("buyout_line").insert({
     quote_id: quoteId,
     categoria: partidaNombre,
@@ -271,19 +276,6 @@ async function insertVigenteQuoteAndLine(
     notas: d.notas ?? null,
   })
   if (lineErr) return { error: lineErr.message }
-
-  // PDF al final: un fallo NO aborta (la línea ya está guardada). Se avisa para
-  // reintentar subiéndolo al editar la línea. El PDF es opcional/progresivo.
-  if (pdfFile && pdfFile.size > 0) {
-    const up = await uploadBuyoutPdf(sb, pdfFile, projectId, quoteId)
-    if ("error" in up) {
-      return {
-        ok: true,
-        warning: `La línea se guardó, pero el PDF no se subió (${up.error}). Ábrela con “Editar” para reintentar la subida.`,
-      }
-    }
-    await sb.from("buyout_quote").update({ pdf_url: up.path }).eq("id", quoteId)
-  }
 
   return { ok: true }
 }
@@ -330,18 +322,17 @@ export async function createLinea(
 
   const res = await insertVigenteQuoteAndLine(
     sb,
-    projectId,
     item.id as string,
     d.concepto,
     partidaNombre,
     sup,
     villaCasita,
     d,
-    formData.get("pdf") as File | null,
+    safeBuyoutPdfPath(projectId, d.pdf_path),
   )
   if ("error" in res) return res
   revalidatePath(`/proyectos/${projectId}/buyout/partida`)
-  return res // propaga el aviso si la línea se guardó pero el PDF no subió (BO-10)
+  return res
 }
 
 // ---------------------------------------------------------------------------
@@ -383,18 +374,17 @@ export async function addBudgetVersion(
 
   const res = await insertVigenteQuoteAndLine(
     sb,
-    projectId,
     itemId,
     d.concepto,
     partidaNombre,
     sup,
     villaCasita,
     d,
-    formData.get("pdf") as File | null,
+    safeBuyoutPdfPath(projectId, d.pdf_path),
   )
   if ("error" in res) return res
   revalidatePath(`/proyectos/${projectId}/buyout/partida`)
-  return res // propaga el aviso si la línea se guardó pero el PDF no subió (BO-10)
+  return res
 }
 
 // ---------------------------------------------------------------------------
@@ -434,11 +424,11 @@ export async function updateLinea(
     .is("deleted_at", null)
   if (quoteErr) return { error: quoteErr.message }
 
-  const pdfFile = formData.get("pdf") as File | null
-  if (pdfFile && pdfFile.size > 0) {
-    const up = await uploadBuyoutPdf(sb, pdfFile, projectId, quoteId)
-    if ("error" in up) return { error: up.error }
-    await sb.from("buyout_quote").update({ pdf_url: up.path }).eq("id", quoteId)
+  // El navegador ya subió el PDF nuevo directo a Storage; solo guardamos su ruta.
+  // Sin ruta nueva → NO se toca pdf_url (se conserva el PDF anterior, si había).
+  const pdfPath = safeBuyoutPdfPath(projectId, d.pdf_path)
+  if (pdfPath) {
+    await sb.from("buyout_quote").update({ pdf_url: pdfPath }).eq("id", quoteId)
   }
 
   const { error: lineErr } = await sb

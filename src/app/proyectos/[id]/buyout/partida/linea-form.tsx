@@ -183,6 +183,8 @@ type Props = {
   currencies: CurrencyOption[]
   pdfInputRef: RefObject<HTMLInputElement | null>
   hasPdf?: boolean
+  /** Error de validación del archivo (tipo/tamaño), mostrado bajo el input. */
+  pdfError?: string | null
   /** En modo "version" el concepto es fijo (misma subcategoría) → solo lectura. */
   conceptoLocked?: boolean
   conceptoName?: string
@@ -198,6 +200,7 @@ export function LineaFormFields({
   currencies,
   pdfInputRef,
   hasPdf,
+  pdfError,
   conceptoLocked,
   conceptoName,
 }: Props) {
@@ -434,11 +437,15 @@ export function LineaFormFields({
           accept="application/pdf"
           className="block text-sm file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-input file:bg-transparent file:px-3 file:py-1 file:text-sm file:font-medium hover:file:bg-accent"
         />
-        {hasPdf ? (
+        {pdfError ? (
+          <p className="text-xs text-destructive">{pdfError}</p>
+        ) : (
           <p className="text-xs text-muted-foreground">
-            Ya tiene PDF. Adjunta uno nuevo para reemplazarlo.
+            {hasPdf
+              ? "Ya tiene PDF. Adjunta uno nuevo para reemplazarlo. Máx. 50 MB."
+              : "PDF, máx. 50 MB. Se sube directo a Storage."}
           </p>
-        ) : null}
+        )}
       </div>
 
       {/* Cálculos en vivo (no se teclean — espejan las fórmulas del Excel). */}
