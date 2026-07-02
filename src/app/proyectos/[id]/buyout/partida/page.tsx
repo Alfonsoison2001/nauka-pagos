@@ -14,6 +14,7 @@ import type {
   UnitMode,
 } from "./actions"
 import { BuyoutPdfCell } from "./buyout-pdf-cell"
+import { ContratadoToggle } from "./contratado-toggle"
 import { DeleteLineaButton } from "./delete-linea-button"
 import { EditLineaButton } from "./edit-linea-button"
 import type { Catalogs } from "./linea-dialog"
@@ -524,7 +525,16 @@ function LineaRowCells({
         <EstadoBadge kind={linea.kind} />
       </td>
       <td className="px-3 py-2">
-        <EstadoBadge contratado={linea.contratado} />
+        {admin ? (
+          <ContratadoToggle
+            lineId={linea.id}
+            projectId={projectId}
+            contratado={linea.contratado}
+            concepto={linea.concepto}
+          />
+        ) : (
+          <EstadoBadge contratado={linea.contratado} />
+        )}
       </td>
       <td className="px-3 py-2">
         <div className="flex items-center justify-end gap-1">

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import { getMyProfile } from "@/lib/auth/roles"
 import { createClient } from "@/lib/supabase/server"
 
 // ---------------------------------------------------------------------------
@@ -206,6 +207,29 @@ function safeBuyoutPdfPath(
   const prefix = `${projectId}/buyout/`
   if (raw.startsWith(prefix) && raw.endsWith(".pdf") && !raw.includes(".."))
     return raw
+  return null
+}
+
+/**
+ * Revalida las 3 pantallas que muestran el estado agregado de una línea: el
+ * Resumen (badges/parcial/% Contratación), la Partida (tabla) y la Subcategoría
+ * (historial/índice). Un cambio de estado por línea debe reflejarse en las tres.
+ */
+function revalidateEstado(projectId: string) {
+  revalidatePath(`/proyectos/${projectId}/buyout`)
+  revalidatePath(`/proyectos/${projectId}/buyout/partida`)
+  revalidatePath(`/proyectos/${projectId}/buyout/subcategoria`)
+}
+
+/**
+ * Guard admin server-side (además lo refuerza la RLS `is_admin()` de las tablas
+ * `buyout_*`). Devuelve un mensaje si no es admin, o null si puede continuar.
+ */
+async function requireAdmin(): Promise<string | null> {
+  const profile = await getMyProfile()
+  if (profile?.role !== "admin") {
+    return "Solo un administrador puede editar el estado."
+  }
   return null
 }
 
@@ -459,12 +483,17 @@ export async function updateLinea(
       sobrecosto_pct: d.sobrecosto_pct / 100,
       iva_pct: d.iva_pct / 100,
       notas: d.notas ?? null,
+      // Estado POR LÍNEA (además del de la cotización, arriba): el rollup lee el
+      // de la línea con fallback a la cotización, así que sin esto el cambio de
+      // estado NO se reflejaba en líneas con estado por-línea (BF por torre).
+      kind: d.madurez,
+      contratado: d.contratado === "contratado",
     })
     .eq("id", lineId)
     .is("deleted_at", null)
   if (lineErr) return { error: lineErr.message }
 
-  revalidatePath(`/proyectos/${projectId}/buyout/partida`)
+  revalidateEstado(projectId)
   return { ok: true }
 }
 
@@ -521,6 +550,38 @@ export async function deleteLinea(
   }
 
   revalidatePath(`/proyectos/${projectId}/buyout/partida`)
+  return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
+// setLineaContratado — toggle RÁPIDO de contratación de UNA línea (admin-only)
+// ---------------------------------------------------------------------------
+
+/**
+ * Alterna Contratado/No contratado de UNA línea, escribiendo SOLO
+ * `buyout_line.contratado` (el estado por-línea que lee el rollup). No toca la
+ * cotización: así una cotización con varias líneas (BF por torre) puede quedar
+ * "parcial" (una torre contratada y otra no) sin que el toggle de una arrastre a
+ * la otra ni altere el puente a Pagos (que mira el estado de la cotización).
+ * No cambia montos ni el cuadre — solo el estado.
+ */
+export async function setLineaContratado(
+  lineId: string,
+  projectId: string,
+  contratado: boolean,
+): Promise<ActionResult> {
+  const guard = await requireAdmin()
+  if (guard) return { error: guard }
+  const sb = await createClient()
+
+  const { error } = await sb
+    .from("buyout_line")
+    .update({ contratado })
+    .eq("id", lineId)
+    .is("deleted_at", null)
+  if (error) return { error: error.message }
+
+  revalidateEstado(projectId)
   return { ok: true }
 }
 

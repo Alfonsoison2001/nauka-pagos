@@ -373,6 +373,26 @@
    y accesible. **1 archivo** (`buyout/partida/page.tsx`). Gate verde: `tsc` ✓ · `biome` ✓ · `pnpm build` ✓ (11
    rutas; las tablas de Pagos —`presupuesto`, `flujo-de-pagos`— **no se tocaron**, conservan su `max-h-[70vh]`).
    **Pagos intacto · L3/L44 sin cambios de orden.**
+✅ **Editar estado (contratación/madurez) POR LÍNEA (2026-07-02 · rama `feat/buyout-mejoras`)** — en la pantalla
+   Partida no se podía cambiar el estado de una línea: el rollup lee el estado a nivel **línea**
+   (`buyout_line.kind/contratado`, con fallback a la cotización), pero **`updateLinea` solo escribía en la
+   cotización** → en líneas con estado por-línea (BF agrupado por torre) el cambio **no se reflejaba**. Fix, **sin
+   migración** (los campos ya existen), **solo estado** (cero cambio de montos/cuadre). **(1) Diálogo de editar:** ya
+   tenía los selects **Madurez** (Paramétrico/Ppto) y **Contratación** (Contratado/No) y los enviaba; ahora
+   `updateLinea` **también escribe `buyout_line.kind` y `buyout_line.contratado`** de esa línea (además de la
+   cotización, que se conserva). **(2) Toggle rápido en la fila (admin):** la celda "CONTRATADO/NO CONTRATADO" pasó de
+   pill estático a **botón clicable** (`ContratadoToggle`) que alterna el estado de esa línea con **1 clic** vía nueva
+   Server Action **`setLineaContratado`** (guard admin `getMyProfile().role==='admin'` + RLS `is_admin()`). Escribe
+   **SOLO `buyout_line.contratado`** (no la cotización) → una cotización con varias líneas (BF por torre) puede quedar
+   **"parcial"** sin que el toggle de una torre arrastre a la otra, y **no altera el puente a Pagos** (que mira el
+   estado de la cotización). No-admin sigue viendo el pill estático (`EstadoBadge`). **(3) Revalidación:** `updateLinea`
+   y `setLineaContratado` ahora revalidan **Resumen (`/buyout`) + Partida + Subcategoría** (antes solo Partida) → la
+   tabla, los badges, el **"parcial"** y el **% de Contratación del Resumen** refrescan al instante. **3 archivos**
+   (`partida/actions.ts`: +import `getMyProfile`, helpers `revalidateEstado`/`requireAdmin`, `updateLinea` escribe
+   estado en la línea, +`setLineaContratado`; `partida/contratado-toggle.tsx` nuevo; `partida/page.tsx`: celda de
+   contratación clicable admin). Gate verde: `tsc` ✓ · `biome` ✓ · `pnpm build` ✓ (12 rutas; Pagos idénticas).
+   **Pagos intacto** (solo Buy-Out; el puente a Pagos no se tocó) · **L3 idéntico** (line-state NULL → cae a la
+   cotización, igual que hoy; al editar se materializa con el mismo valor).
 ⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
    de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
    Partida). Pendiente BF anterior: confirmar Herreria.
@@ -440,6 +460,10 @@ Todo bajo `src/app/proyectos/[id]/buyout/glosario/` (0 archivos de Pagos, 0 migr
     vertical en pantalla Partida` (solo `partida/page.tsx` + STATE; display-only: agrupa líneas por torre en modo BF
     + contenedor `overflow-x-auto` para scroll vertical de página; **sin migración**, **sin tocar Pagos**, **L3/L44
     sin cambios de orden**). **Local, sin push.**
+  - `feat/buyout-mejoras` → **(sesión estado por línea, 2026-07-02):** `fix(buyout): editar estado (contratación/
+    madurez) por línea` (`partida/actions.ts` +escribe `buyout_line.kind/contratado` en `updateLinea` + nueva
+    `setLineaContratado` + revalida Resumen; `partida/contratado-toggle.tsx` nuevo; `partida/page.tsx` celda
+    clicable admin + STATE; **sin migración**, **solo estado**, **sin tocar Pagos**). **Local, sin push.**
 - Rama histórica (pre-merge a main): **`feat/buyout`**.
 - Commits hechos:
   - `main` → `163c597 docs: runbook rotación keys + prompt auditoría` (solo `docs/runbook-rotacion-keys.md` + `docs/prompt-auditoria-calidad.md`). **Local, sin push.**
