@@ -320,6 +320,22 @@
    antes. **Follow-up (NO en esta sesión): Pagos tiene el MISMO patrón latente** (comprobantes/carátulas suben por
    Server Action en `flujo-de-pagos/actions.ts` y `presupuesto/actions.ts`) — migrar a subida directa cuando se
    decida; **no se tocó ahora**.
+✅ **Fix: `env.ts` client-safe — NEXT_PUBLIC inlineado en el bundle del cliente (2026-07-02 · `feat/buyout-mejoras`)** —
+   al probar la subida directa en el navegador, la pantalla **Partida** tiraba **"Missing required environment
+   variable: NEXT_PUBLIC_SUPABASE_URL"** (Runtime Error). **Causa raíz:** `src/lib/env.ts` leía las vars con acceso
+   **dinámico** `process.env[name]`; Next/Turbopack **solo inlinea** (reemplaza en el bundle del navegador) los
+   `NEXT_PUBLIC_*` accedidos de forma **literal** (`process.env.NEXT_PUBLIC_SUPABASE_URL`). Con el acceso dinámico el
+   valor quedaba `undefined` **en el cliente** → `required()` lanzaba. Server-side no fallaba (SSR daba 200) porque
+   ahí `process.env` está poblado en runtime. Era un **bug latente** del helper compartido: antes solo lo importaba
+   al bundle cliente la ruta `auth/recovery` (poco usada); la subida directa de Buy-Out (browser client de Supabase)
+   fue la primera en pegarle en una pantalla común. **Fix (1 archivo, `env.ts`):** `required(name, value)` recibe el
+   valor y el call site pasa la **referencia literal** `process.env.NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` → se
+   inlinea en el cliente. **Behavior-preserving server-side** (mismos valores, mismo throw si falta) y además
+   **arregla también `auth/recovery`** (que estaba roto en silencio). Verificado concretamente: tras `pnpm build`, el
+   host del proyecto Supabase **aparece ahora en un chunk estático de cliente** (`.next/static/chunks/…`), cosa que
+   con el acceso dinámico no ocurría. `.env.local` estaba bien (valor presente, https, no era un problema de config).
+   Gate verde: `tsc` ✓ · `biome` ✓ · `pnpm build` ✓. **Pagos intacto** (solo se tocó infra compartida de env, sin
+   cambiar lógica ni valores).
 ⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
    de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
    Partida). Pendiente BF anterior: confirmar Herreria.
@@ -377,6 +393,9 @@ Todo bajo `src/app/proyectos/[id]/buyout/glosario/` (0 archivos de Pagos, 0 migr
     (hasta 50MB)` (`partida/actions.ts` + `partida/linea-dialog.tsx` + `partida/linea-form.tsx` + STATE; el archivo
     sube directo del navegador a Storage, el Server Action recibe solo la ruta; **sin migración**, **sin tocar
     Pagos**). **Local, sin push.**
+  - `feat/buyout-mejoras` → **(fix env cliente, 2026-07-02):** `fix(env): inlinear NEXT_PUBLIC en el bundle del
+    cliente (acceso literal)` (`src/lib/env.ts` + STATE; arregla el Runtime Error de la subida directa; behavior-
+    preserving server-side; **sin migración**, **sin tocar lógica de Pagos**). **Local, sin push.**
 - Rama histórica (pre-merge a main): **`feat/buyout`**.
 - Commits hechos:
   - `main` → `163c597 docs: runbook rotación keys + prompt auditoría` (solo `docs/runbook-rotacion-keys.md` + `docs/prompt-auditoria-calidad.md`). **Local, sin push.**
