@@ -336,6 +336,24 @@
    con el acceso dinámico no ocurría. `.env.local` estaba bien (valor presente, https, no era un problema de config).
    Gate verde: `tsc` ✓ · `biome` ✓ · `pnpm build` ✓. **Pagos intacto** (solo se tocó infra compartida de env, sin
    cambiar lógica ni valores).
+✅ **Torre y Depto separados en la captura — SOLO BF (2026-07-02 · rama `feat/buyout-mejoras`)** — en el
+   formulario de línea (pantalla Partida), para **Beachfront** el dropdown "Villa/Casita" mostraba los **deptos**
+   (porque `buyout_unit` de BF son los 8 deptos), cuando ahí debe ir la **TORRE**. Se separó **POR PROYECTO**,
+   **sin migración** (reusa `buyout_unit`): el módulo detecta el modo desde `buyout_unit.tipo` — si hay filas
+   `tipo='depto'` → **modo "torre" (BF)**; si no → **modo "villa" (L3/L44)**. **En BF:** el campo se **renombra a
+   "Torre"** y ofrece **Torre 1 / Torre 2** (derivadas del prefijo `T1·`/`T2·` de los deptos), y **"Depto"** pasa de
+   texto libre a **dropdown de los 8 deptos** ("101 PB · 102/103 Dúplex · 201 PB · 202/203 Dúplex · 301 PB · 302/303
+   Dúplex · 401 PB · 402/403 Dúplex", derivados de `buyout_unit`). **En L3/L44:** idéntico a hoy (Villa/Casita por
+   `unit_id`, Depto texto libre). **Guardado:** la torre va **directo a `buyout_line.villa_casita`** como texto
+   ("Torre 1"/"Torre 2") — mismo formato que los datos ya volcados de BF, y el item **no** lleva `unit_id` (no hay
+   `buyout_unit` de torre); el depto va a `buyout_line.depto`. **Rollup/cuadre intactos:** `villa_casita` es solo
+   dimensión de despliegue (el rollup agrupa por partida y suma `total_mxn`, no por `villa_casita`), así que el
+   TOTAL y el $/m² no cambian. **Edición segura:** al editar una línea BF existente, la torre se resuelve contra sus
+   opciones y **conserva** un valor legacy no catalogado (p. ej. "Compartido") para no perderlo. **4 archivos**
+   (`partida/actions.ts` +campo `torre`→`villa_casita`; `partida/page.tsx` deriva torres/deptos de `buyout_unit`;
+   `partida/linea-form.tsx` render condicional por modo; `partida/linea-dialog.tsx` defaults + FormData). Gate verde:
+   `tsc` ✓ · `biome` ✓ (4 archivos) · `pnpm build` ✓ (11 rutas, Pagos idénticas). **Pagos intacto · L3/L44 sin
+   cambios visibles.**
 ⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
    de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
    Partida). Pendiente BF anterior: confirmar Herreria.
@@ -396,6 +414,9 @@ Todo bajo `src/app/proyectos/[id]/buyout/glosario/` (0 archivos de Pagos, 0 migr
   - `feat/buyout-mejoras` → **(fix env cliente, 2026-07-02):** `fix(env): inlinear NEXT_PUBLIC en el bundle del
     cliente (acceso literal)` (`src/lib/env.ts` + STATE; arregla el Runtime Error de la subida directa; behavior-
     preserving server-side; **sin migración**, **sin tocar lógica de Pagos**). **Local, sin push.**
+  - `feat/buyout-mejoras` → **(sesión torre/depto BF, 2026-07-02):** `fix(buyout): torre y depto separados en captura
+    (solo BF)` (`partida/actions.ts` + `partida/page.tsx` + `partida/linea-form.tsx` + `partida/linea-dialog.tsx` +
+    STATE; **sin migración** —reusa `buyout_unit`—, **sin tocar Pagos**, **L3/L44 sin cambios**). **Local, sin push.**
 - Rama histórica (pre-merge a main): **`feat/buyout`**.
 - Commits hechos:
   - `main` → `163c597 docs: runbook rotación keys + prompt auditoría` (solo `docs/runbook-rotacion-keys.md` + `docs/prompt-auditoria-calidad.md`). **Local, sin push.**

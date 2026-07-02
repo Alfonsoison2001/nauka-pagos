@@ -7,7 +7,12 @@ import { loadVigenteLines, type VigenteLine } from "@/lib/buyout/rollup"
 import { createClient } from "@/lib/supabase/server"
 import { cn, formatMXN } from "@/lib/utils"
 import { NuevaPartidaButton } from "../glosario/nueva-partida-button"
-import type { ConceptoOption, CurrencyOption } from "./actions"
+import type {
+  ConceptoOption,
+  CurrencyOption,
+  KVOption,
+  UnitMode,
+} from "./actions"
 import { BuyoutPdfCell } from "./buyout-pdf-cell"
 import { DeleteLineaButton } from "./delete-linea-button"
 import { EditLineaButton } from "./edit-linea-button"
@@ -236,7 +241,45 @@ function buildGroups(
   return groups
 }
 
-// --- carga de catálogos del formulario --------------------------------------
+// --- catálogos del formulario -----------------------------------------------
+
+/**
+ * BF: `buyout_unit` son los 8 DEPTOS con la torre en el prefijo del nombre
+ * ("T1 · 101 (PB)"). Derivamos las TORRES distintas (Torre 1 / Torre 2) y la
+ * lista de DEPTOS ("101 PB") para que la captura separe ambos campos. L3/L44 no
+ * tienen deptos → modo "villa" (comportamiento actual: villa/casita por unit_id).
+ */
+function deriveTorreDepto(units: { nombre: string; tipo: string }[]): {
+  unitMode: UnitMode
+  torres: KVOption[]
+  deptos: KVOption[]
+} {
+  const deptoUnits = units.filter((u) => u.tipo === "depto")
+  if (deptoUnits.length === 0) {
+    return { unitMode: "villa", torres: [], deptos: [] }
+  }
+  const torreLabels: string[] = []
+  const deptos: KVOption[] = []
+  for (const u of deptoUnits) {
+    const sepIdx = u.nombre.indexOf(" · ")
+    const prefix = sepIdx >= 0 ? u.nombre.slice(0, sepIdx).trim() : ""
+    const rest =
+      sepIdx >= 0 ? u.nombre.slice(sepIdx + 3).trim() : u.nombre.trim()
+    const m = prefix.match(/^T\s*(\d+)$/i)
+    if (m) {
+      const torreLabel = `Torre ${m[1]}`
+      if (!torreLabels.includes(torreLabel)) torreLabels.push(torreLabel)
+    }
+    // "101 (PB)" → "101 PB" · "102/103 (Dúplex)" → "102/103 Dúplex".
+    const deptoLabel = rest.replace(/[()]/g, "").replace(/\s+/g, " ").trim()
+    deptos.push({ value: deptoLabel, label: deptoLabel })
+  }
+  return {
+    unitMode: "torre",
+    torres: torreLabels.map((t) => ({ value: t, label: t })),
+    deptos,
+  }
+}
 
 async function loadCatalogs(
   sb: Sb,
@@ -257,7 +300,7 @@ async function loadCatalogs(
       .order("nombre"),
     sb
       .from("buyout_unit")
-      .select("id, nombre")
+      .select("id, nombre, tipo")
       .eq("project_id", projectId)
       .is("deleted_at", null)
       .order("nombre"),
@@ -285,6 +328,12 @@ async function loadCatalogs(
       id: u.id as string,
       nombre: u.nombre as string,
     })),
+    ...deriveTorreDepto(
+      (unitRes.data ?? []).map((u) => ({
+        nombre: u.nombre as string,
+        tipo: u.tipo as string,
+      })),
+    ),
     uoms: (uomRes.data ?? []).map((u) => ({
       codigo: u.codigo as string,
       nombre: u.nombre as string,

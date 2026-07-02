@@ -19,7 +19,9 @@ import { formatMXN } from "@/lib/utils"
 import type {
   ConceptoOption,
   CurrencyOption,
+  KVOption,
   SupplierOption,
+  UnitMode,
   UnitOption,
   UomOption,
 } from "./actions"
@@ -46,6 +48,7 @@ export const formSchema = z.object({
   concepto_otro: z.string().optional(),
   detalle: z.string().optional(),
   unit_id: z.string().optional(),
+  torre: z.string().optional(),
   piso: z.string().optional(),
   depto: z.string().optional(),
   supplier_id: z.string().optional(),
@@ -179,6 +182,10 @@ type Props = {
   conceptos: ConceptoOption[]
   suppliers: SupplierOption[]
   units: UnitOption[]
+  /** "torre" (BF) → Torre 1/Torre 2 + Depto de dropdown; "villa" (L3/L44) → actual. */
+  unitMode: UnitMode
+  torres: KVOption[]
+  deptos: KVOption[]
   uoms: UomOption[]
   currencies: CurrencyOption[]
   pdfInputRef: RefObject<HTMLInputElement | null>
@@ -196,6 +203,9 @@ export function LineaFormFields({
   conceptos,
   suppliers,
   units,
+  unitMode,
+  torres,
+  deptos,
   uoms,
   currencies,
   pdfInputRef,
@@ -206,6 +216,8 @@ export function LineaFormFields({
 }: Props) {
   const supplierId = useWatch({ control, name: "supplier_id" })
   const conceptoSel = useWatch({ control, name: "concepto" })
+  const torreSel = useWatch({ control, name: "torre" })
+  const deptoSel = useWatch({ control, name: "depto" })
   const [cantidad, unitario, sobre, iva, moneda] = useWatch({
     control,
     name: ["cantidad", "unitario", "sobrecosto_pct", "iva_pct", "moneda"],
@@ -241,6 +253,18 @@ export function LineaFormFields({
     ...conceptos.map((c) => ({ value: c.nombre, label: c.nombre })),
     { value: OTRO, label: "Otro… (escribir)" },
   ]
+
+  // BF (modo torre): dropdowns de Torre y Depto. Conservan un valor legacy que no
+  // esté en el catálogo (p. ej. "Compartido") para no perderlo al editar.
+  const withCurrent = (base: Option[], current?: string): Option[] => {
+    const opts: Option[] = [{ value: NONE, label: "—" }, ...base]
+    if (current && current !== NONE && !opts.some((o) => o.value === current)) {
+      opts.push({ value: current, label: current })
+    }
+    return opts
+  }
+  const torreOptions = withCurrent(torres, torreSel)
+  const deptoOptions = withCurrent(deptos, deptoSel)
 
   return (
     <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto pr-1">
@@ -284,13 +308,23 @@ export function LineaFormFields({
       />
 
       <div className="grid grid-cols-2 gap-3">
-        <ControlledSelect
-          control={control}
-          name="unit_id"
-          label="Villa/Casita"
-          placeholder="—"
-          options={unitOptions}
-        />
+        {unitMode === "torre" ? (
+          <ControlledSelect
+            control={control}
+            name="torre"
+            label="Torre"
+            placeholder="—"
+            options={torreOptions}
+          />
+        ) : (
+          <ControlledSelect
+            control={control}
+            name="unit_id"
+            label="Villa/Casita"
+            placeholder="—"
+            options={unitOptions}
+          />
+        )}
         <ControlledSelect
           control={control}
           name="piso"
@@ -301,12 +335,22 @@ export function LineaFormFields({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <ControlledInput
-          control={control}
-          name="depto"
-          label="Depto"
-          errors={errors}
-        />
+        {unitMode === "torre" ? (
+          <ControlledSelect
+            control={control}
+            name="depto"
+            label="Depto"
+            placeholder="—"
+            options={deptoOptions}
+          />
+        ) : (
+          <ControlledInput
+            control={control}
+            name="depto"
+            label="Depto"
+            errors={errors}
+          />
+        )}
         <ControlledSelect
           control={control}
           name="unidad"

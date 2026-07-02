@@ -15,6 +15,9 @@ export type ActionResult = { error: string } | { ok: true; warning?: string }
 
 export type SupplierOption = { id: string; nombre: string }
 export type UnitOption = { id: string; nombre: string }
+// Opción genérica valor/etiqueta (torres y deptos derivados de buyout_unit en BF).
+export type KVOption = { value: string; label: string }
+export type UnitMode = "villa" | "torre"
 export type UomOption = { codigo: string; nombre: string }
 export type CurrencyOption = { currency: string; rate: number }
 export type PartidaOption = { id: string; nombre: string }
@@ -55,6 +58,9 @@ const baseSchema = z.object({
   concepto: z.string().trim().min(1, "Concepto requerido"),
   detalle: z.string().trim().optional(),
   unit_id: z.string().trim().optional(),
+  // BF: la torre llega como texto ("Torre 1"/"Torre 2"). En L3/L44 no se usa
+  // (la villa/casita va por unit_id). Se guarda directo en `villa_casita`.
+  torre: z.string().trim().optional(),
   piso: z.string().trim().optional(),
   depto: z.string().trim().optional(),
   supplier_id: z.string().trim().optional(),
@@ -86,6 +92,7 @@ function parseForm(fd: FormData): Record<string, unknown> {
     concepto: fd.get("concepto"),
     detalle: get("detalle"),
     unit_id: get("unit_id"),
+    torre: get("torre"),
     piso: get("piso"),
     depto: get("depto"),
     supplier_id: get("supplier_id"),
@@ -302,8 +309,11 @@ export async function createLinea(
     projectId,
     d.partida_catalog_id,
   )
-  const unitId = d.unit_id || null
-  const villaCasita = await resolveUnitName(sb, unitId ?? undefined)
+  // BF: la torre viene como texto y se guarda directo en `villa_casita` (no hay
+  // buyout_unit de torre → el item no lleva unit_id). L3/L44: villa/casita por unit_id.
+  const torre = d.torre?.trim() || null
+  const unitId = torre ? null : d.unit_id || null
+  const villaCasita = torre ?? (await resolveUnitName(sb, unitId ?? undefined))
 
   const { data: item, error: itemErr } = await sb
     .from("buyout_item")
@@ -370,7 +380,8 @@ export async function addBudgetVersion(
     projectId,
     item.partida_catalog_id as string,
   )
-  const villaCasita = await resolveUnitName(sb, d.unit_id || undefined)
+  const villaCasita =
+    d.torre?.trim() || (await resolveUnitName(sb, d.unit_id || undefined))
 
   const res = await insertVigenteQuoteAndLine(
     sb,
@@ -406,7 +417,8 @@ export async function updateLinea(
 
   const sup = await resolveSupplier(sb, d.supplier_id, d.supplier_nombre)
   if ("error" in sup) return { error: sup.error }
-  const villaCasita = await resolveUnitName(sb, d.unit_id || undefined)
+  const villaCasita =
+    d.torre?.trim() || (await resolveUnitName(sb, d.unit_id || undefined))
 
   const { error: quoteErr } = await sb
     .from("buyout_quote")

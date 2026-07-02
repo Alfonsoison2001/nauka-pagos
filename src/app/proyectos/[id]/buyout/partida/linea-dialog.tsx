@@ -18,8 +18,10 @@ import type {
   ActionResult,
   ConceptoOption,
   CurrencyOption,
+  KVOption,
   LineaRow,
   SupplierOption,
+  UnitMode,
   UnitOption,
   UomOption,
 } from "./actions"
@@ -36,6 +38,11 @@ export type Catalogs = {
   conceptos: ConceptoOption[]
   suppliers: SupplierOption[]
   units: UnitOption[]
+  // BF: "torre" → captura Torre 1/Torre 2 (villa_casita) + Depto de dropdown.
+  // L3/L44: "villa" → comportamiento actual (villa/casita por unit_id, depto libre).
+  unitMode: UnitMode
+  torres: KVOption[]
+  deptos: KVOption[]
   uoms: UomOption[]
   currencies: CurrencyOption[]
 }
@@ -91,6 +98,7 @@ function getDefaults(props: Props): FormValues {
       concepto_otro: "",
       detalle: "",
       unit_id: NONE,
+      torre: NONE,
       piso: "",
       depto: "",
       supplier_id: NONE,
@@ -108,14 +116,19 @@ function getDefaults(props: Props): FormValues {
     }
   }
   const l = props.linea
+  const torreMode = props.catalogs.unitMode === "torre"
   const unitId =
     props.catalogs.units.find((u) => u.nombre === l.villa_casita)?.id ?? NONE
+  // BF: la torre vive en villa_casita como texto ("Torre 1"); el form la resuelve
+  // contra sus opciones (o la conserva tal cual si es un valor legacy p. ej. "Compartido").
+  const torre = torreMode ? (l.villa_casita ?? NONE) : NONE
   const cc = conceptoDefaults(l.concepto, props.catalogs.conceptos)
   return {
     concepto: cc.concepto,
     concepto_otro: cc.concepto_otro,
     detalle: l.detalle ?? "",
     unit_id: unitId,
+    torre,
     piso: l.piso ?? "",
     depto: l.depto ?? "",
     supplier_id: l.supplier_id ?? NONE,
@@ -247,8 +260,10 @@ export function LineaDialog(props: Props) {
       )
       put("detalle", v.detalle)
       if (v.unit_id && v.unit_id !== NONE) put("unit_id", v.unit_id)
+      // BF: la torre (Torre 1/Torre 2) va directo a villa_casita en el server.
+      if (v.torre && v.torre !== NONE) put("torre", v.torre)
       put("piso", v.piso)
-      put("depto", v.depto)
+      if (v.depto && v.depto !== NONE) put("depto", v.depto)
       put("supplier_id", v.supplier_id)
       put("supplier_nombre", v.supplier_nombre)
       put("unidad", v.unidad)
@@ -316,6 +331,9 @@ export function LineaDialog(props: Props) {
             conceptos={catalogs.conceptos}
             suppliers={catalogs.suppliers}
             units={catalogs.units}
+            unitMode={catalogs.unitMode}
+            torres={catalogs.torres}
+            deptos={catalogs.deptos}
             uoms={catalogs.uoms}
             currencies={catalogs.currencies}
             pdfInputRef={pdfRef}
