@@ -150,9 +150,13 @@ export default async function BuyoutPartidaPage({
   if (selectedPartidaId) {
     const partidaNombre = partidaNombreById.get(selectedPartidaId) ?? "Partida"
     const catalogs = await loadCatalogs(sb, id, selectedPartidaId)
-    const lineas = allLineas.filter(
+    const lineasRaw = allLineas.filter(
       (l) => l.partida_catalog_id === selectedPartidaId,
     )
+    // BF (modo torre): agrupa las líneas por torre (Torre 1 → Torre 2 → resto),
+    // con el mismo orden de conceptos en cada bloque. L3/L44: orden actual intacto.
+    const lineas =
+      catalogs.unitMode === "torre" ? sortLineasByTorre(lineasRaw) : lineasRaw
     return (
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -239,6 +243,37 @@ function buildGroups(
     groups.push({ nombre: "Sin capítulo", partidas: sinCap.map(cardOf) })
   }
   return groups
+}
+
+// --- orden de líneas por torre (solo BF) ------------------------------------
+
+/** Rango de torre para ordenar: "Torre 1" → 1, "Torre 2" → 2, … ; "Compartido"/otros/sin torre → al final. */
+function torreRank(villaCasita: string | null): number {
+  const m = villaCasita?.match(/torre\s*(\d+)/i)
+  return m ? Number(m[1]) : Number.POSITIVE_INFINITY
+}
+
+/**
+ * Ordena las líneas de una partida (BF) por TORRE primero (Torre 1 → Torre 2 →
+ * "Compartido"/otros al final) y, dentro de cada torre, con el MISMO orden de
+ * conceptos: la clave de concepto = su primera aparición en la lista original,
+ * así ambos bloques de torre listan los conceptos en idéntico orden. Solo cambia
+ * el orden de DESPLIEGUE; no toca montos ni el total (la suma es la misma).
+ */
+function sortLineasByTorre(lineas: VigenteLine[]): VigenteLine[] {
+  const conceptOrder = new Map<string, number>()
+  lineas.forEach((l, i) => {
+    if (!conceptOrder.has(l.concepto)) conceptOrder.set(l.concepto, i)
+  })
+  return [...lineas].sort((a, b) => {
+    const ra = torreRank(a.villa_casita)
+    const rb = torreRank(b.villa_casita)
+    if (ra !== rb) return ra < rb ? -1 : 1
+    const ca = conceptOrder.get(a.concepto) ?? 0
+    const cb = conceptOrder.get(b.concepto) ?? 0
+    if (ca !== cb) return ca - cb
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  })
 }
 
 // --- catálogos del formulario -----------------------------------------------
@@ -370,9 +405,12 @@ function LineasTable({
   }, 0)
 
   return (
-    <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
+    // overflow-x-auto = scroll HORIZONTAL de las 22 columnas dentro de la caja;
+    // sin cap de altura → el scroll VERTICAL es el de la página y se alcanzan
+    // TODAS las filas (antes `max-h-[70vh] overflow-auto` atrapaba las de abajo).
+    <div className="overflow-x-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
       <table className="w-full whitespace-nowrap text-sm tabular-nums">
-        <thead className="sticky top-0 z-10">
+        <thead>
           <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
             {GREEN_COLUMNS.map((col) => (
               <th

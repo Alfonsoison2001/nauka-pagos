@@ -354,6 +354,25 @@
    `partida/linea-form.tsx` render condicional por modo; `partida/linea-dialog.tsx` defaults + FormData). Gate verde:
    `tsc` ✓ · `biome` ✓ (4 archivos) · `pnpm build` ✓ (11 rutas, Pagos idénticas). **Pagos intacto · L3/L44 sin
    cambios visibles.**
+✅ **Orden por torre + scroll vertical en la pantalla Partida (2026-07-02 · rama `feat/buyout-mejoras`)** — 2 ajustes
+   **solo de display** en la tabla de líneas (`buyout/partida/page.tsx`, `LineasTable`); **cero cambio de datos,
+   montos ni cuadre**. **(1) Orden de líneas (solo BF):** cuando el proyecto está en modo torre (`catalogs.unitMode
+   === "torre"`), las líneas de la partida se **agrupan por TORRE** — **Torre 1 → Torre 2 → "Compartido"/sin torre al
+   final** — y **dentro de cada torre** con el **MISMO orden de conceptos** (la clave de concepto = su primera
+   aparición en la lista original, compartida entre torres → ambos bloques listan los conceptos en idéntico orden).
+   Antes salían en orden `created_at,id`, y como el volcado de BF comparte `created_at`, el desempate por `id` (uuid)
+   daba un orden casi aleatorio. Helpers `torreRank` (parsea "Torre N"; resto → ∞) + `sortLineasByTorre` (compara sin
+   restar ∞ para no producir NaN). **L3/L44:** orden actual intacto (el sort solo corre en modo torre). El total del
+   pie y las tarjetas usan `allLineas`/`totalsByPartida` sin ordenar → **suma idéntica** (el orden no altera la Σ).
+   **(2) Scroll vertical:** el contenedor pasó de `max-h-[70vh] overflow-auto` (un scroll interno de 70vh que, al
+   empezar ~200px abajo del topbar+encabezado y con la tabla ancha, dejaba las filas de abajo fuera de alcance) a
+   **`overflow-x-auto`** (sin cap de altura): el scroll **horizontal** de las 22 columnas sigue **dentro de la caja**
+   y el **vertical** ahora es el **de la página** → se alcanzan **TODAS** las filas con el scroll normal. Se quitó el
+   `sticky top-0` del `thead` (sin contenedor de scroll vertical ya no aportaba). Mismo patrón `overflow-x-auto` que
+   una tabla responsiva estándar; las partidas de BF tienen pocas filas (máx ~14) → la barra horizontal queda cerca
+   y accesible. **1 archivo** (`buyout/partida/page.tsx`). Gate verde: `tsc` ✓ · `biome` ✓ · `pnpm build` ✓ (11
+   rutas; las tablas de Pagos —`presupuesto`, `flujo-de-pagos`— **no se tocaron**, conservan su `max-h-[70vh]`).
+   **Pagos intacto · L3/L44 sin cambios de orden.**
 ⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
    de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
    Partida). Pendiente BF anterior: confirmar Herreria.
@@ -417,6 +436,10 @@ Todo bajo `src/app/proyectos/[id]/buyout/glosario/` (0 archivos de Pagos, 0 migr
   - `feat/buyout-mejoras` → **(sesión torre/depto BF, 2026-07-02):** `fix(buyout): torre y depto separados en captura
     (solo BF)` (`partida/actions.ts` + `partida/page.tsx` + `partida/linea-form.tsx` + `partida/linea-dialog.tsx` +
     STATE; **sin migración** —reusa `buyout_unit`—, **sin tocar Pagos**, **L3/L44 sin cambios**). **Local, sin push.**
+  - `feat/buyout-mejoras` → **(sesión orden+scroll Partida, 2026-07-02):** `fix(buyout): orden por torre + scroll
+    vertical en pantalla Partida` (solo `partida/page.tsx` + STATE; display-only: agrupa líneas por torre en modo BF
+    + contenedor `overflow-x-auto` para scroll vertical de página; **sin migración**, **sin tocar Pagos**, **L3/L44
+    sin cambios de orden**). **Local, sin push.**
 - Rama histórica (pre-merge a main): **`feat/buyout`**.
 - Commits hechos:
   - `main` → `163c597 docs: runbook rotación keys + prompt auditoría` (solo `docs/runbook-rotacion-keys.md` + `docs/prompt-auditoria-calidad.md`). **Local, sin push.**
