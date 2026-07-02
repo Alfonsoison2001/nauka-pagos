@@ -392,3 +392,239 @@ export async function deletePartida(
   revalidateBuyout(projectId)
   return { ok: true }
 }
+
+// ===========================================================================
+// CONCEPTOS (buyout_concepto_catalog — por-proyecto vía su partida)
+// ===========================================================================
+
+/** Un concepto del catálogo + cuántos datos capturados (buyout_item) tiene por nombre. */
+export type ConceptoRow = {
+  id: string
+  nombre: string
+  orden: number
+  itemCount: number
+}
+
+const conceptoCreateSchema = z.object({ nombre, orden: orden.optional() })
+const conceptoRenameSchema = z.object({ nombre })
+
+/** ¿La partida existe, está vigente y pertenece al proyecto? (evita ids cruzados) */
+async function partidaEnProyecto(
+  sb: Sb,
+  projectId: string,
+  partidaId: string,
+): Promise<boolean> {
+  const { data } = await sb
+    .from("buyout_partida_catalog")
+    .select("id")
+    .eq("id", partidaId)
+    .eq("project_id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  return !!data
+}
+
+/** Concepto vigente + su partida, SOLO si esa partida pertenece al proyecto. */
+async function loadConceptoScoped(
+  sb: Sb,
+  projectId: string,
+  conceptoId: string,
+): Promise<{ partidaId: string; nombre: string } | null> {
+  const { data } = await sb
+    .from("buyout_concepto_catalog")
+    .select("nombre, partida_catalog_id")
+    .eq("id", conceptoId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  if (!data) return null
+  const partidaId = data.partida_catalog_id as string
+  if (!(await partidaEnProyecto(sb, projectId, partidaId))) return null
+  return { partidaId, nombre: data.nombre as string }
+}
+
+/** Agrega un concepto a una partida del proyecto. Orden opcional → al final. */
+export async function createConcepto(
+  projectId: string,
+  partidaId: string,
+  input: { nombre: string; orden?: number },
+): Promise<ActionResult> {
+  const guard = await requireAdmin()
+  if (guard) return { error: guard }
+  const parsed = conceptoCreateSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+  const sb = await createClient()
+  if (!(await partidaEnProyecto(sb, projectId, partidaId))) {
+    return { error: "Partida no encontrada." }
+  }
+
+  let ordenFinal = parsed.data.orden
+  if (ordenFinal === undefined) {
+    const { data: last } = await sb
+      .from("buyout_concepto_catalog")
+      .select("orden")
+      .eq("partida_catalog_id", partidaId)
+      .is("deleted_at", null)
+      .order("orden", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    ordenFinal = last ? Number(last.orden) + 1 : 0
+  }
+
+  const { error } = await sb.from("buyout_concepto_catalog").insert({
+    partida_catalog_id: partidaId,
+    nombre: parsed.data.nombre,
+    orden: ordenFinal,
+  })
+  if (error) {
+    return {
+      error: dupMessage(
+        error,
+        error.message,
+        "Ya existe un concepto con ese nombre en esta partida.",
+      ),
+    }
+  }
+  revalidateBuyout(projectId)
+  return { ok: true }
+}
+
+/**
+ * Renombra un concepto del catálogo. Como los `buyout_item`/`buyout_line`
+ * capturados guardan el nombre como TEXTO (no hay FK al catálogo; se ligan por
+ * nombre dentro de la partida), propaga el nuevo nombre a las filas capturadas
+ * con el nombre viejo EXACTO en esa partida → la pantalla Partida y el conteo
+ * "con datos" quedan coherentes. NO cambia montos/cotizaciones/partida ni toca
+ * Pagos; el total del Resumen (agrupado por partida) es idéntico.
+ */
+export async function renameConcepto(
+  projectId: string,
+  conceptoId: string,
+  nuevoNombre: string,
+): Promise<ActionResult> {
+  const guard = await requireAdmin()
+  if (guard) return { error: guard }
+  const parsed = conceptoRenameSchema.safeParse({ nombre: nuevoNombre })
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+  const sb = await createClient()
+
+  const scoped = await loadConceptoScoped(sb, projectId, conceptoId)
+  if (!scoped) return { error: "Concepto no encontrado." }
+  const nuevo = parsed.data.nombre
+  if (scoped.nombre === nuevo) return { ok: true }
+
+  const { error } = await sb
+    .from("buyout_concepto_catalog")
+    .update({ nombre: nuevo })
+    .eq("id", conceptoId)
+  if (error) {
+    return {
+      error: dupMessage(
+        error,
+        error.message,
+        "Ya existe un concepto con ese nombre en esta partida.",
+      ),
+    }
+  }
+
+  // Propagación por nombre EXACTO dentro de la partida (solo Buy-Out, sin montos).
+  const { data: items } = await sb
+    .from("buyout_item")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("partida_catalog_id", scoped.partidaId)
+    .eq("concepto", scoped.nombre)
+    .is("deleted_at", null)
+  const itemIds = (items ?? []).map((i) => i.id as string)
+  if (itemIds.length > 0) {
+    const { data: quotes } = await sb
+      .from("buyout_quote")
+      .select("id")
+      .in("item_id", itemIds)
+      .is("deleted_at", null)
+    const quoteIds = (quotes ?? []).map((q) => q.id as string)
+    await sb.from("buyout_item").update({ concepto: nuevo }).in("id", itemIds)
+    if (quoteIds.length > 0) {
+      await sb
+        .from("buyout_line")
+        .update({ concepto: nuevo })
+        .in("quote_id", quoteIds)
+        .eq("concepto", scoped.nombre)
+        .is("deleted_at", null)
+    }
+  }
+
+  revalidateBuyout(projectId)
+  return { ok: true }
+}
+
+/**
+ * Reordena un concepto ↑/↓ dentro de su partida. Normaliza TODOS los `orden` de
+ * esa partida a 0..n-1 (evita empates/huecos que traben el swap).
+ */
+export async function moveConcepto(
+  projectId: string,
+  conceptoId: string,
+  direction: "up" | "down",
+): Promise<ActionResult> {
+  const guard = await requireAdmin()
+  if (guard) return { error: guard }
+  const sb = await createClient()
+
+  const scoped = await loadConceptoScoped(sb, projectId, conceptoId)
+  if (!scoped) return { error: "Concepto no encontrado." }
+
+  const { data } = await sb
+    .from("buyout_concepto_catalog")
+    .select("id, orden")
+    .eq("partida_catalog_id", scoped.partidaId)
+    .is("deleted_at", null)
+    .order("orden", { ascending: true })
+    .order("created_at", { ascending: true })
+  const list = (data ?? []).map((c) => c.id as string)
+  const i = list.indexOf(conceptoId)
+  if (i === -1) return { error: "Concepto no encontrado." }
+  const j = direction === "up" ? i - 1 : i + 1
+  if (j < 0 || j >= list.length)
+    return { ok: true } // ya está en el borde
+  ;[list[i], list[j]] = [list[j], list[i]]
+
+  for (let k = 0; k < list.length; k++) {
+    const { error } = await sb
+      .from("buyout_concepto_catalog")
+      .update({ orden: k })
+      .eq("id", list[k])
+    if (error) return { error: error.message }
+  }
+  revalidateBuyout(projectId)
+  return { ok: true }
+}
+
+/**
+ * Soft-delete de un concepto del catálogo (nunca hard-delete). Quita la entrada
+ * del dropdown; los `buyout_item`/líneas capturados con ese nombre NO se borran
+ * (siguen en Resumen/Partida). Si tiene datos capturados, la confirmación se
+ * pide en el cliente; aquí solo se marca `deleted_at`.
+ */
+export async function deleteConcepto(
+  projectId: string,
+  conceptoId: string,
+): Promise<ActionResult> {
+  const guard = await requireAdmin()
+  if (guard) return { error: guard }
+  const sb = await createClient()
+
+  const scoped = await loadConceptoScoped(sb, projectId, conceptoId)
+  if (!scoped) return { error: "Concepto no encontrado." }
+
+  const { error } = await sb
+    .from("buyout_concepto_catalog")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", conceptoId)
+  if (error) return { error: error.message }
+  revalidateBuyout(projectId)
+  return { ok: true }
+}

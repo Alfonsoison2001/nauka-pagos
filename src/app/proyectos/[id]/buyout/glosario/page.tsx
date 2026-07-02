@@ -2,18 +2,17 @@ import { BookText } from "lucide-react"
 import { notFound } from "next/navigation"
 import { isAdmin } from "@/lib/auth/roles"
 import { createClient } from "@/lib/supabase/server"
-import { cn } from "@/lib/utils"
-import type { ChapterRow, PartidaRow } from "./actions"
+import type { ChapterRow, ConceptoRow, PartidaRow } from "./actions"
 import { DeleteCapituloButton } from "./delete-capitulo-button"
-import { DeletePartidaButton } from "./delete-partida-button"
 import { EditCapituloButton } from "./edit-capitulo-button"
-import { EditPartidaButton } from "./edit-partida-button"
 import { NuevaPartidaButton } from "./nueva-partida-button"
 import { NuevoCapituloButton } from "./nuevo-capitulo-button"
+import { PartidaRowView } from "./partida-row"
 import { ReordenarCapitulo } from "./reordenar-capitulo"
 
 export const metadata = { title: "Buy-Out · Glosario" }
 
+type ConceptosByPartida = Map<string, ConceptoRow[]>
 type Group = { chapter: ChapterRow | null; partidas: PartidaRow[] }
 
 export default async function BuyoutGlosarioPage({
@@ -33,10 +32,8 @@ export default async function BuyoutGlosarioPage({
   if (!project) notFound()
 
   const admin = await isAdmin()
-  const { chapters, groups, chapterNames, nextOrden } = await loadGlosario(
-    sb,
-    id,
-  )
+  const { chapters, groups, chapterNames, nextOrden, conceptosByPartida } =
+    await loadGlosario(sb, id)
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,7 +45,8 @@ export default async function BuyoutGlosarioPage({
           <div>
             <h2 className="text-lg font-semibold text-nauka-dark">Glosario</h2>
             <p className="max-w-xl text-sm text-muted-foreground">
-              Administra los catálogos de este proyecto: capítulos y partidas.
+              Administra los catálogos de este proyecto: capítulos, partidas y
+              conceptos. Abre una partida para ver sus conceptos.
               {admin ? "" : " (solo lectura)"}
             </p>
           </div>
@@ -66,6 +64,7 @@ export default async function BuyoutGlosarioPage({
             group={g}
             chapters={chapters}
             chapterNames={chapterNames}
+            conceptosByPartida={conceptosByPartida}
             admin={admin}
           />
         ))}
@@ -83,12 +82,14 @@ function ChapterSection({
   group,
   chapters,
   chapterNames,
+  conceptosByPartida,
   admin,
 }: {
   projectId: string
   group: Group
   chapters: ChapterRow[]
   chapterNames: string[]
+  conceptosByPartida: ConceptosByPartida
   admin: boolean
 }) {
   const { chapter, partidas } = group
@@ -148,10 +149,11 @@ function ChapterSection({
       ) : (
         <ul className="divide-y divide-nauka-subtle">
           {partidas.map((p) => (
-            <PartidaRowItem
+            <PartidaRowView
               key={p.id}
               projectId={projectId}
               partida={p}
+              conceptos={conceptosByPartida.get(p.id) ?? []}
               chapterNames={chapterNames}
               admin={admin}
             />
@@ -162,71 +164,8 @@ function ChapterSection({
   )
 }
 
-function PartidaRowItem({
-  projectId,
-  partida,
-  chapterNames,
-  admin,
-}: {
-  projectId: string
-  partida: PartidaRow
-  chapterNames: string[]
-  admin: boolean
-}) {
-  const conDatos = partida.itemCount > 0
-  return (
-    <li className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-nauka-bg">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span
-          aria-hidden
-          title={conDatos ? "Con datos capturados" : "Sin datos"}
-          className={cn(
-            "inline-block size-2 shrink-0 rounded-full",
-            conDatos ? "bg-nauka-success" : "bg-nauka-neutral/40",
-          )}
-        />
-        <span className="truncate text-sm font-medium text-nauka-dark">
-          {partida.nombre}
-        </span>
-        {partida.unidad_driver ? (
-          <span className="shrink-0 rounded-full bg-nauka-subtle px-2 py-0.5 text-xs text-muted-foreground">
-            {partida.unidad_driver}
-          </span>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <span className="text-xs text-muted-foreground">
-          {partida.conceptoCount > 0
-            ? `${partida.conceptoCount} concepto${partida.conceptoCount === 1 ? "" : "s"}`
-            : "—"}
-        </span>
-        {admin ? (
-          <div className="flex items-center">
-            <EditPartidaButton
-              projectId={projectId}
-              chapterNames={chapterNames}
-              partida={{
-                id: partida.id,
-                nombre: partida.nombre,
-                chapter_default: partida.chapter_default,
-                unidad_driver: partida.unidad_driver,
-              }}
-            />
-            <DeletePartidaButton
-              projectId={projectId}
-              partidaId={partida.id}
-              nombre={partida.nombre}
-              itemCount={partida.itemCount}
-            />
-          </div>
-        ) : null}
-      </div>
-    </li>
-  )
-}
-
 // ---------------------------------------------------------------------------
-// Carga de datos: capítulos + partidas + conteos (conceptos / datos capturados)
+// Carga de datos: capítulos + partidas + conceptos + datos capturados
 // ---------------------------------------------------------------------------
 
 type Sb = Awaited<ReturnType<typeof createClient>>
@@ -246,41 +185,62 @@ async function loadGlosario(sb: Sb, projectId: string) {
       .eq("project_id", projectId)
       .is("deleted_at", null)
       .order("orden", { ascending: true }),
+    // El concepto se liga a los datos capturados por TEXTO (item.concepto), no FK.
     sb
       .from("buyout_item")
-      .select("partida_catalog_id")
+      .select("partida_catalog_id, concepto")
       .eq("project_id", projectId)
       .is("deleted_at", null),
   ])
 
   const partidaIds = (partidaRes.data ?? []).map((p) => p.id as string)
-  const conceptoCount = new Map<string, number>()
+
+  // Datos capturados: por partida (para la partida) y por (partida, concepto).
+  const itemCountByPartida = new Map<string, number>()
+  const itemCountByConcepto = new Map<string, number>()
+  for (const it of itemRes.data ?? []) {
+    const pid = it.partida_catalog_id as string
+    itemCountByPartida.set(pid, (itemCountByPartida.get(pid) ?? 0) + 1)
+    const key = `${pid}::${(it.concepto as string) ?? ""}`
+    itemCountByConcepto.set(key, (itemCountByConcepto.get(key) ?? 0) + 1)
+  }
+
+  // Conceptos del catálogo (ordenados) agrupados por partida.
+  const conceptosByPartida: ConceptosByPartida = new Map()
   if (partidaIds.length > 0) {
     const { data: conceptos } = await sb
       .from("buyout_concepto_catalog")
-      .select("partida_catalog_id")
+      .select("id, nombre, orden, partida_catalog_id")
       .in("partida_catalog_id", partidaIds)
       .is("deleted_at", null)
+      .order("orden", { ascending: true })
+      .order("created_at", { ascending: true })
     for (const c of conceptos ?? []) {
-      const k = c.partida_catalog_id as string
-      conceptoCount.set(k, (conceptoCount.get(k) ?? 0) + 1)
+      const pid = c.partida_catalog_id as string
+      const nombre = c.nombre as string
+      const list = conceptosByPartida.get(pid) ?? []
+      list.push({
+        id: c.id as string,
+        nombre,
+        orden: Number(c.orden),
+        itemCount: itemCountByConcepto.get(`${pid}::${nombre}`) ?? 0,
+      })
+      conceptosByPartida.set(pid, list)
     }
   }
-  const itemCount = new Map<string, number>()
-  for (const it of itemRes.data ?? []) {
-    const k = it.partida_catalog_id as string
-    itemCount.set(k, (itemCount.get(k) ?? 0) + 1)
-  }
 
-  const partidas: PartidaRow[] = (partidaRes.data ?? []).map((p) => ({
-    id: p.id as string,
-    nombre: p.nombre as string,
-    chapter_default: (p.chapter_default as string | null) ?? null,
-    unidad_driver: (p.unidad_driver as string | null) ?? null,
-    orden: Number(p.orden),
-    conceptoCount: conceptoCount.get(p.id as string) ?? 0,
-    itemCount: itemCount.get(p.id as string) ?? 0,
-  }))
+  const partidas: PartidaRow[] = (partidaRes.data ?? []).map((p) => {
+    const pid = p.id as string
+    return {
+      id: pid,
+      nombre: p.nombre as string,
+      chapter_default: (p.chapter_default as string | null) ?? null,
+      unidad_driver: (p.unidad_driver as string | null) ?? null,
+      orden: Number(p.orden),
+      conceptoCount: conceptosByPartida.get(pid)?.length ?? 0,
+      itemCount: itemCountByPartida.get(pid) ?? 0,
+    }
+  })
 
   const chapterNames = (chapterRes.data ?? []).map((c) => c.nombre as string)
   const known = new Set(chapterNames)
@@ -304,5 +264,5 @@ async function loadGlosario(sb: Sb, projectId: string) {
     ? Math.max(...chapters.map((c) => c.orden)) + 1
     : 0
 
-  return { chapters, groups, chapterNames, nextOrden }
+  return { chapters, groups, chapterNames, nextOrden, conceptosByPartida }
 }

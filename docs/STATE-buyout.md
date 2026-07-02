@@ -250,8 +250,25 @@
    **Pagos intacto** (cero archivos/esquema/RLS de Pagos); **Resumen/rollup sin tocar** (solo lee el catálogo
    ya editable). Gate verde: `tsc` ✓ · `biome` ✓ (169 archivos) · `pnpm build` ✓ (ruta `/buyout/glosario`
    dinámica; las de Pagos idénticas). Detalle abajo.
+✅ **Glosario — gestión de CONCEPTOS por partida (2026-07-02 · rama `feat/buyout-mejoras`)** — segunda mejora del
+   Glosario: cada partida ahora se **expande** (chevron, para todos) para ver su lista de conceptos
+   (`buyout_concepto_catalog`, por-proyecto vía su partida), con un indicador de **cuántos datos capturados**
+   tiene cada concepto (buyout_item empatado por nombre). **Gestión admin** (guard `getMyProfile().role==='admin'`
+   + RLS `is_admin()`): **agregar** (nombre + orden), **renombrar**, **reordenar** ↑/↓ (normaliza `orden` a
+   0..n-1 dentro de la partida), **soft-delete** — si el concepto tiene datos capturados pide **confirmación**
+   (los datos NO se borran, solo sale del catálogo); si está **vacío**, es **directo** (un clic). **Sin migración**
+   (reusa `buyout_concepto_catalog` del Slice 2c). **Decisión clave — propagación del renombre:** como
+   `buyout_item.concepto`/`buyout_line.concepto` guardan el nombre como **TEXTO** (no hay FK al catálogo; se ligan
+   por nombre dentro de la partida), `renameConcepto` propaga el nombre nuevo a las filas capturadas con el nombre
+   **viejo exacto** en esa partida → la pantalla Partida (22 col) y el conteo "con datos" quedan coherentes.
+   **NO cambia montos/cotizaciones/partida ni toca Pagos**; el **total del Resumen es idéntico** (el rollup agrupa
+   por `partida_catalog_id`, no por nombre de concepto). Todo scopeado (la acción verifica que la partida/concepto
+   pertenezca al proyecto). Revalida Resumen · Partida · Glosario. Gate verde: `tsc` ✓ · `biome` ✓ (175 archivos) ·
+   `pnpm build` ✓ (sin ruta nueva; los conceptos viven dentro de `/buyout/glosario`). **L3/BF aislados · Pagos
+   intacto.** Detalle de archivos abajo.
 ⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
-   de capítulos y partidas + atajo "+ Nueva partida" en Partida). Pendiente BF anterior: confirmar Herreria.
+   de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
+   Partida). Pendiente BF anterior: confirmar Herreria.
    Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
    Pendiente Resumen: modo **Qué falta**. Pendiente BF (si se decide tras revisar): **desglose por depto**
    (hoy torre/piso/depto van como texto en la línea, grano = total del proyecto).
@@ -275,6 +292,19 @@ Todo bajo `src/app/proyectos/[id]/buyout/glosario/` salvo 2 toques quirúrgicos 
 - `buyout/partida/page.tsx` — en la vista de tarjetas (admin) monta `NuevaPartidaButton` (mismo diálogo/acción);
   el resto de la pantalla Partida intacto.
 
+### Sesión conceptos — archivos (2026-07-02)
+
+Todo bajo `src/app/proyectos/[id]/buyout/glosario/` (0 archivos de Pagos, 0 migraciones):
+- `glosario/actions.ts` (**+conceptos**) — Server Actions `createConcepto` · `renameConcepto` (con propagación por
+  nombre a `buyout_item`/`buyout_line`) · `moveConcepto` · `deleteConcepto`; helpers `partidaEnProyecto`,
+  `loadConceptoScoped` (scoping al proyecto); tipo `ConceptoRow`.
+- `glosario/page.tsx` (**reescrito**) — ahora carga los conceptos (id/nombre/orden) por partida + datos capturados
+  por (partida, concepto) y por partida; pasa `conceptosByPartida` a la fila.
+- `glosario/partida-row.tsx` (nuevo, **cliente**) — fila de partida **expandible** (`PartidaRowView`) con su panel de
+  conceptos; reemplaza el `PartidaRowItem` server del Glosario (los botones de partida edit/delete se movieron aquí).
+- `glosario/concepto-dialog.tsx` (crear/renombrar, RHF+Zod) · `nuevo-concepto-button.tsx` · `edit-concepto-button.tsx` ·
+  `reordenar-concepto.tsx` · `delete-concepto-button.tsx` (directo si vacío, confirmación si tiene datos).
+
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
 - **Buy-Out ya está en `main` (publicado).** Las **mejoras** post-publicación viven en la rama
@@ -283,6 +313,9 @@ Todo bajo `src/app/proyectos/[id]/buyout/glosario/` salvo 2 toques quirúrgicos 
   - `feat/buyout-mejoras` → **(sesión Glosario, 2026-07-02):** `feat(buyout): sección Glosario — capítulos y
     partidas` (dir `glosario/` + 1 tab en `buyout-sub-nav` + atajo en `partida/page` + STATE; **sin migración**).
     **Local, sin push.**
+  - `feat/buyout-mejoras` → **(sesión conceptos, 2026-07-02):** `feat(buyout): Glosario — gestión de conceptos por
+    partida` (`glosario/actions.ts` +conceptos, `page.tsx` reescrito, `partida-row.tsx` + 5 componentes de concepto
+    + STATE; **sin migración**). **Local, sin push.**
 - Rama histórica (pre-merge a main): **`feat/buyout`**.
 - Commits hechos:
   - `main` → `163c597 docs: runbook rotación keys + prompt auditoría` (solo `docs/runbook-rotacion-keys.md` + `docs/prompt-auditoria-calidad.md`). **Local, sin push.**
