@@ -45,6 +45,17 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
+  // Límite del body de los Server Actions. Por defecto Next.js lo corta en 1 MB
+  // y rechaza el request ANTES de llegar a la validación de la app ("Body
+  // exceeded 1 MB limit"). Los uploads de PDF (Buy-Out y Pagos) permiten hasta
+  // 10 MB por archivo; subimos el límite a 10 MB para que el request pase y sea
+  // la propia validación de tamaño (cliente + servidor, "máximo 10 MB") la que
+  // acepte/rechace. No afecta la lógica de Pagos, solo destapa el mismo límite.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
+  },
   // @react-pdf/renderer es pesado y solo se usa server-side (generación de
   // carátulas). Mantenerlo fuera del bundle evita problemas de empaquetado.
   serverExternalPackages: ["@react-pdf/renderer"],

@@ -266,6 +266,25 @@
    pertenezca al proyecto). Revalida Resumen · Partida · Glosario. Gate verde: `tsc` ✓ · `biome` ✓ (175 archivos) ·
    `pnpm build` ✓ (sin ruta nueva; los conceptos viven dentro de `/buyout/glosario`). **L3/BF aislados · Pagos
    intacto.** Detalle de archivos abajo.
+✅ **Fix: subir límite del body de Server Actions a 10 MB (uploads de PDF · 2026-07-02 · rama `feat/buyout-mejoras`)** —
+   al subir un PDF de **más de 1 MB** en Buy-Out (diálogo de línea, `EditLineaButton`/`NuevaLineaButton`) salía
+   **"Body exceeded 1 MB limit"**: es el límite **default de Server Actions de Next.js** (1 MB), que rechaza el
+   request en el framework **ANTES** de llegar a la validación de la app. **Fix (solo config global, 1 archivo
+   `next.config.ts`):** `experimental.serverActions.bodySizeLimit = "10mb"` (ubicación correcta en Next 16.2.6:
+   `serverActions` sigue bajo `experimental`, confirmado en los tipos de Next; el build lo reconoce → "Experiments:
+   serverActions"). Ahora un PDF **>1 MB y ≤10 MB** pasa por el Server Action y lo acepta la propia **validación de
+   tamaño de 10 MB** que ya existe; un PDF **>10 MB** sigue rechazado. **Beneficia también a Pagos** (mismos PDFs de
+   10 MB: comprobantes de Flujo de Pagos y presupuestos), **sin tocar su lógica** — es solo destapar el mismo límite
+   de body a nivel framework. **La validación de 10 MB por archivo sigue intacta donde ya vivía:** servidor
+   (`buyout/partida/actions.ts`, `presupuesto/actions.ts`, `flujo-de-pagos/actions.ts` → `PDF_MAX_BYTES/COMPROBANTE_MAX_BYTES
+   = 10*1024*1024`, "El PDF/archivo debe pesar máximo 10 MB") y cliente (`flujo-de-pagos/comprobante-cell.tsx` y
+   `estimacion-dialog.tsx` → "Máximo 10 MB"). **Sin migración · sin tocar componentes/actions de Pagos.** Nota fina
+   (FYI, no bloqueante): el `bodySizeLimit` acota el body COMPLETO (archivo + campos del form), así que un PDF muy
+   pegado a 10 MB podría toparse con el límite del framework ("Body exceeded 10 MB limit") en vez del mensaje
+   amable de la app; si se quisiera que SIEMPRE gane el mensaje de la app, subir el body a `"12mb"`. Se dejó en
+   `"10mb"` según lo pedido. Gate verde: `tsc` ✓ · `biome check next.config.ts` ✓ · `pnpm build` ✓ (11 rutas, Pagos
+   idénticas). (Los 2 errores de `biome check` global son del script **sin trackear** `scripts/backup-storage.mjs`,
+   ajeno a este cambio — no se tocó.)
 ⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
    de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
    Partida). Pendiente BF anterior: confirmar Herreria.
@@ -316,6 +335,9 @@ Todo bajo `src/app/proyectos/[id]/buyout/glosario/` (0 archivos de Pagos, 0 migr
   - `feat/buyout-mejoras` → **(sesión conceptos, 2026-07-02):** `feat(buyout): Glosario — gestión de conceptos por
     partida` (`glosario/actions.ts` +conceptos, `page.tsx` reescrito, `partida-row.tsx` + 5 componentes de concepto
     + STATE; **sin migración**). **Local, sin push.**
+  - `feat/buyout-mejoras` → **(sesión límite body, 2026-07-02):** `fix(buyout): subir límite de Server Actions a 10MB
+    (uploads de PDF)` (solo `next.config.ts` → `experimental.serverActions.bodySizeLimit = "10mb"` + STATE; **sin
+    migración**, **sin tocar Pagos**). **Local, sin push.**
 - Rama histórica (pre-merge a main): **`feat/buyout`**.
 - Commits hechos:
   - `main` → `163c597 docs: runbook rotación keys + prompt auditoría` (solo `docs/runbook-rotacion-keys.md` + `docs/prompt-auditoria-calidad.md`). **Local, sin push.**
