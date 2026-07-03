@@ -211,14 +211,16 @@ function safeBuyoutPdfPath(
 }
 
 /**
- * Revalida las 3 pantallas que muestran el estado agregado de una línea: el
- * Resumen (badges/parcial/% Contratación), la Partida (tabla) y la Subcategoría
- * (historial/índice). Un cambio de estado por línea debe reflejarse en las tres.
+ * Revalida las pantallas del Buy-Out que dependen de las líneas de una partida:
+ * Resumen (total/rollup/parcial/% Contratación), Partida (tabla), Subcategoría
+ * (historial/índice) y Glosario (contadores "con datos" por partida/concepto).
+ * Un alta/edición/borrado/toggle/versión de línea debe reflejarse en las cuatro (M1).
  */
 function revalidateEstado(projectId: string) {
   revalidatePath(`/proyectos/${projectId}/buyout`)
   revalidatePath(`/proyectos/${projectId}/buyout/partida`)
   revalidatePath(`/proyectos/${projectId}/buyout/subcategoria`)
+  revalidatePath(`/proyectos/${projectId}/buyout/glosario`)
 }
 
 /**
@@ -365,7 +367,9 @@ export async function createLinea(
     safeBuyoutPdfPath(projectId, d.pdf_path),
   )
   if ("error" in res) return res
-  revalidatePath(`/proyectos/${projectId}/buyout/partida`)
+  // M1 — revalida Resumen + Partida + Subcategoría + Glosario (un concepto/versión
+  // nuevo cambia el total del rollup y los contadores del Glosario, no solo /partida).
+  revalidateEstado(projectId)
   return res
 }
 
@@ -418,7 +422,9 @@ export async function addBudgetVersion(
     safeBuyoutPdfPath(projectId, d.pdf_path),
   )
   if ("error" in res) return res
-  revalidatePath(`/proyectos/${projectId}/buyout/partida`)
+  // M1 — revalida Resumen + Partida + Subcategoría + Glosario (un concepto/versión
+  // nuevo cambia el total del rollup y los contadores del Glosario, no solo /partida).
+  revalidateEstado(projectId)
   return res
 }
 
@@ -511,6 +517,21 @@ export async function deleteLinea(
   const guard = await requireAdmin()
   if (guard) return { error: guard }
   const sb = await createClient()
+
+  // L1 — Scoping: el concepto (item) debe pertenecer a ESTE proyecto antes de
+  // tocar sus líneas/cotizaciones. La RLS `buyout_*` gatea por admin GLOBAL, no
+  // por proyecto → sin esto, ids de otro proyecto pasarían.
+  const { data: item, error: itemErr } = await sb
+    .from("buyout_item")
+    .select("id")
+    .eq("id", itemId)
+    .eq("project_id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  if (itemErr)
+    return { error: `Error al validar el concepto: ${itemErr.message}` }
+  if (!item) return { error: "Concepto no encontrado en este proyecto." }
+
   const now = new Date().toISOString()
 
   // 1) Soft-delete SOLO esta línea (por su id). Las líneas hermanas del mismo
@@ -578,12 +599,19 @@ export async function deleteLinea(
 // ---------------------------------------------------------------------------
 
 /**
- * Alterna Contratado/No contratado de UNA línea, escribiendo SOLO
- * `buyout_line.contratado` (el estado por-línea que lee el rollup). No toca la
- * cotización: así una cotización con varias líneas (BF por torre) puede quedar
- * "parcial" (una torre contratada y otra no) sin que el toggle de una arrastre a
- * la otra ni altere el puente a Pagos (que mira el estado de la cotización).
- * No cambia montos ni el cuadre — solo el estado.
+ * Alterna Contratado/No contratado de UNA línea, escribiendo el estado por-línea
+ * `buyout_line.contratado` (el que lee el rollup del Resumen). Una cotización con
+ * varias líneas (BF por torre) puede quedar "parcial" (una torre contratada y otra
+ * no) sin que el toggle de una arrastre a la otra.
+ *
+ * L2 — Scoping: ata la línea → cotización → item → proyecto antes de escribir
+ * (la RLS `buyout_*` gatea por admin GLOBAL, no por proyecto).
+ * L3 — Consistencia con el puente a Pagos: el puente lee el estado de la
+ * COTIZACIÓN (`buyout_quote.contratado`), no de las líneas. Tras el toggle se
+ * recomputa ese agregado desde TODAS las líneas vivas con la MISMA regla que el
+ * rollup (`contratado` = true solo si TODAS lo están; una parcial → false) → el
+ * bridge y el Resumen coinciden. Solo se recomputa `contratado` (lo único que
+ * cambia este toggle); `kind`, montos y cuadre quedan intactos.
  */
 export async function setLineaContratado(
   lineId: string,
@@ -594,12 +622,72 @@ export async function setLineaContratado(
   if (guard) return { error: guard }
   const sb = await createClient()
 
+  // L2 — línea → cotización → item → proyecto.
+  const { data: line, error: lineErr } = await sb
+    .from("buyout_line")
+    .select("quote_id")
+    .eq("id", lineId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  if (lineErr) return { error: `Error al leer la línea: ${lineErr.message}` }
+  if (!line) return { error: "Línea no encontrada." }
+  const quoteId = line.quote_id as string
+
+  const { data: quote, error: quoteErr } = await sb
+    .from("buyout_quote")
+    .select("item_id, contratado")
+    .eq("id", quoteId)
+    .maybeSingle()
+  if (quoteErr) {
+    return { error: `Error al leer la cotización: ${quoteErr.message}` }
+  }
+  if (!quote) return { error: "Cotización no encontrada." }
+
+  const { data: item, error: itemErr } = await sb
+    .from("buyout_item")
+    .select("id")
+    .eq("id", quote.item_id as string)
+    .eq("project_id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  if (itemErr)
+    return { error: `Error al validar el proyecto: ${itemErr.message}` }
+  if (!item) return { error: "La línea no pertenece a este proyecto." }
+
+  // Toggle de ESTA línea.
   const { error } = await sb
     .from("buyout_line")
     .update({ contratado })
     .eq("id", lineId)
     .is("deleted_at", null)
   if (error) return { error: error.message }
+
+  // L3 — Recomputa el agregado de la cotización desde sus líneas vivas. Una línea
+  // sin estado propio (`contratado` NULL) hereda el valor previo de la cotización
+  // (mismo fallback que el rollup), para no voltear el display de una hermana
+  // heredada. Solo se escribe si el agregado cambió.
+  const prevQuote = Boolean(quote.contratado)
+  const { data: quoteLines, error: linesErr } = await sb
+    .from("buyout_line")
+    .select("contratado")
+    .eq("quote_id", quoteId)
+    .is("deleted_at", null)
+  if (linesErr) {
+    return { error: `Error al recomputar el estado: ${linesErr.message}` }
+  }
+  const live = quoteLines ?? []
+  const quoteContratado =
+    live.length > 0 &&
+    live.every((l) => ((l.contratado as boolean | null) ?? prevQuote) === true)
+  if (quoteContratado !== prevQuote) {
+    const { error: qErr } = await sb
+      .from("buyout_quote")
+      .update({ contratado: quoteContratado })
+      .eq("id", quoteId)
+    if (qErr) {
+      return { error: `Error al actualizar la cotización: ${qErr.message}` }
+    }
+  }
 
   revalidateEstado(projectId)
   return { ok: true }

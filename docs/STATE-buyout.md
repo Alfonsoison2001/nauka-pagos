@@ -1,6 +1,6 @@
 # STATE — Módulo Buy-Out
 
-> Bitácora de avance del módulo. Última actualización: **2026-07-02**.
+> Bitácora de avance del módulo. Última actualización: **2026-07-03**.
 > Spec: [`docs/SPEC-buyout.md`](SPEC-buyout.md) · Análisis del Excel: [`docs/future-modules/buyout-L3-estructura.md`](future-modules/buyout-L3-estructura.md).
 
 ## Estado actual
@@ -413,6 +413,25 @@
    (Resumen + Partida + Subcategoría). **2 archivos** (`partida/page.tsx`: `deriveTorreDepto` +opción, `torreRank`
    +"Dos Torres"; `partida/actions.ts`: `deleteLinea` reescrito). Gate verde: `tsc` ✓ · `biome` ✓ · `pnpm build` ✓
    (12 rutas; Pagos idénticas). **Pagos intacto · L3/L44 sin cambios (salvo el borrado, que ahora es por línea).**
+✅ **Robustez PRE-PRODUCCIÓN del branch — auditoría `docs/audit-buyout-mejoras-2026-07-03.md` (2026-07-03 · rama `feat/buyout-mejoras`)** —
+   6 arreglos quirúrgicos de la auditoría (0🔴 0🟠; se aplicaron los **3 🟡 + 3 ⚪** de scoping/consistencia), **2 archivos**
+   (`partida/actions.ts`, `glosario/actions.ts`), **sin migración · sin tocar Pagos · sin cambiar montos/cuadre**.
+   **M1 — Revalidación:** `revalidateEstado` ahora también revalida **Glosario** (Resumen+Partida+Subcategoría+Glosario);
+   `createLinea`/`addBudgetVersion` pasaron de revalidar solo `/partida` a usar `revalidateEstado` → tras capturar un
+   concepto/versión, el **total del Resumen** y los **contadores "con datos" del Glosario** quedan frescos (antes stale en
+   navegación cliente). **M2 — `renameChapter`:** el re-apunte de partidas (`chapter_default` viejo→nuevo) ahora **captura
+   el `.error`**; si falla, **revierte el rename** del capítulo (compensación) y devuelve error, en vez de `ok:true` con
+   partidas huérfanas. **M3 — `renameConcepto`:** la propagación del nombre a `buyout_item`/`buyout_line` se extrajo a
+   `propagateConceptoRename`, que **revisa el error** de cada UPDATE y, si falla, **revierte lo aplicado** (conceptos +
+   catálogo) → nunca deja el nombre desincronizado en silencio. **L1 — `deleteLinea`:** valida `buyout_item.project_id ===
+   projectId` antes de borrar (la RLS gatea por admin GLOBAL, no por proyecto). **L2 — `setLineaContratado`:** ata **línea →
+   cotización → item → proyecto** antes de escribir (mismo motivo). **L3 — consistencia estado ↔ puente a Pagos:** tras el
+   toggle por línea, **recomputa `buyout_quote.contratado`** desde TODAS las líneas vivas con la MISMA regla del rollup
+   (`contratado`=true solo si TODAS lo están; parcial→false) → el **puente a Pagos** (que lee la cotización) queda
+   consistente con el **Resumen** (que lee las líneas); solo se recomputa `contratado` (lo único que cambia el toggle), y una
+   línea sin estado propio hereda el valor previo de la cotización (mismo fallback del rollup) para no voltear una hermana
+   heredada. Gate verde: `tsc` ✓ · `biome` ✓ · `pnpm build` ✓ (12 rutas; Pagos idénticas). **NO se hizo el módulo común
+   compartido (L11) ni el resto de ⚪ (deuda post-merge, ver el reporte).** **Pagos intacto · L3/L44 sin cambios de comportamiento.**
 ⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
    de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
    Partida). Pendiente BF anterior: confirmar Herreria.

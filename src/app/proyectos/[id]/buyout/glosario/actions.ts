@@ -180,13 +180,27 @@ export async function renameChapter(
     }
   }
 
-  // Re-apunta las partidas que colgaban del nombre viejo (mantiene la agrupación).
-  await sb
+  // M2 — Re-apunta las partidas que colgaban del nombre viejo (mantiene la
+  // agrupación). Si esta 2ª escritura falla, el capítulo ya quedó renombrado y las
+  // partidas quedarían huérfanas ("Sin capítulo"): revertimos el rename
+  // (compensación) y avisamos, en vez de devolver ok:true en silencio.
+  const { error: repointErr } = await sb
     .from("buyout_partida_catalog")
     .update({ chapter_default: parsed.data.nombre })
     .eq("project_id", projectId)
     .eq("chapter_default", chapter.nombre)
     .is("deleted_at", null)
+  if (repointErr) {
+    await sb
+      .from("buyout_chapter")
+      .update({ nombre: chapter.nombre })
+      .eq("id", chapterId)
+      .eq("project_id", projectId)
+    return {
+      error:
+        "No se pudieron re-apuntar las partidas del capítulo; se revirtió el cambio. Intenta de nuevo.",
+    }
+  }
 
   revalidateBuyout(projectId)
   return { ok: true }
@@ -491,6 +505,82 @@ export async function createConcepto(
 }
 
 /**
+ * Propaga el nombre nuevo del concepto a las filas capturadas (`buyout_item` /
+ * `buyout_line`) con el nombre viejo EXACTO en esa partida. Si alguna escritura
+ * falla, revierte lo ya aplicado (incluido el rename del catálogo) para no dejar
+ * el nombre a medias y devuelve el error (M3). No cambia montos.
+ */
+async function propagateConceptoRename(
+  sb: Sb,
+  projectId: string,
+  partidaId: string,
+  conceptoId: string,
+  nombreViejo: string,
+  nombreNuevo: string,
+): Promise<ActionResult> {
+  const revertCatalog = () =>
+    sb
+      .from("buyout_concepto_catalog")
+      .update({ nombre: nombreViejo })
+      .eq("id", conceptoId)
+
+  const { data: items, error: itemsErr } = await sb
+    .from("buyout_item")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("partida_catalog_id", partidaId)
+    .eq("concepto", nombreViejo)
+    .is("deleted_at", null)
+  if (itemsErr) {
+    await revertCatalog()
+    return {
+      error: `No se pudo propagar el nombre; se revirtió el cambio (${itemsErr.message}).`,
+    }
+  }
+  const itemIds = (items ?? []).map((i) => i.id as string)
+  if (itemIds.length === 0) return { ok: true }
+
+  const { data: quotes } = await sb
+    .from("buyout_quote")
+    .select("id")
+    .in("item_id", itemIds)
+    .is("deleted_at", null)
+  const quoteIds = (quotes ?? []).map((q) => q.id as string)
+
+  const { error: itemPropErr } = await sb
+    .from("buyout_item")
+    .update({ concepto: nombreNuevo })
+    .in("id", itemIds)
+  if (itemPropErr) {
+    await revertCatalog()
+    return {
+      error: `No se pudo propagar el nombre a los conceptos; se revirtió el cambio (${itemPropErr.message}).`,
+    }
+  }
+
+  if (quoteIds.length > 0) {
+    const { error: linePropErr } = await sb
+      .from("buyout_line")
+      .update({ concepto: nombreNuevo })
+      .in("quote_id", quoteIds)
+      .eq("concepto", nombreViejo)
+      .is("deleted_at", null)
+    if (linePropErr) {
+      // Revierte lo ya aplicado: conceptos → nombre viejo y catálogo → nombre viejo.
+      await sb
+        .from("buyout_item")
+        .update({ concepto: nombreViejo })
+        .in("id", itemIds)
+      await revertCatalog()
+      return {
+        error: `No se pudo propagar el nombre a los renglones; se revirtió el cambio (${linePropErr.message}).`,
+      }
+    }
+  }
+  return { ok: true }
+}
+
+/**
  * Renombra un concepto del catálogo. Como los `buyout_item`/`buyout_line`
  * capturados guardan el nombre como TEXTO (no hay FK al catálogo; se ligan por
  * nombre dentro de la partida), propaga el nuevo nombre a las filas capturadas
@@ -530,32 +620,17 @@ export async function renameConcepto(
     }
   }
 
-  // Propagación por nombre EXACTO dentro de la partida (solo Buy-Out, sin montos).
-  const { data: items } = await sb
-    .from("buyout_item")
-    .select("id")
-    .eq("project_id", projectId)
-    .eq("partida_catalog_id", scoped.partidaId)
-    .eq("concepto", scoped.nombre)
-    .is("deleted_at", null)
-  const itemIds = (items ?? []).map((i) => i.id as string)
-  if (itemIds.length > 0) {
-    const { data: quotes } = await sb
-      .from("buyout_quote")
-      .select("id")
-      .in("item_id", itemIds)
-      .is("deleted_at", null)
-    const quoteIds = (quotes ?? []).map((q) => q.id as string)
-    await sb.from("buyout_item").update({ concepto: nuevo }).in("id", itemIds)
-    if (quoteIds.length > 0) {
-      await sb
-        .from("buyout_line")
-        .update({ concepto: nuevo })
-        .in("quote_id", quoteIds)
-        .eq("concepto", scoped.nombre)
-        .is("deleted_at", null)
-    }
-  }
+  // M3 — Propaga el nombre a las filas capturadas con compensación si falla (no
+  // dejar el nombre desincronizado en silencio).
+  const prop = await propagateConceptoRename(
+    sb,
+    projectId,
+    scoped.partidaId,
+    conceptoId,
+    scoped.nombre,
+    nuevo,
+  )
+  if ("error" in prop) return prop
 
   revalidateBuyout(projectId)
   return { ok: true }
