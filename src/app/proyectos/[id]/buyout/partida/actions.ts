@@ -498,7 +498,8 @@ export async function updateLinea(
 }
 
 // ---------------------------------------------------------------------------
-// deleteLinea — soft-delete línea + cotización; promueve versión previa o baja el item
+// deleteLinea — soft-delete SOLO esa línea; limpia cotización/item vacíos únicamente
+// si era la ÚLTIMA línea viva del concepto (no toca las hermanas de otras torres).
 // ---------------------------------------------------------------------------
 
 export async function deleteLinea(
@@ -507,9 +508,13 @@ export async function deleteLinea(
   itemId: string,
   projectId: string,
 ): Promise<ActionResult> {
+  const guard = await requireAdmin()
+  if (guard) return { error: guard }
   const sb = await createClient()
   const now = new Date().toISOString()
 
+  // 1) Soft-delete SOLO esta línea (por su id). Las líneas hermanas del mismo
+  //    concepto/cotización (p. ej. la otra torre) NO se tocan.
   const { error: lineErr } = await sb
     .from("buyout_line")
     .update({ deleted_at: now })
@@ -517,12 +522,27 @@ export async function deleteLinea(
     .is("deleted_at", null)
   if (lineErr) return { error: lineErr.message }
 
+  // 2) ¿Quedan líneas vivas bajo la MISMA cotización (otras torres)? Si sí, el
+  //    concepto sigue vivo: NO tocamos la cotización ni el item.
+  const { data: siblings, error: sibErr } = await sb
+    .from("buyout_line")
+    .select("id")
+    .eq("quote_id", quoteId)
+    .is("deleted_at", null)
+    .limit(1)
+  if (sibErr) return { error: sibErr.message }
+  if (siblings && siblings.length > 0) {
+    revalidateEstado(projectId)
+    return { ok: true }
+  }
+
+  // 3) Era la ÚLTIMA línea de la cotización → da de baja la cotización vacía y
+  //    promueve la versión previa (o baja el item si no quedan versiones).
   await sb
     .from("buyout_quote")
     .update({ deleted_at: now, is_selected: false })
     .eq("id", quoteId)
 
-  // ¿Quedan versiones (cotizaciones) de este concepto? Promueve la más reciente.
   const { data: prev } = await sb
     .from("buyout_quote")
     .select("id")
@@ -549,7 +569,7 @@ export async function deleteLinea(
       .eq("id", itemId)
   }
 
-  revalidatePath(`/proyectos/${projectId}/buyout/partida`)
+  revalidateEstado(projectId)
   return { ok: true }
 }
 

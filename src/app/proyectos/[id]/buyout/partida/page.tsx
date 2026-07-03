@@ -248,18 +248,27 @@ function buildGroups(
 
 // --- orden de líneas por torre (solo BF) ------------------------------------
 
-/** Rango de torre para ordenar: "Torre 1" → 1, "Torre 2" → 2, … ; "Compartido"/otros/sin torre → al final. */
+/** Etiqueta de la línea que cubre AMBAS torres (una sola línea, cantidad normal). */
+const DOS_TORRES = "Dos Torres"
+
+/**
+ * Rango de torre para ordenar: "Dos Torres" → 0 (agrupada LIMPIA al inicio de la
+ * partida), "Torre 1" → 1, "Torre 2" → 2, … ; "Compartido"/otros/sin torre → al final.
+ */
 function torreRank(villaCasita: string | null): number {
-  const m = villaCasita?.match(/torre\s*(\d+)/i)
+  if (!villaCasita) return Number.POSITIVE_INFINITY
+  const v = villaCasita.trim()
+  if (v.toLowerCase() === DOS_TORRES.toLowerCase()) return 0
+  const m = v.match(/torre\s*(\d+)/i)
   return m ? Number(m[1]) : Number.POSITIVE_INFINITY
 }
 
 /**
- * Ordena las líneas de una partida (BF) por TORRE primero (Torre 1 → Torre 2 →
- * "Compartido"/otros al final) y, dentro de cada torre, con el MISMO orden de
- * conceptos: la clave de concepto = su primera aparición en la lista original,
- * así ambos bloques de torre listan los conceptos en idéntico orden. Solo cambia
- * el orden de DESPLIEGUE; no toca montos ni el total (la suma es la misma).
+ * Ordena las líneas de una partida (BF) por TORRE primero ("Dos Torres" al inicio
+ * → Torre 1 → Torre 2 → "Compartido"/otros al final) y, dentro de cada torre, con
+ * el MISMO orden de conceptos: la clave de concepto = su primera aparición en la
+ * lista original, así ambos bloques de torre listan los conceptos en idéntico
+ * orden. Solo cambia el orden de DESPLIEGUE; no toca montos ni el total (Σ igual).
  */
 function sortLineasByTorre(lineas: VigenteLine[]): VigenteLine[] {
   const conceptOrder = new Map<string, number>()
@@ -312,7 +321,12 @@ function deriveTorreDepto(units: { nombre: string; tipo: string }[]): {
   }
   return {
     unitMode: "torre",
-    torres: torreLabels.map((t) => ({ value: t, label: t })),
+    torres: [
+      ...torreLabels.map((t) => ({ value: t, label: t })),
+      // "Dos Torres" = UNA línea que cubre ambas torres (cantidad normal, ppto
+      // total, un solo estado). Se guarda tal cual en villa_casita.
+      { value: DOS_TORRES, label: DOS_TORRES },
+    ],
     deptos,
   }
 }

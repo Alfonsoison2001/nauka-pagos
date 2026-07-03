@@ -393,6 +393,26 @@
    contratación clicable admin). Gate verde: `tsc` ✓ · `biome` ✓ · `pnpm build` ✓ (12 rutas; Pagos idénticas).
    **Pagos intacto** (solo Buy-Out; el puente a Pagos no se tocó) · **L3 idéntico** (line-state NULL → cae a la
    cotización, igual que hoy; al editar se materializa con el mismo valor).
+✅ **Opción "Dos Torres" + borrado individual por línea (2026-07-02 · rama `feat/buyout-mejoras`)** — 2 ajustes en la
+   captura BF, **sin migración**, **sin tocar montos/cuadre**. **(1) "Dos Torres" (solo BF):** el dropdown de Torre
+   (modo torre) ahora ofrece **Torre 1 · Torre 2 · Dos Torres**. "Dos Torres" guarda `buyout_line.villa_casita =
+   "Dos Torres"` y es **UNA sola línea** que cubre ambas torres (cantidad **normal**, no 0.5; ppto total; un solo
+   estado) — reusa el mismo canal `torre`→`villa_casita` de la captura (sin cambios en actions/form: solo se agregó
+   la opción en `deriveTorreDepto`, y solo en el return de modo torre → L3/L44 no la ven). El rollup la trata como
+   línea normal (suma su `total_mxn`) → cuadre intacto. En el **orden** de la tabla se agrupa **LIMPIA al inicio** de
+   la partida (`torreRank("Dos Torres")=0`, antes de Torre 1); Torre 1→Torre 2→Compartido siguen igual. **(2) Borrado
+   individual (bug):** `deleteLinea` borraba la línea **y también la cotización** (`quoteId`), que en BF es
+   **compartida** por las líneas hermanas (una cotización por concepto, N líneas por torre — la migración fuerza 1
+   cotización vigente por item) → al bajar la cotización desaparecían **todas** las torres (ej. borrar "Mecánica de
+   Suelos · Torre 2" se llevaba Torre 1). **Fix:** `deleteLinea` ahora (a) soft-deletea **SOLO** esa `buyout_line` por
+   su id; (b) consulta si quedan **líneas vivas bajo la MISMA cotización** (`quote_id`, no `item_id` → no cuenta
+   líneas de versiones históricas) — si sí, **no toca** cotización ni item y termina; (c) **solo si era la última
+   línea viva** de la cotización, la da de baja y promueve la versión previa (o baja el item), como antes. **Aplica a
+   TODOS los proyectos** (sin ramas por proyecto): L3/L44 con 1 línea por concepto → cae directo al caso (c), igual
+   que hoy. Se agregó **guard admin** explícito (`requireAdmin`, + RLS) y la revalidación pasó a `revalidateEstado`
+   (Resumen + Partida + Subcategoría). **2 archivos** (`partida/page.tsx`: `deriveTorreDepto` +opción, `torreRank`
+   +"Dos Torres"; `partida/actions.ts`: `deleteLinea` reescrito). Gate verde: `tsc` ✓ · `biome` ✓ · `pnpm build` ✓
+   (12 rutas; Pagos idénticas). **Pagos intacto · L3/L44 sin cambios (salvo el borrado, que ahora es por línea).**
 ⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
    de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
    Partida). Pendiente BF anterior: confirmar Herreria.
@@ -464,6 +484,11 @@ Todo bajo `src/app/proyectos/[id]/buyout/glosario/` (0 archivos de Pagos, 0 migr
     madurez) por línea` (`partida/actions.ts` +escribe `buyout_line.kind/contratado` en `updateLinea` + nueva
     `setLineaContratado` + revalida Resumen; `partida/contratado-toggle.tsx` nuevo; `partida/page.tsx` celda
     clicable admin + STATE; **sin migración**, **solo estado**, **sin tocar Pagos**). **Local, sin push.**
+  - `feat/buyout-mejoras` → **(sesión Dos Torres + borrado, 2026-07-02):** `fix(buyout): opción Dos Torres + borrado
+    individual por línea` (`partida/page.tsx`: opción "Dos Torres" en el dropdown de Torre + orden al inicio;
+    `partida/actions.ts`: `deleteLinea` borra solo esa línea, limpia cotización/item solo si era la última +
+    guard admin; STATE; **sin migración**, **sin tocar Pagos**, **L3/L44 solo cambian en el borrado**). **Local,
+    sin push.**
 - Rama histórica (pre-merge a main): **`feat/buyout`**.
 - Commits hechos:
   - `main` → `163c597 docs: runbook rotación keys + prompt auditoría` (solo `docs/runbook-rotacion-keys.md` + `docs/prompt-auditoria-calidad.md`). **Local, sin push.**
