@@ -35,7 +35,7 @@ export function PartidaRowView({
 
   return (
     <li>
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-nauka-bg">
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-nauka-bg">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -53,7 +53,7 @@ export function PartidaRowView({
             title={conDatos ? "Con datos capturados" : "Sin datos"}
             className={cn(
               "inline-block size-2 shrink-0 rounded-full",
-              conDatos ? "bg-nauka-success" : "bg-nauka-neutral/40",
+              conDatos ? "bg-nauka-accent" : "bg-nauka-neutral/40",
             )}
           />
           <span className="truncate text-sm font-medium text-nauka-dark">
@@ -95,9 +95,9 @@ export function PartidaRowView({
       </div>
 
       {open ? (
-        <div className="border-t border-nauka-subtle bg-nauka-bg/60 px-4 py-3 pl-11">
+        <div className="border-t border-nauka-subtle bg-nauka-bg px-4 py-3 pl-11">
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Conceptos
             </span>
             {admin ? (
@@ -154,7 +154,7 @@ function ConceptoLine({
           title={conDatos ? "Con datos capturados" : "Sin datos"}
           className={cn(
             "inline-block size-1.5 shrink-0 rounded-full",
-            conDatos ? "bg-nauka-success" : "bg-nauka-neutral/40",
+            conDatos ? "bg-nauka-accent" : "bg-nauka-neutral/40",
           )}
         />
         <span className="truncate text-sm text-nauka-dark">

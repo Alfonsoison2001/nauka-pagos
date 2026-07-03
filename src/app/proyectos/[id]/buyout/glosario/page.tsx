@@ -1,4 +1,3 @@
-import { BookText } from "lucide-react"
 import { notFound } from "next/navigation"
 import { isAdmin } from "@/lib/auth/roles"
 import { createClient } from "@/lib/supabase/server"
@@ -38,18 +37,13 @@ export default async function BuyoutGlosarioPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex size-9 items-center justify-center rounded-xl bg-nauka-subtle text-nauka-dark">
-            <BookText className="size-5" />
-          </span>
-          <div>
-            <h2 className="text-lg font-semibold text-nauka-dark">Glosario</h2>
-            <p className="max-w-xl text-sm text-muted-foreground">
-              Administra los catálogos de este proyecto: capítulos, partidas y
-              conceptos. Abre una partida para ver sus conceptos.
-              {admin ? "" : " (solo lectura)"}
-            </p>
-          </div>
+        <div>
+          <h2 className="text-lg font-semibold text-nauka-dark">Glosario</h2>
+          <p className="max-w-xl text-sm text-muted-foreground">
+            Administra los catálogos de este proyecto: capítulos, partidas y
+            conceptos. Abre una partida para ver sus conceptos.
+            {admin ? "" : " (solo lectura)"}
+          </p>
         </div>
         {admin ? (
           <NuevoCapituloButton projectId={id} nextOrden={nextOrden} />
@@ -97,12 +91,13 @@ function ChapterSection({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-nauka-subtle bg-nauka-bg px-4 py-2.5">
+      {/* Banda de capítulo con espina accent — mismo lenguaje que el Resumen. */}
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-nauka-subtle border-l-2 border-l-nauka-accent bg-nauka-subtle/60 px-4 py-2">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-nauka-dark">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-nauka-dark">
             {chapter?.nombre ?? "Sin capítulo"}
           </h3>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground">
             {partidas.length} partida{partidas.length === 1 ? "" : "s"}
           </span>
         </div>

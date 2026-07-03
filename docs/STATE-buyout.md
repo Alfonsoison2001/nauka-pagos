@@ -470,6 +470,33 @@
    hairline verificados en el CSS compilado. Verificación por razonamiento (no-interactivo; render tras login = prueba
    de Alfonso): columnas/labels/orden/links/celdas editables/reabrir/cerrar mes/toggles idénticos en props y lógica.
    **PAUSA — Alfonso reacciona al piloto antes de replicar al resto del módulo.**
+✅ **UI PROFESIONAL — Fase 2: réplica a PARTIDA y GLOSARIO (2026-07-03 · rama `feat/ui-profesional`, sin push)** —
+   mismo sistema del piloto (design-prompt § Buy-Out), **SOLO presentación** (cero lógica/queries/labels/acciones).
+   **Subcategoría NO se estilizó a propósito** (pantalla por eliminar — rama `feat/buyout-historial`); su link
+   "Historial" por fila sigue funcionando igual. **PARTIDA — tabla de 22 col:** header pasó de banda oscura a
+   **blanco 11px uppercase con hairline** (mismo lenguaje del Resumen; sin sticky vertical — ahí el scroll es el de
+   la página, decisión previa intacta); filas `h-11` con hover plano y 1ª col `pl-4`; columna **Acciones ahora
+   `sticky right-0`** (fondo sólido + hairline izquierdo + hover sincronizado vía `group`) → Historial · PDF · ↻ ·
+   editar · borrar quedan a la mano aunque se scrollee a la izquierda de las 22 columnas; fila **Total → banda
+   `nauka-dark`** (label "Total" idéntico); **montos con 2 decimales intactos** (formato del tab verde; el
+   sin-decimales es del Resumen). **Badges de 2 ejes** (nuevo mapeo confirmado por Alfonso — cada eje su color):
+   `Ppto` = tinte accent/20 · `Paramétrico` = **outline dashed** gris (borrador) · `Contratado` = tinte dark/10 ·
+   `No contratado` = neutral subtle (antes verde/ámbar/verde/slate); el **toggle clicable** de contratación
+   (`ContratadoToggle`, admin) usa los mismos colores con ring al hover — misma acción/Server Action. **Tarjetas de
+   Partida:** título de capítulo con **espina accent** (11px uppercase); punto "con datos" **verde → accent** (es
+   dato, no semáforo). **GLOSARIO:** se quitó el chip decorativo de icono (BookText) del encabezado (regla "cero
+   decoración"); banda de cada capítulo con **espina accent + `nauka-subtle/60`** y título 11px uppercase (mismo
+   lenguaje de bandas del Resumen); panel de conceptos en lavado `nauka-bg` con label 11px; puntos "con datos" →
+   accent; hover de fila con transición. Todos los botones/diálogos/acciones (agregar/renombrar/reordenar/borrar
+   capítulos·partidas·conceptos, atajo "+ Nueva partida") **intactos en props y lógica**. **design-prompt.md**
+   actualizado: estado (fase 2 aplicada, Subcategoría excluida), badges con el mapeo por eje definitivo, indicador
+   "con datos" = accent, y nota de la tabla de 22 col (header estático + Acciones sticky + 2 decimales). **7
+   archivos** (5 código + design-prompt + STATE): `partida/page.tsx` · `partida/partida-cards.tsx` ·
+   `partida/contratado-toggle.tsx` · `glosario/page.tsx` · `glosario/partida-row.tsx`. **NO tocados:** Subcategoría
+   completa, `buyout-sub-nav`, diálogos/botones shadcn de ambas pantallas, **Pagos completo**; sin migración, sin
+   dependencias. Gate verde: `tsc` ✓ · `biome` ✓ (5 archivos) · `pnpm build` ✓ (12 rutas; Pagos idénticas); dev
+   server siguió vivo tras el build (HTTP 200). **PAUSA — Alfonso reacciona a Partida + Glosario; falta su OK para
+   dar el sistema por cerrado (Subcategoría se resuelve cuando entre Historial).**
 ⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
    de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
    Partida). Pendiente BF anterior: confirmar Herreria.

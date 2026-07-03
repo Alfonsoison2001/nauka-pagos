@@ -7,6 +7,7 @@ import { loadVigenteLines, type VigenteLine } from "@/lib/buyout/rollup"
 import { createClient } from "@/lib/supabase/server"
 import { cn, formatMXN } from "@/lib/utils"
 import { NuevaPartidaButton } from "../glosario/nueva-partida-button"
+import { HEAD_ROW, TH_HAIRLINE } from "../table-ui"
 import type {
   ConceptoOption,
   CurrencyOption,
@@ -423,22 +424,29 @@ function LineasTable({
     // overflow-x-auto = scroll HORIZONTAL de las 22 columnas dentro de la caja;
     // sin cap de altura → el scroll VERTICAL es el de la página y se alcanzan
     // TODAS las filas (antes `max-h-[70vh] overflow-auto` atrapaba las de abajo).
+    // La columna Acciones va `sticky right-0` → las acciones (Historial · PDF ·
+    // ↻ · editar · borrar) quedan siempre a la mano aunque se scrollee a la
+    // izquierda de las 22 columnas.
     <div className="overflow-x-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
       <table className="w-full whitespace-nowrap text-sm tabular-nums">
         <thead>
-          <tr className="bg-nauka-dark text-xs uppercase tracking-wider text-white/70">
-            {GREEN_COLUMNS.map((col) => (
+          <tr className={HEAD_ROW}>
+            {GREEN_COLUMNS.map((col, i) => (
               <th
                 key={col.label}
                 className={cn(
-                  "px-3 py-2.5",
+                  "px-3 py-2.5 font-medium",
+                  TH_HAIRLINE,
                   col.numeric ? "text-right" : "text-left",
+                  i === 0 && "pl-4",
                 )}
               >
                 {col.label}
               </th>
             ))}
-            <th className="px-3 py-2.5 text-right">Acciones</th>
+            <th className="sticky right-0 z-10 bg-white px-3 py-2.5 pr-4 text-right font-medium shadow-[inset_1px_0_0_0_var(--color-nauka-subtle),inset_0_-1px_0_0_var(--color-nauka-subtle)]">
+              Acciones
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -464,14 +472,17 @@ function LineasTable({
           )}
         </tbody>
         <tfoot>
-          <tr className="border-t border-nauka-subtle bg-nauka-bg text-xs uppercase tracking-wider text-muted-foreground">
-            <td colSpan={18} className="px-3 py-2 text-right font-medium">
+          <tr className="bg-nauka-dark text-white">
+            <td
+              colSpan={18}
+              className="px-3 py-2.5 pl-4 text-right text-[11px] font-medium uppercase tracking-wider text-white/70"
+            >
               Total
             </td>
-            <td className="px-3 py-2 text-right font-semibold text-nauka-dark">
+            <td className="px-3 py-2.5 text-right font-semibold">
               {formatMXN(totalMxn)}
             </td>
-            <td colSpan={4} className="px-3 py-2" />
+            <td colSpan={4} className="px-3 py-2.5 pr-4" />
           </tr>
         </tfoot>
       </table>
@@ -500,8 +511,8 @@ function LineaRowCells({
   const dash = (v: string | null) => v || "—"
 
   return (
-    <tr className="border-b border-nauka-subtle hover:bg-nauka-bg">
-      <td className="px-3 py-2">{dash(linea.partidaNombre)}</td>
+    <tr className="group h-11 border-b border-nauka-subtle transition-colors hover:bg-nauka-bg">
+      <td className="px-3 py-2 pl-4">{dash(linea.partidaNombre)}</td>
       <td className="px-3 py-2 font-medium">{dash(linea.concepto)}</td>
       <td className="px-3 py-2 text-muted-foreground">{dash(linea.detalle)}</td>
       <td className="px-3 py-2">{dash(linea.villa_casita)}</td>
@@ -550,7 +561,7 @@ function LineaRowCells({
           <EstadoBadge contratado={linea.contratado} />
         )}
       </td>
-      <td className="px-3 py-2">
+      <td className="sticky right-0 bg-white px-3 py-2 pr-4 shadow-[inset_1px_0_0_0_var(--color-nauka-subtle),inset_0_-1px_0_0_var(--color-nauka-subtle)] transition-colors group-hover:bg-nauka-bg">
         <div className="flex items-center justify-end gap-1">
           <Link
             href={`/proyectos/${projectId}/buyout/subcategoria?item=${linea.item_id}`}
@@ -589,8 +600,14 @@ function LineaRowCells({
 }
 
 const PILL =
-  "inline-flex h-6 items-center rounded-full px-2.5 text-xs font-medium"
+  "inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium"
 
+/**
+ * Badges de los 2 ejes (design-prompt § Buy-Out · badges): cada eje usa su color
+ * fijo — madurez=accent, contratación=dark. `Paramétrico` = outline punteado
+ * (es un borrador tecleado); `Ppto` = tinte accent (respaldado por cotización);
+ * `Contratado` = tinte dark (amarrado); `No contratado` = neutral.
+ */
 function EstadoBadge({
   kind,
   contratado,
@@ -604,8 +621,8 @@ function EstadoBadge({
         className={cn(
           PILL,
           kind === "ppto"
-            ? "bg-green-100 text-green-700"
-            : "bg-amber-100 text-amber-700",
+            ? "bg-nauka-accent/20 text-nauka-dark"
+            : "border border-dashed border-nauka-neutral/70 bg-white text-muted-foreground",
         )}
       >
         {kind === "ppto" ? "Ppto" : "Paramétrico"}
@@ -617,8 +634,8 @@ function EstadoBadge({
       className={cn(
         PILL,
         contratado
-          ? "bg-green-100 text-green-700"
-          : "bg-slate-100 text-slate-600",
+          ? "bg-nauka-dark/10 text-nauka-dark"
+          : "bg-nauka-subtle text-muted-foreground",
       )}
     >
       {contratado ? "Contratado" : "No contratado"}

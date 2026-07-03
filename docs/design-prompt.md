@@ -284,8 +284,9 @@ Cuando alguien compare el "antes" y "después", el redesign debe sentirse **5–
 
 # EXTENSIÓN — Módulo Buy-Out: tablero financiero denso
 
-**Estado:** Propuesta 2026-07-03 · rama `feat/ui-profesional` · **Piloto = pantalla Resumen** del Buy-Out.
-Pendiente reacción de Alfonso antes de replicar a Partida · Subcategoría · Glosario. **Pagos NO se toca.**
+**Estado:** 2026-07-03 · rama `feat/ui-profesional` · **Aplicado a: Resumen (piloto, fase 1) +
+Partida y Glosario (fase 2).** Pendiente reacción de Alfonso. **Pagos NO se toca.**
+**Subcategoría queda EXCLUIDA a propósito** (pantalla por eliminar — rama `feat/buyout-historial`).
 
 ## Por qué una extensión (y no otro sistema)
 
@@ -367,6 +368,11 @@ en fila sticky se queda atrás al hacer scroll con `border-collapse`.)
   horizontal). **Reemplaza a las 4 tarjetas grises sueltas** del pie anterior.
 - **DIF:** texto con signo y flecha (↑ rojo · ↓ verde · — gris), `text-xs font-medium`
   tabular, **sin pill de fondo** a nivel fila (menos ruido); en la banda TOTAL, tintas claras.
+- **Tabla de 22 columnas (Partida):** mismo header blanco con hairline (estático — ahí el
+  scroll vertical es el de la página); la columna **Acciones** va `sticky right-0` con fondo
+  sólido y hairline izquierdo → las acciones quedan a la mano aunque se scrollee horizontal;
+  su fila Total usa la misma banda `nauka-dark`. Los montos de Partida conservan sus
+  2 decimales (formato del tab verde del Excel; el "sin decimales" es del Resumen).
 - **Barras de avance** (Estado del Vigente, % Contratado, desglose del TOTAL): track
   `nauka-subtle`, relleno accent (madurez) / dark (contratación), altura 1.5, % en texto muted.
 
@@ -385,16 +391,21 @@ en fila sticky se queda atrás al hacer scroll con `border-collapse`.)
 
 ## Badges de estado — los 2 ejes (sistema para todo el módulo)
 
-Forma: pill `rounded-full px-2 py-0.5 text-[11px] font-medium`.
+Forma: pill `rounded-full h-6 px-2.5 text-[11px] font-medium`. **Cada eje usa SU color fijo**
+(el mismo de sus barras): madurez → accent · contratación → dark. Los estados "pendientes"
+van en gris; el color marca el estado ALCANZADO.
 
 - **Madurez:** `Paramétrico` = outline **dashed** gris (es un estimado tecleado, un borrador) ·
-  `Ppto` = fondo `accent/15`, texto dark (respaldado por cotización real).
-- **Contratación:** `Contratado` = verde funcional suave (green-100/700, igual que "Pagada" en
-  Pagos) · `No contratado` = neutral gris (slate-100/600).
+  `Ppto` = tinte accent (`accent/20`, texto dark — respaldado por cotización real).
+- **Contratación:** `Contratado` = tinte dark (`dark/10`, texto dark — amarrado) ·
+  `No contratado` = neutral (`nauka-subtle`, texto muted).
 - **Parcial** (mezcla por dinero): NO lleva badge — se muestran las **micro-barras de % por
   eje** (el % por dinero es el dato real; un badge "Parcial" esconde información).
 - En el **Resumen** la columna Estado usa siempre las micro-barras (muestran el % exacto);
-  los badges aplican en **Partida/Subcategoría** cuando se replique el sistema.
+  los badges viven en **Partida** (cols PARAMETRICO/PPTO y CONTRATADO/NO CONTRATADO; el de
+  contratación es clicable para admin — mismo look, con ring al hover).
+- **Indicador "con datos"** (tarjetas de Partida, filas del Glosario): punto `accent`
+  (capturado) vs `neutral/40` (vacío). Es dato, no semáforo → color de marca, no verde.
 
 ## Qué NO cambia nunca en esta pasada
 
