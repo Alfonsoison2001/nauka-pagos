@@ -432,6 +432,16 @@
    línea sin estado propio hereda el valor previo de la cotización (mismo fallback del rollup) para no voltear una hermana
    heredada. Gate verde: `tsc` ✓ · `biome` ✓ · `pnpm build` ✓ (12 rutas; Pagos idénticas). **NO se hizo el módulo común
    compartido (L11) ni el resto de ⚪ (deuda post-merge, ver el reporte).** **Pagos intacto · L3/L44 sin cambios de comportamiento.**
+🚀 **MERGEADO A `main` + PUSH A PRODUCCIÓN (2026-07-03 · autorizado por Alfonso)** — se cerró la rama de trabajo:
+   `feat/buyout-mejoras` → `main` por **fast-forward** (`b3220c8..41d2a9f`, 11 commits; sin conflictos, `origin/main`
+   estaba al día en `b3220c8`) y **`git push origin main`** publicó a producción (Vercel deploya `main`). Gate verde
+   **antes** (en `feat/buyout-mejoras`) y **después** del merge (ya en `main`): `tsc` ✓ · `biome check src` ✓ (176
+   archivos; los 2 únicos errores de `biome` global son del script **sin trackear** `scripts/backup-storage.mjs`, ajeno
+   al merge y no publicado) · `pnpm build` ✓ (11 rutas; las de Pagos idénticas). El diff mergeado toca **solo** Buy-Out
+   + `env.ts` + `next.config.ts` + docs (**0 archivos de Pagos**); **sin migración nueva** (las tablas/RLS ya vivían en
+   prod, opción B). **Branch `feat/buyout-mejoras` NO se borró** (punto de retorno). Todo lo publicado ya venía
+   verificado por la auditoría `docs/audit-buyout-mejoras-2026-07-03.md` (0🔴 0🟠) + los 6 fixes pre-producción.
+   **Pendiente:** confirmar el deploy verde en Vercel.
 ⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
    de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
    Partida). Pendiente BF anterior: confirmar Herreria.
