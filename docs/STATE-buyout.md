@@ -481,6 +481,29 @@ Todo bajo `src/app/proyectos/[id]/buyout/glosario/` (0 archivos de Pagos, 0 migr
 - `glosario/concepto-dialog.tsx` (crear/renombrar, RHF+Zod) · `nuevo-concepto-button.tsx` · `edit-concepto-button.tsx` ·
   `reordenar-concepto.tsx` · `delete-concepto-button.tsx` (directo si vacío, confirmación si tiene datos).
 
+✅ **Historial de pptos en Partida + retiro de la pestaña "Subcategoría" (2026-07-03 · rama `feat/buyout-historial`)** —
+   ejecuta la decisión aprobada de `docs/changes/buyout-historial/change.md` (D1-D4). **(1) QUITA:** el link
+   **"Subcategoría"** del sub-nav (`buyout-sub-nav.tsx`) → queda **Resumen · Partida · Glosario**. La **ruta**
+   `/buyout/subcategoria` **sigue viva y accesible por URL** (anti-cleanup): ahí quedan el índice, **"Marcar vigente"**
+   y el **puente a Pagos** (admin); sus `revalidatePath` siguen válidos. **(2) AGREGA:** el ícono 🕘 de cada fila de la
+   Partida se volvió un **botón "Historial"** (a nivel **concepto = `buyout_item`**; **D3:** uno por fila, keyed por
+   `item_id`) que abre un **panel lateral de SOLO LECTURA** (drawer derecho) con todas las versiones de cotización del
+   concepto: fecha · proveedor · moneda · **Total MXN** · **Δ vs anterior** · madurez/contratación · **PDF** · y **cuál
+   es la vigente** (resaltada), + un comparativo compacto Δ% vs la vigente. **D1:** el panel **no edita** — sin "Marcar
+   vigente" ni puente a Pagos (eso vive en `/subcategoria?item=`). **D2:** historial **por concepto** (todas las
+   versiones, cada una con su proveedor; sin filtrar a un solo proveedor). **D4:** panel/drawer, **no** navega a la
+   pantalla vieja. **Sin migración · sin query nueva:** reusa **`loadItemHistory`** (el loader de la pantalla
+   Subcategoría) vía un Server Action delgado de solo lectura **`getItemHistory(projectId, itemId)`** (lee `buyout_fx`
+   + llama al loader, que ya valida el proyecto). El panel compone el `Dialog` base-ui **re-posicionado con clases**
+   (sin tocar el primitivo compartido que también usa Pagos). **4 archivos:** `components/buyout/buyout-sub-nav.tsx`
+   (−1 tab), `buyout/partida/page.tsx` (ícono→botón + quita import `History`), `buyout/partida/actions.ts`
+   (+`getItemHistory`), y **nuevo** `buyout/partida/historial-panel.tsx`. **Verificación (razonamiento; sesión
+   no-interactiva):** Resumen/rollup, captura (Agregar/↻ Actualizar/Editar/Borrar), toggle Contratado + estado
+   "parcial", y uploads/PDF **intactos** (0 cambios en `rollup.ts`, Resumen `page.tsx`, `month-close`, ni en los actions
+   de captura salvo el add del wrapper de lectura); **L3/L44 idénticos** (el botón es mode-agnóstico, keyed por
+   `item_id`); **Pagos intacto** (0 archivos de Pagos). Gate: `tsc` ✓ · `biome` ✓ (4 archivos) · `pnpm build` ✓ (11
+   rutas; `/buyout/subcategoria` sigue existiendo; Pagos idénticas). **Local, sin push** — Alfonso prueba en local.
+
 ## Aislamiento / git (regla de la fase: rama propia, sin push)
 
 - **Buy-Out ya está en `main` (publicado).** Las **mejoras** post-publicación viven en la rama
