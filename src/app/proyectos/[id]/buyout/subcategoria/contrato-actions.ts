@@ -26,6 +26,7 @@ type VigenteContrato = {
   pdfPath: string | null
   conceptoNombre: string
   proveedor: string | null
+  /** Base sin IVA en MXN: Σ de TODAS las líneas vivas de la vigente (C1). */
   baseMxn: number
   ivaPct: number
   /** Fecha de la cotización vigente (quote_date, yyyy-mm-dd). Va a la fecha de la
@@ -36,8 +37,8 @@ type VigenteContrato = {
 /**
  * Carga, validando que el item pertenezca al proyecto, su cotización VIGENTE con
  * lo necesario para el puente: estado contratado, enlace actual, PDF, proveedor y
- * el monto (base sin IVA en MXN + iva_pct) de su renglón. Devuelve un error legible
- * si el concepto o su cotización/renglón no existen.
+ * el monto (base sin IVA en MXN + iva_pct) sumando TODAS sus líneas vivas (C1).
+ * Devuelve un error legible si el concepto o su cotización/renglones no existen.
  */
 async function loadVigenteContrato(
   sb: Sb,
@@ -70,16 +71,25 @@ async function loadVigenteContrato(
   }
   if (!quote) return { error: "Este concepto no tiene una cotización vigente." }
 
-  const { data: line, error: lineErr } = await sb
+  // C1 (audit 2026-07-03): la cotización vigente puede tener VARIAS líneas
+  // vivas (BF: una por torre). El monto del contrato es la SUMA de TODAS —
+  // misma base por línea que el rollup del Resumen (contratoBaseMxn = calcLinea
+  // + TC por la moneda de la línea) → el total con IVA de Pagos cuadra con lo
+  // que muestran Resumen/Partida. Antes se tomaba solo la 1ª línea y un
+  // concepto de 2 torres escribía ~la mitad a Pagos.
+  const { data: lineRows, error: lineErr } = await sb
     .from("buyout_line")
     .select("cantidad, unitario, sobrecosto_pct, iva_pct, moneda, proveedor")
     .eq("quote_id", quote.id as string)
     .is("deleted_at", null)
     .order("created_at")
-    .limit(1)
-    .maybeSingle()
-  if (lineErr) return { error: `Error al leer el renglón: ${lineErr.message}` }
-  if (!line) return { error: "La cotización vigente no tiene renglón." }
+  if (lineErr) {
+    return { error: `Error al leer los renglones: ${lineErr.message}` }
+  }
+  const lines = lineRows ?? []
+  if (lines.length === 0) {
+    return { error: "La cotización vigente no tiene renglón." }
+  }
 
   const { data: fxRows, error: fxErr } = await sb
     .from("buyout_fx")
@@ -89,33 +99,62 @@ async function loadVigenteContrato(
   if (fxErr)
     return { error: `Error al leer el tipo de cambio: ${fxErr.message}` }
 
-  // BO-01: el factor 1 solo es legítimo para MXN. Para una divisa (USD/EUR) sin TC
-  // configurado NO usamos 1 como fallback —escribiría a Pagos un monto ~17-20×
-  // subestimado, en silencio—: abortamos con un mensaje claro. (`buyout_fx` solo
-  // está sembrado para L3; cualquier línea en divisa de otro proyecto cae aquí.)
-  const moneda = (line.moneda as string) ?? "MXN"
-  let tc: number
-  if (moneda === "MXN") {
-    tc = 1
-  } else {
-    const rate = (fxRows ?? []).find((r) => r.currency === moneda)?.rate
-    const rateNum = Number(rate)
-    if (rate == null || !Number.isFinite(rateNum) || rateNum <= 0) {
-      return {
-        error: `Falta (o es inválido) el tipo de cambio de ${moneda} en este proyecto. Configúralo en Buy-Out antes de crear o re-sincronizar el contrato en Pagos.`,
-      }
+  // El contrato de Pagos es UNO (un contratista + un solo iva_pct en
+  // `partidas`): si las líneas difieren en proveedor o IVA no hay mapeo fiel →
+  // se aborta con un mensaje claro en vez de escribir una aproximación (esto
+  // escribe dinero en Pagos). Con líneas homogéneas (el caso real: mismas
+  // condiciones por torre) se comporta idéntico a antes.
+  const provs = [
+    ...new Set(
+      lines
+        .map((l) => ((l.proveedor as string | null) ?? "").trim())
+        .filter(Boolean),
+    ),
+  ]
+  if (provs.length > 1) {
+    return {
+      error: `Las líneas de la cotización vigente tienen proveedores distintos (${provs.join(" / ")}). El contrato de Pagos lleva un solo contratista: unifica el proveedor antes de ligar.`,
     }
-    tc = rateNum
   }
+  const ivas = [...new Set(lines.map((l) => Number(l.iva_pct ?? 0)))]
+  if (ivas.length > 1) {
+    return {
+      error:
+        "Las líneas de la cotización vigente tienen IVAs distintos. El contrato de Pagos lleva un solo IVA: unifícalos antes de ligar.",
+    }
+  }
+  const ivaPct = ivas[0]
 
-  const ivaPct = Number(line.iva_pct ?? 0)
-  const baseMxn = contratoBaseMxn({
-    cantidad: Number(line.cantidad ?? 0),
-    unitario: Number(line.unitario ?? 0),
-    sobrecosto_pct: Number(line.sobrecosto_pct ?? 0),
-    iva_pct: ivaPct,
-    tc,
-  })
+  // BO-01, ahora POR LÍNEA: el factor 1 solo es legítimo para MXN. Divisa sin
+  // TC configurado → se aborta (escribiría a Pagos un monto ~17-20× subestimado,
+  // en silencio). Mismo mensaje que antes.
+  let baseMxn = 0
+  for (const line of lines) {
+    const moneda = (line.moneda as string) ?? "MXN"
+    let tc: number
+    if (moneda === "MXN") {
+      tc = 1
+    } else {
+      const rate = (fxRows ?? []).find((r) => r.currency === moneda)?.rate
+      const rateNum = Number(rate)
+      if (rate == null || !Number.isFinite(rateNum) || rateNum <= 0) {
+        return {
+          error: `Falta (o es inválido) el tipo de cambio de ${moneda} en este proyecto. Configúralo en Buy-Out antes de crear o re-sincronizar el contrato en Pagos.`,
+        }
+      }
+      tc = rateNum
+    }
+    baseMxn += contratoBaseMxn({
+      cantidad: Number(line.cantidad ?? 0),
+      unitario: Number(line.unitario ?? 0),
+      sobrecosto_pct: Number(line.sobrecosto_pct ?? 0),
+      iva_pct: ivaPct,
+      tc,
+    })
+  }
+  // Σ de montos ya redondeados a 2 dec por línea; re-redondeo para limpiar el
+  // polvo binario de la suma antes de escribir a numeric(14,2).
+  baseMxn = Math.round(baseMxn * 100) / 100
 
   return {
     data: {
@@ -124,7 +163,7 @@ async function loadVigenteContrato(
       pagosPartidaId: (quote.pagos_partida_id as string | null) ?? null,
       pdfPath: (quote.pdf_url as string | null) ?? null,
       conceptoNombre: (item.concepto as string) ?? "",
-      proveedor: ((line.proveedor as string | null) ?? "").trim() || null,
+      proveedor: provs[0] ?? null,
       baseMxn,
       ivaPct,
       quoteDate: (quote.quote_date as string | null) ?? null,

@@ -442,9 +442,35 @@
    prod, opción B). **Branch `feat/buyout-mejoras` NO se borró** (punto de retorno). Todo lo publicado ya venía
    verificado por la auditoría `docs/audit-buyout-mejoras-2026-07-03.md` (0🔴 0🟠) + los 6 fixes pre-producción.
    **Pendiente:** confirmar el deploy verde en Vercel.
-⏸️ **PAUSA para que Alfonso revise el Glosario en el navegador** (pestaña Glosario + alta/renombre/mover/borrado
-   de capítulos, partidas **y conceptos** + expandir partida para ver conceptos + atajo "+ Nueva partida" en
-   Partida). Pendiente BF anterior: confirmar Herreria.
+✅ **FIXES C1/A1/A2 de la auditoría de producción `docs/audit-app-completa-2026-07-03.md` (2026-07-03 · rama
+   `feat/fix-c1-a1-a2`, SIN push)** — 3 arreglos quirúrgicos, **4 archivos**, **sin migración · sin tocar esquema/RLS ·
+   0 archivos de Pagos** (el único efecto en Pagos es el MONTO que el puente ya escribía). **C1 🔴 — Historial/puente
+   suman TODAS las líneas de la cotización:** `lib/buyout/history.ts` (`loadLinesByQuote` devuelve todas las líneas
+   vivas por quote; cada versión suma Σ `calcLinea` por línea con TC por la moneda de la línea — MISMA fórmula del
+   rollup → el Historial/Comparativo/panel del puente cuadran con Resumen/Partida/Índice; proveedor "Varios" si
+   difieren, mismo criterio del índice) y `subcategoria/contrato-actions.ts` (`loadVigenteContrato` sin `.limit(1)`:
+   `baseMxn = Σ contratoBaseMxn(línea)` con BO-01 aplicado POR LÍNEA + re-redondeo a 2 dec de la Σ; **guardas nuevas:**
+   proveedores o IVAs DISTINTOS entre líneas → aborta con mensaje claro en vez de escribir una aproximación — el
+   contrato de Pagos lleva UN contratista y UN `iva_pct`; con líneas homogéneas o 1 línea (L3) se comporta idéntico a
+   antes). Un concepto BF de 2 torres ya muestra/escribe el monto COMPLETO (antes ~la mitad). **A1 🟠 — cierre de mes
+   en TZ CDMX:** `lib/buyout/month-close.ts` → `currentPeriodo()` resuelve año/mes con `Intl.DateTimeFormat` en
+   `America/Mexico_City` (antes usaba la fecha del server —Vercel=UTC—: cerrar el último día después de las ~18:00
+   CDMX congelaba el mes SIGUIENTE). El botón "Cerrar `<Mes>`" y la acción usan el mismo helper → ambos corregidos.
+   **A2 🟠 — Editar ya no revierte el toggle Contratado:** `partida/linea-dialog.tsx` re-sincroniza el form con el
+   estado ACTUAL de la línea AL ABRIR (`useEffect [open, form]` + ref de props frescos; no re-resetea en re-renders
+   con el diálogo abierto → no pisa lo tecleado) — antes `useForm` congelaba los defaults del primer render y guardar
+   desde "Editar" re-escribía el estado viejo (secuencia toggle → Editar → Guardar lo revertía en silencio).
+   **Verificación:** `tsc` ✓ · `biome` ✓ (4 archivos) · `pnpm build` ✓ (exit 0; rutas de Pagos idénticas) + test de
+   lógica pura (scratch, réplica exacta de `calcLinea`/`contratoBaseMxn`/`currentPeriodo`): periodo correcto en 5
+   fronteras UTC↔CDMX (incl. fin de año, y regex del CHECK `^\d{4}-\d{2}$`) y paridad Historial ≡ rollup ≡
+   `con_iva` de Pagos (±$0.02 por redondeo por línea), con el código viejo dando exactamente la mitad. **Prueba en
+   navegador pendiente de Alfonso** (sesión no-interactiva: sin login no se puede clickear BF real).
+⏸️ **PAUSA para que Alfonso pruebe los fixes C1/A1/A2 en la rama `feat/fix-c1-a1-a2` (sin push)**: (1) en BF, abrir
+   el Historial de un concepto de 2 torres (p. ej. PILAS · Mano de Obra) → el Total MXN del panel/versiones debe ser
+   el MISMO que muestran Resumen/Partida/Índice (antes ~la mitad); el diálogo "Crear contrato en Pagos" debe confirmar
+   el monto completo; (2) "Cerrar mes" en Evolución debe decir/congelar el mes correcto incluso en la noche del último
+   día; (3) togglear Contratado en una fila y luego Editar+Guardar la misma línea NO debe revertir el toggle.
+   Pendiente BF anterior: confirmar Herreria.
    Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
    Pendiente Resumen: modo **Qué falta**. Pendiente BF (si se decide tras revisar): **desglose por depto**
    (hoy torre/piso/depto van como texto en la línea, grano = total del proyecto).

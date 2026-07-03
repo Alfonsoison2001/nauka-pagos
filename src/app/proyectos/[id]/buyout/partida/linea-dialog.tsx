@@ -1,7 +1,7 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import {
@@ -183,6 +183,24 @@ export function LineaDialog(props: Props) {
     defaultValues: getDefaults(props),
   })
   const errors = form.formState.errors
+
+  // A2 (audit 2026-07-03): re-sincroniza el form con el estado ACTUAL de la
+  // línea al ABRIR. useForm congela `defaultValues` en el primer render y el
+  // reset de handleOpenChange solo corre al cerrar: si la línea cambió después
+  // de montar (p. ej. el toggle Contratado de la fila, que escribe al server y
+  // revalida), "Editar" abría con el estado viejo y al guardar lo re-escribía
+  // (revertía el toggle en silencio). El ref lleva los props frescos sin poner
+  // `props` en las deps: re-resetear en cada re-render con el diálogo abierto
+  // pisaría lo que el usuario está tecleando.
+  const propsRef = useRef(props)
+  propsRef.current = props
+  useEffect(() => {
+    if (!open) return
+    form.reset(getDefaults(propsRef.current))
+    setSubmitError(null)
+    setSubmitWarning(null)
+    setPdfError(null)
+  }, [open, form])
 
   function handleOpenChange(next: boolean) {
     if (!next) {
