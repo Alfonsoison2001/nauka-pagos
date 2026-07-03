@@ -278,3 +278,127 @@ Cuando alguien compare el "antes" y "después", el redesign debe sentirse **5–
 5. **Fase 5 — Polish y QA visual:** hover/focus states, spacing rhythm, eliminar feel Excel, QA en cada pantalla.
 
 **Regla crítica:** SOLO se cambia presentación visual. NUNCA se toca lógica de negocio, hooks, server actions, queries, computeResumen, modelo de datos. Toda funcionalidad actual debe seguir funcionando idéntica.
+
+---
+---
+
+# EXTENSIÓN — Módulo Buy-Out: tablero financiero denso
+
+**Estado:** Propuesta 2026-07-03 · rama `feat/ui-profesional` · **Piloto = pantalla Resumen** del Buy-Out.
+Pendiente reacción de Alfonso antes de replicar a Partida · Subcategoría · Glosario. **Pagos NO se toca.**
+
+## Por qué una extensión (y no otro sistema)
+
+El sistema de arriba (aprobado 01-jun) optimiza *dashboards*: pocas cifras grandes, mucho aire.
+El Buy-Out es otra cosa: un **tablero** de ~30 partidas × 8–12 columnas de dinero que se **lee
+completo**, como el Excel BUY OUT. Misma marca, mismos tokens — distinta **densidad** y
+**jerarquía**. Todo lo que esta extensión no diga, hereda del sistema de Pagos.
+
+## Principios del tablero
+
+1. **Informativo primero** (SPEC-buyout §6): es un tablero para VER, no para capturar. Lo que
+   debe saltar a la vista: el Ppto vigente, el DIF, el estado (2 ejes) y la última actualización.
+2. **Denso pero legible.** El usuario vive en Excel; más filas por pantalla sin apretar la
+   lectura. La densidad sale de la altura de fila y los paddings, NO de encoger la letra.
+3. **La tinta es para el dato; el color, para la señal.** El dinero va SIEMPRE en tinta
+   (`nauka-dark` / muted). Color solo en señales puntuales: DIF (rojo/verde), barras de avance
+   (accent/dark), badges. Nunca colorear una columna entera de montos.
+4. **Jerarquía de 5 niveles de tinta** (peso, no tamaño):
+   referencia (muted) → dato vivo (`font-medium` dark) → subtotal (`font-semibold` dark) →
+   TOTAL (banda oscura, texto blanco) → métricas del pie (colofón).
+5. **Cero decoración.** Sin iconos en encabezados de columna, sin zebra stripes, sin bordes
+   gruesos. El icono se reserva para AFFORDANCES (lápiz de editar, chevron, ↩ reabrir).
+6. **Espejo del Excel intocable:** mismas columnas, mismos labels, mismo orden, mismas
+   acciones. El diseño solo cambia cómo se ve, jamás qué dice.
+
+## Paleta (reusa 100% los tokens NAUKA — cero colores nuevos)
+
+- **Superficie de tabla:** card blanca `rounded-2xl` + `border-nauka-card-border` +
+  `shadow-nauka-card` (idéntica a las cards de Pagos).
+- **Estructura interna:** hairlines `nauka-subtle`; banda de capítulo `nauka-subtle/60` con
+  **espina accent de 2px** a la izquierda; lavado de subtotal `nauka-bg`; TOTAL `nauka-dark`.
+- **Colores fijos de los 2 ejes de estado** (barras/rellenos, en todo el módulo):
+  - **Madurez → accent `#7FCFCB`** (avance hacia "respaldado por cotización")
+  - **Contratación → dark `#163D4A`** (avance hacia "amarrado/firmado")
+- **DIF** conserva el semáforo financiero: sobre-ppto rojo `nauka-danger` ↑ · bajo verde
+  `nauka-success` ↓ · sin dato/~0 gris.
+- La **lista negra** de Pagos aplica igual (nada de morados, neones, esmeraldas saturadas).
+
+## Tipografía y números
+
+- **Cuerpo de tabla: `text-sm` (14px)**, Inter. Encabezados de columna y labels de estructura:
+  **11px uppercase `tracking-wider`** muted. Notas al pie de pantalla: `text-sm` muted.
+- **Dinero:** `tabular-nums` SIEMPRE; **sin decimales** en el tablero (`formatMXN0`, es-MX;
+  la BD conserva sus 2 decimales). Los % de DIF con 1 decimal; los % de avance en enteros.
+- **Pesos por rol de columna:**
+  - referencia (Ppto Base, meses congelados, $/m², proveedor, fechas) → `text-muted-foreground`
+  - dato vivo (Ppto vigente, Total) → `font-medium text-nauka-dark`
+  - subtotales → `font-semibold text-nauka-dark` · TOTAL → blanco `font-semibold` sobre dark
+- Nombre de partida: `font-medium`, tinta base; hover = subrayado `decoration-nauka-accent`
+  (el texto NO cambia a accent: contraste insuficiente sobre blanco).
+
+## Espaciado y densidad
+
+- **Celdas `px-3 py-2`**; primera columna `pl-4`, última `pr-4` (la tabla respira hacia el
+  borde de la card). Encabezado `py-2.5`.
+- **Filas de datos `h-11` (44px)** — vs 56px del dashboard de Pagos. Bandas de capítulo y
+  filas de subtotal `py-2`.
+- Entre bloques de la pantalla: `gap-4` (el `gap-10` de Pagos es para dashboards, no tableros).
+
+## Radios y sombras
+
+Los de Pagos, sin excepciones: cards `rounded-2xl` · pills/botones/segmented `rounded-full` ·
+inputs `rounded-lg`. **Dentro de la tabla no hay sombras** — solo hairlines. (Única sombra
+"técnica": el hairline del header sticky se dibuja con `box-shadow` inset porque un `border-b`
+en fila sticky se queda atrás al hacer scroll con `border-collapse`.)
+
+## Estructura del tablero (código: `buyout/table-ui.tsx`)
+
+- **Header sticky:** fondo blanco sólido (no banda gris), labels 11px uppercase muted,
+  hairline inferior inset. Sin iconos.
+- **Banda de capítulo:** `nauka-subtle/60` + espina accent 2px + nombre 11px uppercase dark.
+- **Subtotal:** lavado `nauka-bg` (más claro que la banda de capítulo), números `font-semibold`
+  cayendo bajo su columna, label 11px uppercase muted.
+- **TOTAL:** banda `nauka-dark`, **sticky bottom** — el total general siempre visible mientras
+  se scrollea el tablero.
+- **Colofón de métricas** (pie del Vigente): franja DENTRO de la card, bajo el TOTAL — como el
+  Excel pone COSTO M2 / USD debajo de TOTAL PRESUPUESTO. Label 11px uppercase muted + valor
+  `text-lg font-semibold` tabular dark, en línea (`sticky left-0` para sobrevivir el scroll
+  horizontal). **Reemplaza a las 4 tarjetas grises sueltas** del pie anterior.
+- **DIF:** texto con signo y flecha (↑ rojo · ↓ verde · — gris), `text-xs font-medium`
+  tabular, **sin pill de fondo** a nivel fila (menos ruido); en la banda TOTAL, tintas claras.
+- **Barras de avance** (Estado del Vigente, % Contratado, desglose del TOTAL): track
+  `nauka-subtle`, relleno accent (madurez) / dark (contratación), altura 1.5, % en texto muted.
+
+## Estados
+
+- **Hover de fila:** `bg-nauka-bg` plano (sin elevación ni bordes).
+- **Activo/selección** (pestañas de modo, toggles): pill `bg-nauka-dark text-white` — nunca
+  solo color de texto para marcar el activo. Segmented controls: contenedor `rounded-full`
+  borde `nauka-card-border` fondo blanco `p-1`, opción activa pill oscura.
+- **Foco teclado:** ring accent (el token `--ring` ya es accent) — no se suprime.
+- **Vacío:** texto muted en una línea, sin italic ("Sin partidas en este capítulo"); una
+  sección completa vacía = card de borde **dashed** `nauka-card-border` (comunica "aún no").
+- **Carga:** las pantallas son Server Components — el estado de carga vive en las ACCIONES
+  ("Guardando…", botón disabled), no en spinners de página. Skeletons: solo si algún día hay
+  fetch en cliente.
+
+## Badges de estado — los 2 ejes (sistema para todo el módulo)
+
+Forma: pill `rounded-full px-2 py-0.5 text-[11px] font-medium`.
+
+- **Madurez:** `Paramétrico` = outline **dashed** gris (es un estimado tecleado, un borrador) ·
+  `Ppto` = fondo `accent/15`, texto dark (respaldado por cotización real).
+- **Contratación:** `Contratado` = verde funcional suave (green-100/700, igual que "Pagada" en
+  Pagos) · `No contratado` = neutral gris (slate-100/600).
+- **Parcial** (mezcla por dinero): NO lleva badge — se muestran las **micro-barras de % por
+  eje** (el % por dinero es el dato real; un badge "Parcial" esconde información).
+- En el **Resumen** la columna Estado usa siempre las micro-barras (muestran el % exacto);
+  los badges aplican en **Partida/Subcategoría** cuando se replique el sistema.
+
+## Qué NO cambia nunca en esta pasada
+
+- Columnas, labels, orden y acciones idénticos (regla del espejo del Excel).
+- Cero cambios de datos/queries/rutas/lógica; **Pagos intacto**; sin dependencias nuevas.
+- Los formateadores existentes (`formatMXN0`, `formatUSD0`, `formatDate`) son la única fuente
+  de formato.

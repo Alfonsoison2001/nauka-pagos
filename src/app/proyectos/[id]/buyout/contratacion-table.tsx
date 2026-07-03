@@ -1,19 +1,18 @@
-import {
-  CircleCheck,
-  CircleDashed,
-  Coins,
-  FileCheck,
-  FileSignature,
-  Layers,
-  PencilRuler,
-  Percent,
-  Tag,
-} from "lucide-react"
 import Link from "next/link"
 import { Fragment } from "react"
 import { formatMXN0 } from "@/lib/buyout/format"
 import { cn } from "@/lib/utils"
-import { HEAD_ROW } from "./table-ui"
+import {
+  CHAPTER_TD,
+  HEAD_ROW,
+  ROW,
+  SUBTOTAL_LABEL,
+  SUBTOTAL_ROW,
+  TABLE,
+  TD,
+  TH_HAIRLINE,
+  TOTAL_FOOT,
+} from "./table-ui"
 
 /**
  * Modo Contratación del Resumen (SPEC-buyout.md §6, "Contratado vs No"): por cada
@@ -105,7 +104,8 @@ function MontoPct({
   )
 }
 
-/** % contratado (Contratado ÷ Total) como barrita de avance + texto. */
+/** % contratado (Contratado ÷ Total) como barrita de avance + texto. Relleno =
+ *  color fijo del eje contratación (dark; accent sobre la banda oscura). */
 function PctBar({ value, onDark }: { value: number | null; onDark?: boolean }) {
   if (value === null) {
     return (
@@ -126,7 +126,7 @@ function PctBar({ value, onDark }: { value: number | null; onDark?: boolean }) {
         <div
           className={cn(
             "h-full rounded-full",
-            onDark ? "bg-emerald-400" : "bg-emerald-500",
+            onDark ? "bg-nauka-accent" : "bg-nauka-dark",
           )}
           style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
         />
@@ -165,78 +165,75 @@ export function ContratacionTable({
   }
   const gp = estadoPcts(g)
   return (
-    <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
-      <table className="w-full text-sm tabular-nums">
+    <div className="max-h-[78vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
+      <table className={TABLE}>
         <thead className="sticky top-0 z-10">
-          {/* Fila 1: encabezados AGRUPADOS — deja claro que son 2 pares. */}
-          <tr className={cn(HEAD_ROW, "text-xs")}>
-            <th className="px-4 pt-3 pb-1 text-left align-bottom" rowSpan={2}>
-              <span className="inline-flex items-center gap-1.5">
-                <Tag className="size-3.5 shrink-0 text-nauka-neutral" />
-                Concepto
-              </span>
+          {/* Fila 1: encabezados AGRUPADOS — deja claro que son 2 pares. Las
+              celdas con rowSpan llevan el hairline (su borde inferior coincide
+              con el de la fila 2). */}
+          <tr className={HEAD_ROW}>
+            <th
+              className={cn(
+                "px-3 pt-2.5 pb-2 pl-4 text-left align-bottom font-medium",
+                TH_HAIRLINE,
+              )}
+              rowSpan={2}
+            >
+              Concepto
             </th>
             <th
-              className="px-4 pt-3 pb-1 text-center font-semibold text-nauka-dark"
+              className="px-3 pt-2.5 pb-1 text-center font-semibold text-nauka-dark"
               colSpan={2}
             >
-              <span className="inline-flex items-center gap-1.5">
-                <Layers className="size-3.5 shrink-0 text-nauka-neutral" />
-                Madurez
-              </span>
+              Madurez
             </th>
             <th
               className={cn(
-                "px-4 pt-3 pb-1 text-center font-semibold text-nauka-dark",
+                "px-3 pt-2.5 pb-1 text-center font-semibold text-nauka-dark",
                 AXIS_DIV,
               )}
               colSpan={2}
             >
-              <span className="inline-flex items-center gap-1.5">
-                <FileSignature className="size-3.5 shrink-0 text-nauka-neutral" />
-                Contratación
-              </span>
+              Contratación
             </th>
-            <th className="px-4 pt-3 pb-1 text-right align-bottom" rowSpan={2}>
-              <span className="inline-flex items-center gap-1.5">
-                <Coins className="size-3.5 shrink-0 text-nauka-neutral" />
-                Total
-              </span>
+            <th
+              className={cn(
+                "px-3 pt-2.5 pb-2 text-right align-bottom font-medium",
+                TH_HAIRLINE,
+              )}
+              rowSpan={2}
+            >
+              Total
             </th>
-            <th className="px-4 pt-3 pb-1 text-right align-bottom" rowSpan={2}>
-              <span className="inline-flex items-center gap-1.5">
-                <Percent className="size-3.5 shrink-0 text-nauka-neutral" />%
-                Contratado
-              </span>
+            <th
+              className={cn(
+                "px-3 pt-2.5 pb-2 pr-4 text-right align-bottom font-medium",
+                TH_HAIRLINE,
+              )}
+              rowSpan={2}
+            >
+              % Contratado
             </th>
           </tr>
           {/* Fila 2: las 4 columnas de estado (2 por eje), con monto y % del total. */}
-          <tr
-            className={cn(HEAD_ROW, "border-b border-nauka-subtle text-[11px]")}
-          >
-            <th className="px-4 pb-2 text-right font-medium">
-              <span className="inline-flex items-center gap-1.5">
-                <PencilRuler className="size-3 shrink-0 text-nauka-neutral" />
-                Paramétrico
-              </span>
+          <tr className={HEAD_ROW}>
+            <th className={cn("px-3 pb-2 text-right font-medium", TH_HAIRLINE)}>
+              Paramétrico
             </th>
-            <th className="px-4 pb-2 text-right font-medium">
-              <span className="inline-flex items-center gap-1.5">
-                <FileCheck className="size-3 shrink-0 text-nauka-neutral" />
-                Ppto
-              </span>
+            <th className={cn("px-3 pb-2 text-right font-medium", TH_HAIRLINE)}>
+              Ppto
             </th>
-            <th className={cn("px-4 pb-2 text-right font-medium", AXIS_DIV)}>
-              <span className="inline-flex items-center gap-1.5">
-                <CircleDashed className="size-3 shrink-0 text-nauka-neutral" />
-                No Contratado
-              </span>
+            <th
+              className={cn(
+                "px-3 pb-2 text-right font-medium",
+                TH_HAIRLINE,
+                AXIS_DIV,
+              )}
+            >
+              No Contratado
             </th>
-            <th className="px-4 pb-2 text-right font-medium">
-              <span className="inline-flex items-center gap-1.5">
-                <CircleCheck className="size-3 shrink-0 text-nauka-neutral" />
-                Contratado
-              </span>
+            <th className={cn("px-3 pb-2 text-right font-medium", TH_HAIRLINE)}>
+              Contratado
             </th>
           </tr>
         </thead>
@@ -245,11 +242,8 @@ export function ContratacionTable({
             const sp = estadoPcts(ch)
             return (
               <Fragment key={ch.nombre}>
-                <tr className="bg-nauka-subtle">
-                  <td
-                    colSpan={7}
-                    className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
-                  >
+                <tr>
+                  <td colSpan={7} className={CHAPTER_TD}>
                     {ch.nombre}
                   </td>
                 </tr>
@@ -257,7 +251,7 @@ export function ContratacionTable({
                   <tr className="border-b border-nauka-subtle">
                     <td
                       colSpan={7}
-                      className="px-4 py-3 italic text-muted-foreground"
+                      className="px-4 py-2.5 text-muted-foreground"
                     >
                       Sin partidas en este capítulo
                     </td>
@@ -266,30 +260,30 @@ export function ContratacionTable({
                   ch.partidas.map((p) => {
                     const pp = estadoPcts(p)
                     return (
-                      <tr
-                        key={p.id}
-                        className="h-12 border-b border-nauka-subtle transition-colors hover:bg-nauka-bg"
-                      >
-                        <td className="px-4 py-3">
+                      <tr key={p.id} className={ROW}>
+                        <td className={cn(TD, "font-medium")}>
                           <Link
                             href={`/proyectos/${projectId}/buyout/partida?partida=${p.id}`}
-                            className="transition-colors hover:text-nauka-accent"
+                            className="underline-offset-4 decoration-nauka-accent decoration-2 transition-colors hover:underline"
                           >
                             {p.nombre}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-right text-muted-foreground">
+                        <td
+                          className={cn(TD, "text-right text-muted-foreground")}
+                        >
                           <MontoPct
                             amount={p.parametrico}
                             pct={pp.parametrico}
                           />
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className={cn(TD, "text-right")}>
                           <MontoPct amount={p.ppto} pct={pp.ppto} />
                         </td>
                         <td
                           className={cn(
-                            "px-4 py-3 text-right text-muted-foreground",
+                            TD,
+                            "text-right text-muted-foreground",
                             AXIS_DIV,
                           )}
                         >
@@ -298,13 +292,23 @@ export function ContratacionTable({
                             pct={pp.noContratado}
                           />
                         </td>
-                        <td className="px-4 py-3 text-right text-emerald-700">
+                        <td
+                          className={cn(
+                            TD,
+                            "text-right font-medium text-nauka-dark",
+                          )}
+                        >
                           <MontoPct amount={p.contratado} pct={pp.contratado} />
                         </td>
-                        <td className="px-4 py-3 text-right font-medium text-nauka-dark">
+                        <td
+                          className={cn(
+                            TD,
+                            "text-right font-medium text-nauka-dark",
+                          )}
+                        >
                           {formatMXN0(p.total)}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className={TD}>
                           <PctBar
                             value={pctContratado(p.contratado, p.total)}
                           />
@@ -314,31 +318,26 @@ export function ContratacionTable({
                   })
                 )}
                 {/* Subtotal del capítulo. */}
-                <tr className="border-b border-nauka-subtle bg-nauka-bg/60">
-                  <td className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Subtotal {ch.nombre}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-medium">
+                <tr className={SUBTOTAL_ROW}>
+                  <td className={SUBTOTAL_LABEL}>Subtotal {ch.nombre}</td>
+                  <td className="px-3 py-2 text-right font-medium">
                     <MontoPct amount={ch.parametrico} pct={sp.parametrico} />
                   </td>
-                  <td className="px-4 py-2.5 text-right font-medium">
+                  <td className="px-3 py-2 text-right font-medium">
                     <MontoPct amount={ch.ppto} pct={sp.ppto} />
                   </td>
                   <td
-                    className={cn(
-                      "px-4 py-2.5 text-right font-medium",
-                      AXIS_DIV,
-                    )}
+                    className={cn("px-3 py-2 text-right font-medium", AXIS_DIV)}
                   >
                     <MontoPct amount={ch.noContratado} pct={sp.noContratado} />
                   </td>
-                  <td className="px-4 py-2.5 text-right font-medium">
+                  <td className="px-3 py-2 text-right font-medium">
                     <MontoPct amount={ch.contratado} pct={sp.contratado} />
                   </td>
-                  <td className="px-4 py-2.5 text-right font-semibold text-nauka-dark">
+                  <td className="px-3 py-2 text-right font-semibold text-nauka-dark">
                     {formatMXN0(ch.total)}
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-3 py-2 pr-4">
                     <PctBar value={pctContratado(ch.contratado, ch.total)} />
                   </td>
                 </tr>
@@ -346,30 +345,30 @@ export function ContratacionTable({
             )
           })}
         </tbody>
-        <tfoot>
+        <tfoot className={TOTAL_FOOT}>
           <tr className="bg-nauka-dark text-white">
-            <td className="px-4 py-3 font-semibold">TOTAL</td>
-            <td className="px-4 py-3 text-right font-semibold">
+            <td className="px-3 py-2.5 pl-4 font-semibold">TOTAL</td>
+            <td className="px-3 py-2.5 text-right font-semibold">
               <MontoPct amount={g.parametrico} pct={gp.parametrico} onDark />
             </td>
-            <td className="px-4 py-3 text-right font-semibold">
+            <td className="px-3 py-2.5 text-right font-semibold">
               <MontoPct amount={g.ppto} pct={gp.ppto} onDark />
             </td>
             <td
               className={cn(
-                "px-4 py-3 text-right font-semibold",
+                "px-3 py-2.5 text-right font-semibold",
                 AXIS_DIV_DARK,
               )}
             >
               <MontoPct amount={g.noContratado} pct={gp.noContratado} onDark />
             </td>
-            <td className="px-4 py-3 text-right font-semibold">
+            <td className="px-3 py-2.5 text-right font-semibold">
               <MontoPct amount={g.contratado} pct={gp.contratado} onDark />
             </td>
-            <td className="px-4 py-3 text-right font-semibold">
+            <td className="px-3 py-2.5 text-right font-semibold">
               {formatMXN0(g.total)}
             </td>
-            <td className="px-4 py-3">
+            <td className="px-3 py-2.5 pr-4">
               <PctBar value={pctContratado(g.contratado, g.total)} onDark />
             </td>
           </tr>

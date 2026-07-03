@@ -24,7 +24,7 @@ export function MesesToggle({ open, count }: { open: boolean; count: number }) {
       scroll={false}
       aria-expanded={open}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+        "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
         open
           ? "border-nauka-dark bg-nauka-dark text-white"
           : "border-nauka-card-border bg-white text-nauka-dark hover:bg-nauka-bg",
