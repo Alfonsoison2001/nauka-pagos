@@ -465,12 +465,6 @@
    fronteras UTC↔CDMX (incl. fin de año, y regex del CHECK `^\d{4}-\d{2}$`) y paridad Historial ≡ rollup ≡
    `con_iva` de Pagos (±$0.02 por redondeo por línea), con el código viejo dando exactamente la mitad. **Prueba en
    navegador pendiente de Alfonso** (sesión no-interactiva: sin login no se puede clickear BF real).
-⏸️ **PAUSA para que Alfonso pruebe los fixes C1/A1/A2 en la rama `feat/fix-c1-a1-a2` (sin push)**: (1) en BF, abrir
-   el Historial de un concepto de 2 torres (p. ej. PILAS · Mano de Obra) → el Total MXN del panel/versiones debe ser
-   el MISMO que muestran Resumen/Partida/Índice (antes ~la mitad); el diálogo "Crear contrato en Pagos" debe confirmar
-   el monto completo; (2) "Cerrar mes" en Evolución debe decir/congelar el mes correcto incluso en la noche del último
-   día; (3) togglear Contratado en una fila y luego Editar+Guardar la misma línea NO debe revertir el toggle.
-   Pendiente BF anterior: confirmar Herreria.
 ✅ **UI PROFESIONAL — Fase 1: sistema de diseño + PILOTO en el Resumen (2026-07-03 · rama `feat/ui-profesional`, sin push)** —
    pasada **SOLO de presentación** (cero cambios de datos/queries/rutas/acciones/labels — regla del espejo). **(1) Sistema:**
    `docs/design-prompt.md` ganó la sección **"EXTENSIÓN — Módulo Buy-Out: tablero financiero denso"** (el sistema de Pagos
@@ -526,6 +520,29 @@
    dependencias. Gate verde: `tsc` ✓ · `biome` ✓ (5 archivos) · `pnpm build` ✓ (12 rutas; Pagos idénticas); dev
    server siguió vivo tras el build (HTTP 200). **PAUSA — Alfonso reacciona a Partida + Glosario; falta su OK para
    dar el sistema por cerrado (Subcategoría se resuelve cuando entre Historial).**
+✅ **CONSOLIDACIÓN Y PUBLICACIÓN — `release/2026-07-03` → `main` → producción (2026-07-03, push autorizado por
+   Alfonso)** — las 3 mejoras salieron **JUNTAS y consistentes** (el panel Historial reusa `lib/buyout/history.ts`;
+   sin C1 el panel saldría a la mitad en BF): merges EN ORDEN `feat/fix-c1-a1-a2` → `feat/buyout-historial` →
+   `feat/ui-profesional` sobre `main` (`6f1d9b8`). Conflictos: solo `docs/STATE-buyout.md` (resuelto por unión de
+   entradas; la pausa vieja del Glosario la retiraba el fix — su borrado gana) y `partida/page.tsx` se auto-mergeó
+   integrando **AMBAS intenciones** — celda Acciones `sticky right-0` del rediseño CON el `HistorialButton` del
+   panel adentro; revisado a mano: cero rastro del link viejo a `/subcategoria?item=` ni del ícono `History` suelto.
+   **Consistencia verificada:** los 19 archivos de las 3 ramas quedaron **byte-idénticos** a su rama de origen
+   (`git diff` vacío por archivo vs cada rama); solo `partida/page.tsx` (integración deliberada) y este STATE
+   difieren. **Gate verde en la release:** `tsc --noEmit` ✓ (exit 0) · `biome check src` ✓ (177 archivos) ·
+   `pnpm build` ✓ (20 rutas; `/buyout/subcategoria` sigue viva por URL; rutas de Pagos idénticas) + smoke de
+   `next start` (login 200; `/` y `/buyout/partida` redirigen a login — proxy de auth intacto). Sub-nav queda
+   **Resumen · Partida · Glosario** (sin "Subcategoría") ✓. **0 archivos de Pagos** (único toque:
+   `subcategoria/contrato-actions.ts` = el fix C1 del MONTO del puente, la excepción permitida). Sin migración.
+   **Ramas NO borradas** (puntos de retorno). Merge a `main` + `pnpm build` en `main` + **push a producción**.
+⏸️ **Alfonso valida las 3 mejoras EN PRODUCCIÓN cuando el deploy de Vercel quede Ready:** (1) **C1** — en BF, el
+   Historial de un concepto de 2 torres (p. ej. PILAS · Mano de Obra): Total MXN del panel == Resumen/Partida/Índice
+   (antes ~la mitad); el diálogo "Crear contrato en Pagos" confirma el monto COMPLETO; (2) **A1** — "Cerrar mes"
+   congela el mes correcto aun en la noche del último día (TZ CDMX); (3) **A2** — toggle Contratado → Editar →
+   Guardar NO revierte el toggle; (4) **Historial** — el botón por fila en Partida abre el panel lateral de solo
+   lectura y sus números cuadran con `/subcategoria?item=<id>`; sub-nav sin "Subcategoría"; (5) **UI** —
+   Resumen/Partida/Glosario con el sistema nuevo (header hairline, Acciones sticky, badges de 2 ejes, TOTAL en
+   banda dark). Pendiente BF anterior: confirmar Herreria.
    Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
    Pendiente Resumen: modo **Qué falta**. Pendiente BF (si se decide tras revisar): **desglose por depto**
    (hoy torre/piso/depto van como texto en la línea, grano = total del proyecto).
