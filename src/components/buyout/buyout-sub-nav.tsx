@@ -7,10 +7,13 @@ import { cn } from "@/lib/utils"
 
 // Las 3 pantallas del módulo Buy-Out (SPEC-buyout.md §6). Es un "libro distinto"
 // de las 6 tabs de Pagos: su propia sub-navegación, no una 7ª tab.
+// La pantalla Subcategoría (historial de versiones) se retiró del sub-nav: su valor
+// vive ahora en el botón "Historial" de cada fila de la Partida (panel de solo
+// lectura). La RUTA `/subcategoria` sigue viva y accesible por URL (anti-cleanup;
+// ahí quedan "Marcar vigente" y el puente a Pagos para admin).
 const TABS = [
   { slug: "", label: "Resumen" },
   { slug: "partida", label: "Partida" },
-  { slug: "subcategoria", label: "Subcategoría" },
   { slug: "glosario", label: "Glosario" },
 ] as const
 

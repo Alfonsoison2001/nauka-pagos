@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { getMyProfile } from "@/lib/auth/roles"
+import { type ItemHistory, loadItemHistory } from "@/lib/buyout/history"
 import { createClient } from "@/lib/supabase/server"
 
 // ---------------------------------------------------------------------------
@@ -705,4 +706,34 @@ export async function getSignedBuyoutPdfUrl(
     .from("proyectos")
     .createSignedUrl(pdfPath, 60 * 5)
   return data?.signedUrl ?? null
+}
+
+// ---------------------------------------------------------------------------
+// getItemHistory — historial (SOLO LECTURA) de un concepto para el panel
+// "Historial" de la Partida. Reusa el MISMO loader que la pantalla Subcategoría.
+// ---------------------------------------------------------------------------
+
+/**
+ * Devuelve TODAS las versiones (buyout_quote) de un concepto por fecha desc, cada
+ * una con su monto a MXN, PDF, estado (madurez/contratación) y cuál es la vigente.
+ * Reusa `loadItemHistory` (el loader de la pantalla Subcategoría) → cuadra con ella
+ * y con el Resumen; **sin query ni migración nueva**. Solo lectura: el panel NO marca
+ * vigente ni liga a Pagos (D1) — eso sigue viviendo en `/buyout/subcategoria?item=`.
+ * `loadItemHistory` valida que el item pertenezca al proyecto → devuelve null si no.
+ */
+export async function getItemHistory(
+  projectId: string,
+  itemId: string,
+): Promise<ItemHistory | null> {
+  const sb = await createClient()
+  const { data: fxRows } = await sb
+    .from("buyout_fx")
+    .select("currency, rate")
+    .eq("project_id", projectId)
+    .is("deleted_at", null)
+  const fxList: CurrencyOption[] = (fxRows ?? []).map((c) => ({
+    currency: c.currency as string,
+    rate: Number(c.rate),
+  }))
+  return loadItemHistory(sb, projectId, itemId, fxList)
 }
