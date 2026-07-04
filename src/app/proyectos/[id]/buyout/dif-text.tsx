@@ -2,15 +2,16 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
- * DIF como PILL con flecha de tendencia (tablas del Resumen: Vigente · Evolución).
- * Mantiene la semántica del módulo: sobre-presupuesto (positivo) = rojo con flecha
- * ascendente; debajo (negativo) = verde con flecha descendente; ~0 o sin dato =
- * gris. `onDark` para la fila oscura del TOTAL (pill translúcido legible).
- * El % conserva 1 decimal (es un %, no un monto). Usa la familia de colores
- * semánticos de NAUKA (rojo/verde).
+ * DIF con flecha de tendencia (tablas del Resumen: Vigente · Evolución). Texto
+ * con signo, SIN pill de fondo (design-prompt § Buy-Out: el color es la señal,
+ * el fondo sobra a nivel fila). Semántica intacta: sobre-presupuesto (positivo)
+ * = rojo con flecha ascendente; debajo (negativo) = verde con flecha
+ * descendente; ~0 o sin dato = gris. `onDark` para la banda oscura del TOTAL
+ * (tintas claras). El % conserva 1 decimal (es un %, no un monto). Usa los
+ * tokens semánticos de NAUKA (danger/success).
  */
-const DIF_PILL =
-  "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums"
+const DIF_TEXT =
+  "inline-flex items-center gap-0.5 whitespace-nowrap text-xs font-medium tabular-nums"
 
 export function DifBadge({
   dif,
@@ -23,8 +24,8 @@ export function DifBadge({
     return (
       <span
         className={cn(
-          DIF_PILL,
-          onDark ? "bg-white/10 text-white/60" : "bg-slate-100 text-slate-500",
+          DIF_TEXT,
+          onDark ? "text-white/55" : "text-nauka-neutral",
         )}
       >
         —
@@ -38,8 +39,8 @@ export function DifBadge({
     return (
       <span
         className={cn(
-          DIF_PILL,
-          onDark ? "bg-white/10 text-white/70" : "bg-slate-100 text-slate-500",
+          DIF_TEXT,
+          onDark ? "text-white/70" : "text-nauka-neutral",
         )}
       >
         <Minus className="size-3" />
@@ -51,13 +52,13 @@ export function DifBadge({
   const Arrow = over ? ArrowUpRight : ArrowDownRight
   const cls = over
     ? onDark
-      ? "bg-red-400/20 text-red-200"
-      : "bg-red-100 text-red-700"
+      ? "text-red-300"
+      : "text-nauka-danger"
     : onDark
-      ? "bg-emerald-400/20 text-emerald-200"
-      : "bg-emerald-100 text-emerald-700"
+      ? "text-emerald-300"
+      : "text-nauka-success"
   return (
-    <span className={cn(DIF_PILL, cls)}>
+    <span className={cn(DIF_TEXT, cls)}>
       <Arrow className="size-3" />
       {text}
     </span>

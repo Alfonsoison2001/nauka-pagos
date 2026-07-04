@@ -1,4 +1,3 @@
-import { Calendar, Coins, Tag, Target, TrendingUp } from "lucide-react"
 import { Fragment } from "react"
 import { formatMXN0 } from "@/lib/buyout/format"
 import { cn } from "@/lib/utils"
@@ -6,7 +5,17 @@ import { BaseCell } from "./base-cell"
 import { DifBadge } from "./dif-text"
 import { MonthCell } from "./month-cell"
 import { ReabrirMesButton } from "./reabrir-mes-button"
-import { HEAD_ROW, Th } from "./table-ui"
+import {
+  CHAPTER_TD,
+  HEAD_ROW,
+  ROW,
+  SUBTOTAL_LABEL,
+  SUBTOTAL_ROW,
+  TABLE,
+  TD,
+  Th,
+  TOTAL_FOOT,
+} from "./table-ui"
 
 /** Partida en la rejilla de Evolución (total = vigente del mes en curso, vivo). */
 export type EvoPartida = {
@@ -81,21 +90,14 @@ export function EvolucionTable({
     )
 
   return (
-    <div className="max-h-[70vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
-      <table className="w-full text-sm tabular-nums">
+    <div className="max-h-[78vh] overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
+      <table className={TABLE}>
         <thead className="sticky top-0 z-10">
-          <tr className={cn(HEAD_ROW, "border-b border-nauka-subtle")}>
-            <Th icon={Tag}>Concepto</Th>
-            <Th icon={Target} align="right">
-              Ppto Base
-            </Th>
+          <tr className={HEAD_ROW}>
+            <Th>Concepto</Th>
+            <Th align="right">Ppto Base</Th>
             {months.map((m) => (
-              <Th
-                key={m.id}
-                icon={Calendar}
-                align="right"
-                className="whitespace-nowrap"
-              >
+              <Th key={m.id} align="right" className="whitespace-nowrap">
                 {m.label}
                 {admin ? (
                   <ReabrirMesButton
@@ -106,22 +108,17 @@ export function EvolucionTable({
                 ) : null}
               </Th>
             ))}
-            <Th icon={Coins} align="right" className="whitespace-nowrap">
+            <Th align="right" className="whitespace-nowrap">
               {enCursoLabel}
             </Th>
-            <Th icon={TrendingUp} align="right">
-              Dif
-            </Th>
+            <Th align="right">Dif</Th>
           </tr>
         </thead>
         <tbody>
           {chapters.map((ch) => (
             <Fragment key={ch.nombre}>
-              <tr className="bg-nauka-subtle">
-                <td
-                  colSpan={colCount}
-                  className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
-                >
+              <tr>
+                <td colSpan={colCount} className={CHAPTER_TD}>
                   {ch.nombre}
                 </td>
               </tr>
@@ -129,19 +126,16 @@ export function EvolucionTable({
                 <tr className="border-b border-nauka-subtle">
                   <td
                     colSpan={colCount}
-                    className="px-4 py-3 italic text-muted-foreground"
+                    className="px-4 py-2.5 text-muted-foreground"
                   >
                     Sin partidas en este capítulo
                   </td>
                 </tr>
               ) : (
                 ch.partidas.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="h-12 border-b border-nauka-subtle transition-colors hover:bg-nauka-bg"
-                  >
-                    <td className="px-4 py-3">{p.nombre}</td>
-                    <td className="px-4 py-3 text-right">
+                  <tr key={p.id} className={ROW}>
+                    <td className={cn(TD, "font-medium")}>{p.nombre}</td>
+                    <td className={cn(TD, "text-right text-muted-foreground")}>
                       <BaseCell
                         projectId={projectId}
                         partidaCatalogId={p.id}
@@ -150,7 +144,10 @@ export function EvolucionTable({
                       />
                     </td>
                     {months.map((m) => (
-                      <td key={m.id} className="px-4 py-3 text-right">
+                      <td
+                        key={m.id}
+                        className={cn(TD, "text-right text-muted-foreground")}
+                      >
                         <MonthCell
                           projectId={projectId}
                           monthCloseId={m.id}
@@ -161,54 +158,60 @@ export function EvolucionTable({
                         />
                       </td>
                     ))}
-                    <td className="px-4 py-3 text-right font-medium text-nauka-dark">
+                    <td
+                      className={cn(
+                        TD,
+                        "text-right font-medium text-nauka-dark",
+                      )}
+                    >
                       {formatMXN0(p.total)}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className={cn(TD, "text-right")}>
                       <DifBadge dif={p.dif} />
                     </td>
                   </tr>
                 ))
               )}
-              <tr className="border-b border-nauka-subtle bg-nauka-bg/60">
-                <td className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Subtotal {ch.nombre}
-                </td>
-                <td className="px-4 py-2.5 text-right font-medium">
+              <tr className={SUBTOTAL_ROW}>
+                <td className={SUBTOTAL_LABEL}>Subtotal {ch.nombre}</td>
+                <td className="px-3 py-2 text-right font-medium">
                   {formatMXN0(ch.base)}
                 </td>
                 {months.map((m) => (
-                  <td key={m.id} className="px-4 py-2.5 text-right font-medium">
+                  <td
+                    key={m.id}
+                    className="px-3 py-2 text-right font-medium text-muted-foreground"
+                  >
                     {formatMXN0(
                       ch.partidas.reduce((a, p) => a + snap(m.id, p.id), 0),
                     )}
                   </td>
                 ))}
-                <td className="px-4 py-2.5 text-right font-semibold text-nauka-dark">
+                <td className="px-3 py-2 text-right font-semibold text-nauka-dark">
                   {formatMXN0(ch.total)}
                 </td>
-                <td className="px-4 py-2.5 text-right font-medium">
+                <td className="px-3 py-2 pr-4 text-right font-medium">
                   <DifBadge dif={ch.dif} />
                 </td>
               </tr>
             </Fragment>
           ))}
         </tbody>
-        <tfoot>
+        <tfoot className={TOTAL_FOOT}>
           <tr className="bg-nauka-dark text-white">
-            <td className="px-4 py-3 font-semibold">TOTAL</td>
-            <td className="px-4 py-3 text-right font-semibold">
+            <td className="px-3 py-2.5 pl-4 font-semibold">TOTAL</td>
+            <td className="px-3 py-2.5 text-right font-semibold">
               {formatMXN0(totalBase)}
             </td>
             {months.map((m) => (
-              <td key={m.id} className="px-4 py-3 text-right font-semibold">
+              <td key={m.id} className="px-3 py-2.5 text-right font-semibold">
                 {formatMXN0(monthTotal(m))}
               </td>
             ))}
-            <td className="px-4 py-3 text-right font-semibold">
+            <td className="px-3 py-2.5 text-right font-semibold">
               {formatMXN0(total)}
             </td>
-            <td className="px-4 py-3 text-right font-semibold">
+            <td className="px-3 py-2.5 pr-4 text-right font-semibold">
               <DifBadge dif={totalDif} onDark />
             </td>
           </tr>

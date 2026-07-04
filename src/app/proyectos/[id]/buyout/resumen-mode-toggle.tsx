@@ -27,14 +27,14 @@ export function ResumenModeToggle({ modo }: { modo: ResumenMode }) {
     },
   ]
   return (
-    <div className="inline-flex rounded-lg border border-nauka-card-border bg-white p-0.5">
+    <div className="inline-flex items-center rounded-full border border-nauka-card-border bg-white p-1">
       {items.map((it) => (
         <Link
           key={it.key}
           href={it.href}
           aria-current={modo === it.key ? "page" : undefined}
           className={cn(
-            "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            "rounded-full px-3.5 py-1 text-sm font-medium transition-colors",
             modo === it.key
               ? "bg-nauka-dark text-white"
               : "text-muted-foreground hover:text-nauka-dark",

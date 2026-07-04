@@ -6,8 +6,10 @@ import { setLineaContratado } from "./actions"
 
 // Mismo look que el pill de `EstadoBadge` (page.tsx), pero clicable: alterna
 // Contratado/No contratado de ESA línea (admin-only; RLS refuerza en el server).
+// Colores del eje contratación (design-prompt § Buy-Out): contratado = tinte
+// dark; no contratado = neutral.
 const PILL =
-  "inline-flex h-6 items-center rounded-full px-2.5 text-xs font-medium transition"
+  "inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium transition"
 
 export function ContratadoToggle({
   lineId,
@@ -42,8 +44,8 @@ export function ContratadoToggle({
         PILL,
         "cursor-pointer hover:ring-2 hover:ring-offset-1 disabled:opacity-50",
         contratado
-          ? "bg-green-100 text-green-700 hover:ring-green-300"
-          : "bg-slate-100 text-slate-600 hover:ring-slate-300",
+          ? "bg-nauka-dark/10 text-nauka-dark hover:ring-nauka-dark/30"
+          : "bg-nauka-subtle text-muted-foreground hover:ring-nauka-neutral/50",
       )}
     >
       {pending ? "…" : contratado ? "Contratado" : "No contratado"}

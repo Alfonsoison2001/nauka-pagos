@@ -471,6 +471,61 @@
    el monto completo; (2) "Cerrar mes" en Evolución debe decir/congelar el mes correcto incluso en la noche del último
    día; (3) togglear Contratado en una fila y luego Editar+Guardar la misma línea NO debe revertir el toggle.
    Pendiente BF anterior: confirmar Herreria.
+✅ **UI PROFESIONAL — Fase 1: sistema de diseño + PILOTO en el Resumen (2026-07-03 · rama `feat/ui-profesional`, sin push)** —
+   pasada **SOLO de presentación** (cero cambios de datos/queries/rutas/acciones/labels — regla del espejo). **(1) Sistema:**
+   `docs/design-prompt.md` ganó la sección **"EXTENSIÓN — Módulo Buy-Out: tablero financiero denso"** (el sistema de Pagos
+   aprobado 01-jun queda INTACTO arriba): principios (informativo primero · denso pero legible · "la tinta es para el dato,
+   el color para la señal" · jerarquía de 5 niveles de tinta · cero decoración · espejo del Excel), tokens 100% reusados,
+   **colores fijos de los 2 ejes** (madurez=accent `#7FCFCB` · contratación=dark `#163D4A`), tipografía (tabla 14px,
+   headers 11px uppercase, `tabular-nums` siempre, sin decimales), densidad (celdas `px-3 py-2`, filas 44px vs 56px),
+   estados (hover/activo/foco/vacío/carga) y el sistema de **badges** de 2 ejes (paramétrico=dashed · ppto=accent suave ·
+   contratado=verde funcional · no=neutral · parcial=micro-barras %) para cuando se replique a Partida/Subcategoría.
+   **(2) Piloto = pantalla Resumen completa** (sus 3 modos comparten tabla/lenguaje): headers **blancos sin iconos** con
+   hairline sticky-safe (box-shadow inset — un border-b en fila sticky se queda atrás con `border-collapse`); **capítulos
+   con espina accent** de 2px; subtotales en lavado `nauka-bg`; **TOTAL sticky bottom** (siempre visible al scrollear);
+   **DIF de pill→texto** con flecha (mismos valores/decimales); Estado y % Contratado con **barras en color de eje**
+   (antes verde/esmeralda, fuera de blacklist); montos de Contratado de esmeralda→**tinta** (`nauka-dark` medium);
+   **el pie que Alfonso odió** (4 tarjetas grises) → **colofón DENTRO de la card** bajo el TOTAL, como el Excel pone
+   COSTO M2/USD bajo TOTAL PRESUPUESTO (mismos 4 labels/valores; `sticky left-0` ante scroll horizontal); desglose por
+   ejes en cards blancas con barra de eje; Adicional (dashed) refinado; toggles de modo/meses como **segmented pills**
+   `rounded-full` (lenguaje de botones de Pagos); densidad 15px/h-14 → **14px/h-11** (~21% más filas por pantalla,
+   pedido de hoy: "denso pero legible"). `table-ui.tsx` reescrito como sistema en código (TABLE/HEAD_ROW/TH_HAIRLINE/
+   TD/ROW/CHAPTER_TD/SUBTOTAL_*/TOTAL_FOOT) — solo lo importan las 3 tablas del Resumen. **8 archivos** (7 código +
+   design-prompt): `table-ui.tsx` · `page.tsx` · `evolucion-table.tsx` · `contratacion-table.tsx` · `dif-text.tsx`
+   (**solo `DifBadge`; `DifText` de Subcategoría intacto**) · `resumen-mode-toggle.tsx` · `meses-toggle.tsx`.
+   **NO tocados:** Partida/Subcategoría/Glosario, `buyout-sub-nav`, `cerrar-mes-button`, `base-cell`/`month-cell`/
+   `reabrir-mes-button` (affordances heredan), **Pagos completo**, sin migración, sin dependencias nuevas. Gate verde:
+   `tsc` ✓ · `biome` ✓ (7 archivos) · `pnpm build` ✓ (12 rutas; Pagos idénticas); var `--color-nauka-subtle` y el
+   hairline verificados en el CSS compilado. Verificación por razonamiento (no-interactivo; render tras login = prueba
+   de Alfonso): columnas/labels/orden/links/celdas editables/reabrir/cerrar mes/toggles idénticos en props y lógica.
+   **PAUSA — Alfonso reacciona al piloto antes de replicar al resto del módulo.**
+✅ **UI PROFESIONAL — Fase 2: réplica a PARTIDA y GLOSARIO (2026-07-03 · rama `feat/ui-profesional`, sin push)** —
+   mismo sistema del piloto (design-prompt § Buy-Out), **SOLO presentación** (cero lógica/queries/labels/acciones).
+   **Subcategoría NO se estilizó a propósito** (pantalla por eliminar — rama `feat/buyout-historial`); su link
+   "Historial" por fila sigue funcionando igual. **PARTIDA — tabla de 22 col:** header pasó de banda oscura a
+   **blanco 11px uppercase con hairline** (mismo lenguaje del Resumen; sin sticky vertical — ahí el scroll es el de
+   la página, decisión previa intacta); filas `h-11` con hover plano y 1ª col `pl-4`; columna **Acciones ahora
+   `sticky right-0`** (fondo sólido + hairline izquierdo + hover sincronizado vía `group`) → Historial · PDF · ↻ ·
+   editar · borrar quedan a la mano aunque se scrollee a la izquierda de las 22 columnas; fila **Total → banda
+   `nauka-dark`** (label "Total" idéntico); **montos con 2 decimales intactos** (formato del tab verde; el
+   sin-decimales es del Resumen). **Badges de 2 ejes** (nuevo mapeo confirmado por Alfonso — cada eje su color):
+   `Ppto` = tinte accent/20 · `Paramétrico` = **outline dashed** gris (borrador) · `Contratado` = tinte dark/10 ·
+   `No contratado` = neutral subtle (antes verde/ámbar/verde/slate); el **toggle clicable** de contratación
+   (`ContratadoToggle`, admin) usa los mismos colores con ring al hover — misma acción/Server Action. **Tarjetas de
+   Partida:** título de capítulo con **espina accent** (11px uppercase); punto "con datos" **verde → accent** (es
+   dato, no semáforo). **GLOSARIO:** se quitó el chip decorativo de icono (BookText) del encabezado (regla "cero
+   decoración"); banda de cada capítulo con **espina accent + `nauka-subtle/60`** y título 11px uppercase (mismo
+   lenguaje de bandas del Resumen); panel de conceptos en lavado `nauka-bg` con label 11px; puntos "con datos" →
+   accent; hover de fila con transición. Todos los botones/diálogos/acciones (agregar/renombrar/reordenar/borrar
+   capítulos·partidas·conceptos, atajo "+ Nueva partida") **intactos en props y lógica**. **design-prompt.md**
+   actualizado: estado (fase 2 aplicada, Subcategoría excluida), badges con el mapeo por eje definitivo, indicador
+   "con datos" = accent, y nota de la tabla de 22 col (header estático + Acciones sticky + 2 decimales). **7
+   archivos** (5 código + design-prompt + STATE): `partida/page.tsx` · `partida/partida-cards.tsx` ·
+   `partida/contratado-toggle.tsx` · `glosario/page.tsx` · `glosario/partida-row.tsx`. **NO tocados:** Subcategoría
+   completa, `buyout-sub-nav`, diálogos/botones shadcn de ambas pantallas, **Pagos completo**; sin migración, sin
+   dependencias. Gate verde: `tsc` ✓ · `biome` ✓ (5 archivos) · `pnpm build` ✓ (12 rutas; Pagos idénticas); dev
+   server siguió vivo tras el build (HTTP 200). **PAUSA — Alfonso reacciona a Partida + Glosario; falta su OK para
+   dar el sistema por cerrado (Subcategoría se resuelve cuando entre Historial).**
    Pendiente Fase 5: **marcar contratado** como acción dedicada (hoy se marca al editar la línea).
    Pendiente Resumen: modo **Qué falta**. Pendiente BF (si se decide tras revisar): **desglose por depto**
    (hoy torre/piso/depto van como texto en la línea, grano = total del proyecto).

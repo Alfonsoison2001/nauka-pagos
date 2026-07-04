@@ -1,14 +1,3 @@
-import {
-  Activity,
-  Building2,
-  Calendar,
-  Clock,
-  Coins,
-  Ruler,
-  Tag,
-  Target,
-  TrendingUp,
-} from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Fragment } from "react"
@@ -40,7 +29,17 @@ import {
 } from "./evolucion-table"
 import { MesesToggle } from "./meses-toggle"
 import { type ResumenMode, ResumenModeToggle } from "./resumen-mode-toggle"
-import { HEAD_ROW, Th } from "./table-ui"
+import {
+  CHAPTER_TD,
+  HEAD_ROW,
+  ROW,
+  SUBTOTAL_LABEL,
+  SUBTOTAL_ROW,
+  TABLE,
+  TD,
+  Th,
+  TOTAL_FOOT,
+} from "./table-ui"
 
 export const metadata = { title: "Buy-Out · Resumen" }
 
@@ -352,35 +351,22 @@ export default async function BuyoutResumenPage({
           {/* El toggle "▸ Meses (n)" vive en la barra superior (toolbar). Aquí las
               columnas de meses solo se intercalan si está abierto (mesesCols). */}
           <div className="max-h-[78vh] w-full overflow-auto rounded-2xl border border-nauka-card-border bg-white shadow-nauka-card">
-            <table className="w-full text-[15px] tabular-nums">
+            <table className={TABLE}>
               <thead className="sticky top-0 z-10">
-                <tr className={cn(HEAD_ROW, "border-b border-nauka-subtle")}>
-                  <Th icon={Tag}>Concepto</Th>
-                  <Th icon={Building2}>Proveedor</Th>
-                  <Th icon={Target} align="right">
-                    Ppto Base
-                  </Th>
+                <tr className={HEAD_ROW}>
+                  <Th>Concepto</Th>
+                  <Th>Proveedor</Th>
+                  <Th align="right">Ppto Base</Th>
                   {mesesCols.map((m) => (
-                    <Th
-                      key={m.id}
-                      icon={Calendar}
-                      align="right"
-                      className="whitespace-nowrap"
-                    >
+                    <Th key={m.id} align="right" className="whitespace-nowrap">
                       {m.label}
                     </Th>
                   ))}
-                  <Th icon={Coins} align="right">
-                    Ppto
-                  </Th>
-                  <Th icon={TrendingUp} align="right">
-                    Dif
-                  </Th>
-                  <Th icon={Ruler} align="right">
-                    $/m²
-                  </Th>
-                  <Th icon={Clock}>Última actualización</Th>
-                  <Th icon={Activity}>
+                  <Th align="right">Ppto</Th>
+                  <Th align="right">Dif</Th>
+                  <Th align="right">$/m²</Th>
+                  <Th>Última actualización</Th>
+                  <Th>
                     Estado{" "}
                     <span className="font-normal normal-case tracking-normal text-nauka-neutral">
                       (madurez · contratación)
@@ -400,18 +386,18 @@ export default async function BuyoutResumenPage({
                   />
                 ))}
               </tbody>
-              <tfoot>
+              <tfoot className={TOTAL_FOOT}>
                 <tr className="bg-nauka-dark text-white">
-                  <td className="px-4 py-3 font-semibold" colSpan={2}>
+                  <td className="px-3 py-2.5 pl-4 font-semibold" colSpan={2}>
                     TOTAL
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold">
+                  <td className="px-3 py-2.5 text-right font-semibold">
                     {formatMXN0(totalBase)}
                   </td>
                   {mesesCols.map((m) => (
                     <td
                       key={m.id}
-                      className="px-4 py-3 text-right font-semibold"
+                      className="px-3 py-2.5 text-right font-semibold"
                     >
                       {formatMXN0(
                         mainPartidaViews.reduce(
@@ -422,20 +408,48 @@ export default async function BuyoutResumenPage({
                       )}
                     </td>
                   ))}
-                  <td className="px-4 py-3 text-right font-semibold">
+                  <td className="px-3 py-2.5 text-right font-semibold">
                     {formatMXN0(total)}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold">
+                  <td className="px-3 py-2.5 text-right font-semibold">
                     <DifBadge dif={totalDif} onDark />
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold">
+                  <td className="px-3 py-2.5 text-right font-semibold">
                     {costoM2 != null ? formatMXN0(costoM2) : "—"}
                   </td>
-                  <td className="px-4 py-3" />
-                  <td className="px-4 py-3" />
+                  <td className="px-3 py-2.5" />
+                  <td className="px-3 py-2.5 pr-4" />
                 </tr>
               </tfoot>
             </table>
+            {/* Colofón de métricas (spec §6: $/m² + USD/m² al pie) DENTRO de la
+                card, bajo el TOTAL — como el Excel pone COSTO M2 / USD debajo del
+                TOTAL PRESUPUESTO. sticky left-0 → no se va con el scroll
+                horizontal de la tabla. Mismos 4 valores y labels de siempre. */}
+            <div className="sticky left-0 flex flex-wrap items-baseline gap-x-10 gap-y-2 px-4 py-3">
+              <FooterMetric
+                label="$/m² interior"
+                value={costoM2 != null ? formatMXN0(costoM2) : "—"}
+              />
+              <FooterMetric
+                label="USD/m²"
+                value={usdM2 != null ? formatUSD0(usdM2) : "—"}
+              />
+              <FooterMetric
+                label="Área interior"
+                value={
+                  areaInt != null ? `${areaFormatter.format(areaInt)} m²` : "—"
+                }
+              />
+              <FooterMetric
+                label="Tipo de cambio"
+                value={
+                  usdRate != null
+                    ? `${areaFormatter.format(usdRate)} MXN/USD`
+                    : "—"
+                }
+              />
+            </div>
           </div>
 
           {mesesOpen ? (
@@ -449,33 +463,6 @@ export default async function BuyoutResumenPage({
               Evolución).
             </p>
           ) : null}
-
-          {/* Pie: métricas clave como TARJETAS (spec §6). Montos sin decimales;
-              área y tipo de cambio conservan sus decimales. */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <MetricCard
-              label="$/m² interior"
-              value={costoM2 != null ? formatMXN0(costoM2) : "—"}
-            />
-            <MetricCard
-              label="USD/m²"
-              value={usdM2 != null ? formatUSD0(usdM2) : "—"}
-            />
-            <MetricCard
-              label="Área interior"
-              value={
-                areaInt != null ? `${areaFormatter.format(areaInt)} m²` : "—"
-              }
-            />
-            <MetricCard
-              label="Tipo de cambio"
-              value={
-                usdRate != null
-                  ? `${areaFormatter.format(usdRate)} MXN/USD`
-                  : "—"
-              }
-            />
-          </div>
         </>
       )}
 
@@ -526,6 +513,7 @@ function TotalEjesDesglose({
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <DesgloseCard
         titulo="Madurez del TOTAL"
+        fill="bg-nauka-accent"
         domPct={pptoPct}
         domLabel="Ppto"
         domMonto={ppto}
@@ -534,6 +522,7 @@ function TotalEjesDesglose({
       />
       <DesgloseCard
         titulo="Contratación del TOTAL"
+        fill="bg-nauka-dark"
         domPct={contratadoPct}
         domLabel="Contratado"
         domMonto={contratado}
@@ -544,10 +533,12 @@ function TotalEjesDesglose({
   )
 }
 
-/** Tarjeta de un eje: barra verde (cubeta dominante) + montos y % de cada cubeta.
+/** Tarjeta de un eje: barra de avance (color del eje: madurez=accent ·
+ *  contratación=dark, design-prompt § Buy-Out) + montos y % de cada cubeta.
  *  El % del resto se deriva como complemento (sin descuadre por redondeo). */
 function DesgloseCard({
   titulo,
+  fill,
   domPct,
   domLabel,
   domMonto,
@@ -555,6 +546,8 @@ function DesgloseCard({
   restoMonto,
 }: {
   titulo: string
+  /** Clase de relleno de la barra (color fijo del eje). */
+  fill: string
   domPct: number
   domLabel: string
   domMonto: number
@@ -563,17 +556,17 @@ function DesgloseCard({
 }) {
   const restoPct = 100 - domPct
   return (
-    <div className="rounded-2xl bg-nauka-subtle px-4 py-3.5">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+    <div className="rounded-2xl border border-nauka-card-border bg-white px-5 py-4 shadow-nauka-card">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {titulo}
       </p>
-      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white">
+      <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-nauka-subtle">
         <div
-          className="h-full rounded-full bg-nauka-success"
+          className={cn("h-full rounded-full", fill)}
           style={{ width: `${Math.min(100, Math.max(0, domPct))}%` }}
         />
       </div>
-      <div className="mt-2 flex items-baseline justify-between gap-3 text-sm tabular-nums">
+      <div className="mt-2.5 flex items-baseline justify-between gap-3 text-sm tabular-nums">
         <span className="font-medium text-nauka-dark">
           {domLabel} {formatMXN0(domMonto)}{" "}
           <span className="font-normal text-muted-foreground">· {domPct}%</span>
@@ -596,13 +589,13 @@ function AdicionalBlock({
   total: number
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-nauka-card-border bg-white px-4 py-3.5 shadow-nauka-card">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="rounded-2xl border border-dashed border-nauka-card-border bg-white px-5 py-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-nauka-dark">
             Contingencias / Adicional
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             Adicional · fuera del TOTAL (en el tablero va debajo del total
             presupuesto)
           </p>
@@ -615,12 +608,10 @@ function AdicionalBlock({
         ? views.map((p) => (
             <div
               key={p.id}
-              className="mt-1.5 flex items-center justify-between border-t border-nauka-subtle pt-1.5 text-sm"
+              className="mt-2 flex items-center justify-between border-t border-nauka-subtle pt-2 text-sm tabular-nums"
             >
               <span className="text-muted-foreground">{p.nombre}</span>
-              <span className="tabular-nums text-nauka-dark">
-                {formatMXN0(p.agg.total)}
-              </span>
+              <span className="text-nauka-dark">{formatMXN0(p.agg.total)}</span>
             </div>
           ))
         : null}
@@ -681,11 +672,8 @@ function ChapterGroup({
     snapshotByMonth.get(monthId)?.get(partidaId) ?? 0
   return (
     <Fragment>
-      <tr className="bg-nauka-subtle">
-        <td
-          colSpan={8 + months.length}
-          className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-nauka-dark"
-        >
+      <tr>
+        <td colSpan={8 + months.length} className={CHAPTER_TD}>
           {chapter.nombre}
         </td>
       </tr>
@@ -693,51 +681,50 @@ function ChapterGroup({
         <tr className="border-b border-nauka-subtle">
           <td
             colSpan={8 + months.length}
-            className="px-4 py-3 italic text-muted-foreground"
+            className="px-4 py-2.5 text-muted-foreground"
           >
             Sin partidas en este capítulo
           </td>
         </tr>
       ) : (
         chapter.partidas.map((p) => (
-          <tr
-            key={p.id}
-            className="h-14 border-b border-nauka-subtle transition-colors hover:bg-nauka-bg"
-          >
-            <td className="px-4 py-3">
+          <tr key={p.id} className={ROW}>
+            <td className={cn(TD, "font-medium")}>
               <Link
                 href={`/proyectos/${projectId}/buyout/partida?partida=${p.id}`}
-                className="transition-colors hover:text-nauka-accent"
+                className="underline-offset-4 decoration-nauka-accent decoration-2 transition-colors hover:underline"
               >
                 {p.nombre}
               </Link>
             </td>
-            <td className="px-4 py-3 text-muted-foreground">
+            <td className={cn(TD, "text-muted-foreground")}>
               {proveedorLabel(p.agg.proveedores)}
             </td>
             {/* Ppto Base = solo-lectura aquí; la edición vive en Evolución. */}
-            <td className="px-4 py-3 text-right">{formatMXN0(p.base)}</td>
+            <td className={cn(TD, "text-right text-muted-foreground")}>
+              {formatMXN0(p.base)}
+            </td>
             {months.map((m) => (
               <td
                 key={m.id}
-                className="px-4 py-3 text-right text-muted-foreground"
+                className={cn(TD, "text-right text-muted-foreground")}
               >
                 {formatMXN0(snap(m.id, p.id))}
               </td>
             ))}
-            <td className="px-4 py-3 text-right font-medium text-nauka-dark">
+            <td className={cn(TD, "text-right font-medium text-nauka-dark")}>
               {formatMXN0(p.agg.total)}
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className={cn(TD, "text-right")}>
               <DifBadge dif={p.dif} />
             </td>
-            <td className="px-4 py-3 text-right text-muted-foreground">
+            <td className={cn(TD, "text-right text-muted-foreground")}>
               {perM2(p.agg.total)}
             </td>
-            <td className="px-4 py-3 text-muted-foreground">
+            <td className={cn(TD, "whitespace-nowrap text-muted-foreground")}>
               {p.agg.lastUpdate ? formatDate(p.agg.lastUpdate) : "—"}
             </td>
-            <td className="px-4 py-3">
+            <td className={TD}>
               <EstadoCell
                 ppto={p.agg.ppto}
                 contratado={p.agg.contratado}
@@ -749,35 +736,33 @@ function ChapterGroup({
       )}
       {/* Subtotal del capítulo: etiqueta a la IZQUIERDA en Concepto, números
           alineados bajo sus columnas (corrige el "Subtotal" mal puesto). */}
-      <tr className="border-b border-nauka-subtle bg-nauka-bg/60">
-        <td className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Subtotal {chapter.nombre}
-        </td>
-        <td className="px-4 py-2.5" />
-        <td className="px-4 py-2.5 text-right font-medium">
+      <tr className={SUBTOTAL_ROW}>
+        <td className={SUBTOTAL_LABEL}>Subtotal {chapter.nombre}</td>
+        <td className="px-3 py-2" />
+        <td className="px-3 py-2 text-right font-medium">
           {formatMXN0(chapter.base)}
         </td>
         {months.map((m) => (
           <td
             key={m.id}
-            className="px-4 py-2.5 text-right font-medium text-muted-foreground"
+            className="px-3 py-2 text-right font-medium text-muted-foreground"
           >
             {formatMXN0(
               chapter.partidas.reduce((a, p) => a + snap(m.id, p.id), 0),
             )}
           </td>
         ))}
-        <td className="px-4 py-2.5 text-right font-semibold text-nauka-dark">
+        <td className="px-3 py-2 text-right font-semibold text-nauka-dark">
           {formatMXN0(chapter.total)}
         </td>
-        <td className="px-4 py-2.5 text-right font-medium">
+        <td className="px-3 py-2 text-right font-medium">
           <DifBadge dif={chapter.dif} />
         </td>
-        <td className="px-4 py-2.5 text-right font-medium">
+        <td className="px-3 py-2 text-right font-medium">
           {perM2(chapter.total)}
         </td>
-        <td className="px-4 py-2.5" />
-        <td className="px-4 py-2.5" />
+        <td className="px-3 py-2" />
+        <td className="px-3 py-2 pr-4" />
       </tr>
     </Fragment>
   )
@@ -791,15 +776,15 @@ function proveedorLabel(provs: string[]): string {
   return "Varios"
 }
 
-/** Tarjeta de métrica del pie: label chico arriba + número grande abajo, sobre
- *  fondo secundario sutil (token NAUKA). */
-function MetricCard({ label, value }: { label: string; value: string }) {
+/** Métrica del colofón del tablero: label chico arriba + valor grande abajo.
+ *  Vive DENTRO de la card de la tabla, bajo la banda TOTAL (como el Excel). */
+function FooterMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-nauka-subtle px-4 py-3.5">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+    <div>
+      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 text-2xl font-medium tabular-nums text-nauka-dark">
+      <p className="mt-0.5 text-lg font-semibold tabular-nums text-nauka-dark">
         {value}
       </p>
     </div>
@@ -810,17 +795,18 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 // cubetas del rollup (p.agg: ppto/contratado/total) — % = cubeta ÷ total —
 // anclando ppto/contratado y derivando el complemento, IDÉNTICO al modo
 // Contratación (contratacion-table.tsx → estadoPcts) para que los números
-// CUADREN. Verde (relleno) = Ppto/Contratado; gris (track) = Paramétrico/No
-// contratado. total ≤ 0 → placeholder neutro "—" (sin barras).
+// CUADREN. Relleno = color fijo del eje (madurez=accent · contratación=dark,
+// design-prompt § Buy-Out); gris (track) = Paramétrico/No contratado.
+// total ≤ 0 → placeholder neutro "—" (sin barras).
 const ESTADO_PLACEHOLDER_CLS =
   "inline-flex items-center gap-1.5 text-xs leading-none text-nauka-neutral"
 
-/** Mini-barra de un eje: % verde (success) sobre track gris (subtle). */
-function EjeBar({ pct }: { pct: number }) {
+/** Mini-barra de un eje: % en el color del eje sobre track gris (subtle). */
+function EjeBar({ pct, fill }: { pct: number; fill: string }) {
   return (
-    <div className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-nauka-subtle">
+    <div className="h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-nauka-subtle">
       <div
-        className="h-full rounded-full bg-nauka-success"
+        className={cn("h-full rounded-full", fill)}
         style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
       />
     </div>
@@ -830,12 +816,15 @@ function EjeBar({ pct }: { pct: number }) {
 /** Fila de un eje: barra + etiqueta. 100% en un estado → solo ese (sin "·"). */
 function EjeRow({
   pct,
+  fill,
   domLabel,
   restoAbbr,
   restoFull,
 }: {
   pct: number
-  /** Estado "verde" (dominante de la barra): "Ppto" / "Contratado". */
+  /** Clase de relleno de la barra (color fijo del eje). */
+  fill: string
+  /** Estado dominante de la barra: "Ppto" / "Contratado". */
   domLabel: string
   /** Abreviación del resto en modo mezcla: "Param." / "No". */
   restoAbbr: string
@@ -851,7 +840,7 @@ function EjeRow({
         : `${domLabel} ${pct}% · ${restoAbbr} ${resto}%`
   return (
     <div className="flex items-center gap-2">
-      <EjeBar pct={pct} />
+      <EjeBar pct={pct} fill={fill} />
       <span className="whitespace-nowrap text-[11px] leading-none text-muted-foreground tabular-nums">
         {text}
       </span>
@@ -885,15 +874,17 @@ function EstadoCell({
   const pptoPct = Math.round((ppto / total) * 100)
   const contratadoPct = Math.round((contratado / total) * 100)
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1">
       <EjeRow
         pct={pptoPct}
+        fill="bg-nauka-accent"
         domLabel="Ppto"
         restoAbbr="Param."
         restoFull="Paramétrico"
       />
       <EjeRow
         pct={contratadoPct}
+        fill="bg-nauka-dark"
         domLabel="Contratado"
         restoAbbr="No"
         restoFull="No contratado"

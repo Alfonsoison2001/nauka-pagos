@@ -23,7 +23,7 @@ export function PartidaCards({
     <div className="flex flex-col gap-6">
       {groups.map((g) => (
         <section key={g.nombre} className="flex flex-col gap-2.5">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-nauka-dark">
+          <h2 className="border-l-2 border-nauka-accent pl-2.5 text-[11px] font-semibold uppercase tracking-wider text-nauka-dark">
             {g.nombre}
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -42,7 +42,7 @@ export function PartidaCards({
                     title={p.count > 0 ? "Con datos" : "Sin datos"}
                     className={cn(
                       "mt-1 inline-block size-2 shrink-0 rounded-full",
-                      p.count > 0 ? "bg-nauka-success" : "bg-nauka-neutral/40",
+                      p.count > 0 ? "bg-nauka-accent" : "bg-nauka-neutral/40",
                     )}
                   />
                 </div>
