@@ -12,10 +12,22 @@ type Sb = Awaited<ReturnType<typeof createClient>>
 
 export type ClosedMonth = { id: string; periodo: string }
 
-/** Periodo del mes en curso, `yyyy-mm` (hora del servidor). */
+/**
+ * Periodo del mes en curso, `yyyy-mm`, en la zona horaria del negocio
+ * (America/Mexico_City). A1 (audit 2026-07-03): con la fecha del SERVIDOR
+ * (Vercel corre en UTC), cerrar el mes el último día después de las ~18:00
+ * hora CDMX registraba el mes SIGUIENTE (30-jun 19:00 CDMX = 1-jul UTC →
+ * "2026-07"). Se resuelve el año/mes explícitamente en la TZ de México.
+ */
 export function currentPeriodo(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date())
+  const year = parts.find((p) => p.type === "year")?.value ?? ""
+  const month = parts.find((p) => p.type === "month")?.value ?? ""
+  return `${year}-${month}`
 }
 
 /** "Junio 2026" a partir de "2026-06" (primera letra en mayúscula). */

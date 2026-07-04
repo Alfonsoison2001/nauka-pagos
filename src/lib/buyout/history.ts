@@ -17,9 +17,10 @@ export type QuoteVersion = {
   quoteDate: string | null
   proveedor: string | null
   moneda: string
-  /** Importe sin IVA (col M = cantidad × unitario). */
+  /** Importe sin IVA: Σ col M (cantidad × unitario) de las líneas vivas. */
   montoSinIva: number
-  /** Total MXN (col T, vía calcLinea + TC) — comparable entre versiones. */
+  /** Total MXN: Σ col T de las líneas vivas (calcLinea + TC por línea) —
+   * comparable entre versiones y cuadra con Resumen/Partida/Índice (C1). */
   totalMxn: number
   kind: "parametrico" | "ppto"
   contratado: boolean
@@ -90,16 +91,17 @@ export async function loadItemHistory(
     .order("created_at", { ascending: false })
   const quotes = quoteRows ?? []
   const quoteIds = quotes.map((q) => q.id as string)
-  const lineByQuote = await loadLinesByQuote(sb, quoteIds)
+  const linesByQuote = await loadLinesByQuote(sb, quoteIds)
 
   const rateOf = (cur: string) =>
     fxList.find((c) => c.currency === cur)?.rate ?? 1
 
   const versions: QuoteVersion[] = quotes.map((q) => {
-    const line = lineByQuote.get(q.id as string)
+    const lines = linesByQuote.get(q.id as string) ?? []
     const moneda =
-      (line?.moneda as string | undefined) ?? (q.currency as string) ?? "MXN"
-    const tc = rateOf(moneda)
+      (lines[0]?.moneda as string | undefined) ??
+      (q.currency as string) ??
+      "MXN"
     const base = {
       quoteId: q.id as string,
       quoteDate: (q.quote_date as string | null) ?? null,
@@ -110,19 +112,35 @@ export async function loadItemHistory(
       isSelected: Boolean(q.is_selected),
       pagosPartidaId: (q.pagos_partida_id as string | null) ?? null,
     }
-    if (line) {
-      const c = calcLinea({
-        cantidad: Number(line.cantidad ?? 0),
-        unitario: Number(line.unitario ?? 0),
-        sobrecostoPct: Number(line.sobrecosto_pct ?? 0),
-        ivaPct: Number(line.iva_pct ?? 0),
-        tc,
-      })
+    if (lines.length > 0) {
+      // C1 (audit 2026-07-03): sumar TODAS las líneas vivas de la cotización
+      // (BF: una por torre), cada una con la MISMA fórmula del rollup
+      // (calcLinea + TC por la moneda de la línea) → el total cuadra con
+      // Resumen / Partida / Índice. Antes se tomaba solo la primera línea y un
+      // concepto de 2 torres mostraba ~la mitad.
+      let montoSinIva = 0
+      let totalMxn = 0
+      const provs = new Set<string>()
+      for (const line of lines) {
+        const c = calcLinea({
+          cantidad: Number(line.cantidad ?? 0),
+          unitario: Number(line.unitario ?? 0),
+          sobrecostoPct: Number(line.sobrecosto_pct ?? 0),
+          ivaPct: Number(line.iva_pct ?? 0),
+          tc: rateOf((line.moneda as string) ?? "MXN"),
+        })
+        montoSinIva += c.importeSinIva
+        totalMxn += c.totalMxn
+        const prov = ((line.proveedor as string | null) ?? "").trim()
+        if (prov) provs.add(prov)
+      }
       return {
         ...base,
-        proveedor: (line.proveedor as string | null) ?? null,
-        montoSinIva: c.importeSinIva,
-        totalMxn: c.totalMxn,
+        // Mismo criterio que el índice: 1 proveedor → ese; varios → "Varios".
+        proveedor:
+          provs.size === 0 ? null : provs.size === 1 ? [...provs][0] : "Varios",
+        montoSinIva,
+        totalMxn,
       }
     }
     // Fallback sin renglón (raro en V1): usa los campos guardados en la cotización.
@@ -132,7 +150,7 @@ export async function loadItemHistory(
       ...base,
       proveedor: null,
       montoSinIva,
-      totalMxn: montoSinIva * (1 + ivaPct) * tc,
+      totalMxn: montoSinIva * (1 + ivaPct) * rateOf(moneda),
     }
   })
 
@@ -145,12 +163,17 @@ export async function loadItemHistory(
   }
 }
 
-/** Renglón de cada cotización (1 por quote en V1), indexado por quote_id. */
+/**
+ * Renglones VIVOS de cada cotización, indexados por quote_id. Una cotización
+ * puede tener VARIAS líneas (BF: una por torre) — se devuelven TODAS y el
+ * llamador las suma. C1 (audit 2026-07-03): antes se quedaba solo la primera,
+ * lo que mostraba ~la mitad del total en conceptos multi-torre.
+ */
 async function loadLinesByQuote(
   sb: Sb,
   quoteIds: string[],
-): Promise<Map<string, Record<string, unknown>>> {
-  const out = new Map<string, Record<string, unknown>>()
+): Promise<Map<string, Record<string, unknown>[]>> {
+  const out = new Map<string, Record<string, unknown>[]>()
   if (quoteIds.length === 0) return out
   const { data } = await sb
     .from("buyout_line")
@@ -162,7 +185,9 @@ async function loadLinesByQuote(
     .order("created_at")
   for (const l of data ?? []) {
     const k = l.quote_id as string
-    if (!out.has(k)) out.set(k, l) // si hubiera varias por quote, la primera
+    const arr = out.get(k)
+    if (arr) arr.push(l)
+    else out.set(k, [l])
   }
   return out
 }
